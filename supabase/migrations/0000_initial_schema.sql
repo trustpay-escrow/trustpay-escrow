@@ -4,6 +4,7 @@
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     stellar_address TEXT UNIQUE NOT NULL,
+    email TEXT,
     role TEXT CHECK (role IN ('client', 'freelancer', 'arbiter')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -13,11 +14,14 @@ CREATE TABLE projects (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title TEXT NOT NULL,
     description TEXT NOT NULL,
-    client_address TEXT REFERENCES users(stellar_address) ON DELETE CASCADE,
-    freelancer_address TEXT REFERENCES users(stellar_address) ON DELETE SET NULL,
-    arbiter_address TEXT REFERENCES users(stellar_address) ON DELETE SET NULL,
+    category TEXT,
+    client_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    freelancer_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    arbiter_id UUID REFERENCES users(id) ON DELETE SET NULL,
     status TEXT CHECK (status IN ('draft', 'in_progress', 'completed', 'disputed')) DEFAULT 'draft',
     budget DECIMAL NOT NULL,
+    deadline TIMESTAMP WITH TIME ZONE,
+    visibility TEXT DEFAULT 'public',
     contract_id TEXT, -- Soroban Contract ID once deployed/funded
     project_id_onchain BIGINT, -- ID returned by create_project on-chain
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -33,6 +37,8 @@ CREATE TABLE milestones (
     amount DECIMAL NOT NULL,
     status TEXT CHECK (status IN ('pending', 'submitted', 'approved', 'disputed')) DEFAULT 'pending',
     due_date TIMESTAMP WITH TIME ZONE,
+    revision_limit INTEGER DEFAULT 0,
+    deliverable_type TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
