@@ -15,9 +15,12 @@ export const createMilestone = async (req: Request, res: Response): Promise<any>
 
     const validationResult = milestoneArraySchema.safeParse(milestones);
     if (!validationResult.success) {
+      const errorMessages = validationResult.error.issues
+        .map(i => `${i.path.join('.') || 'field'}: ${i.message}`)
+        .join(' | ');
       return res.status(400).json({
-        error: 'Validation failed',
-        details: validationResult.error.format()
+        error: `Validation failed: ${errorMessages}`,
+        details: validationResult.error.issues
       });
     }
 

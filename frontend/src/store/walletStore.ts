@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type Role = 'client' | 'freelancer' | null;
+export type ActiveRole = 'client' | 'freelancer';
 
 interface WalletState {
   address: string | null;
-  role: Role;
-  setWalletInfo: (address: string, role: Role) => void;
+  activeRole: ActiveRole;
+  isClient: boolean;
+  isFreelancer: boolean;
+  setActiveRole: (role: ActiveRole) => void;
+  setWalletInfo: (address: string, isClient?: boolean, isFreelancer?: boolean) => void;
   disconnect: () => void;
 }
 
@@ -14,12 +17,16 @@ export const useWalletStore = create<WalletState>()(
   persist(
     (set) => ({
       address: null,
-      role: null,
-      setWalletInfo: (address, role) => set({ address, role }),
-      disconnect: () => set({ address: null, role: null }),
+      activeRole: 'client',
+      isClient: true,
+      isFreelancer: true,
+      setActiveRole: (activeRole) => set({ activeRole }),
+      setWalletInfo: (address, isClient = true, isFreelancer = true) =>
+        set({ address, isClient, isFreelancer }),
+      disconnect: () => set({ address: null, activeRole: 'client', isClient: true, isFreelancer: true }),
     }),
     {
-      name: 'trustpay-wallet-storage', // name of the item in the storage (must be unique)
+      name: 'trustpay-wallet-storage',
     }
   )
 );
