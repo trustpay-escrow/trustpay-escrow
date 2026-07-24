@@ -5,18 +5,14 @@ import { logger } from '../utils/logger.js';
 
 export const connectWallet = async (req: UserConnectRequest, res: Response) => {
   try {
-    const { stellar_address, role } = req.body;
+    const { stellar_address } = req.body;
 
     if (!stellar_address) {
       logger.warn('Connection attempt failed: Missing stellar_address');
       return res.status(400).json({ error: 'Stellar address is required' });
     }
-    if (!role || !['client', 'freelancer'].includes(role)) {
-      logger.warn(`Connection attempt failed: Invalid role provided (${role})`);
-      return res.status(400).json({ error: 'Valid role (client/freelancer) is required' });
-    }
 
-    // Check if user already exists
+    // Check if single user identity already exists for this wallet address
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('*')
@@ -29,8 +25,15 @@ export const connectWallet = async (req: UserConnectRequest, res: Response) => {
     }
 
     if (existingUser) {
-      logger.info(`User logged in: ${stellar_address} as ${role}`);
-      return res.status(200).json({ message: 'User logged in successfully', user: existingUser });
+      logger.info(`User logged in with wallet: ${stellar_address}`);
+      return res.status(200).json({
+        message: 'User logged in successfully',
+        user: {
+          ...existingUser,
+          is_client: existingUser.is_client ?? true,
+          is_freelancer: existingUser.is_freelancer ?? true,
+        }
+      });
     }
 
     // User does not exist, require an email to proceed
@@ -39,22 +42,45 @@ export const connectWallet = async (req: UserConnectRequest, res: Response) => {
       return res.status(403).json({ requiresRegistration: true, message: 'Please provide an email to register.' });
     }
 
-    // Email provided, create a new record
+    // Email provided, create a single multi-capability user record
     const { data: newUser, error: insertError } = await supabase
       .from('users')
-      .insert([{ stellar_address, role, email }])
+      .insert([{
+        stellar_address,
+        role: 'user',
+        email,
+        is_client: true,
+        is_freelancer: true
+      }])
       .select()
       .single();
 
     if (insertError) {
-      logger.error(`Error creating user: ${insertError.message}`, { error: insertError });
-      return res.status(500).json({ error: 'Failed to create user' });
+      // If table doesn't have is_client / is_freelancer columns yet, fallback to inserting without them
+      const { data: fallbackUser, error: fallbackError } = await supabase
+        .from('users')
+        .insert([{ stellar_address, role: 'client', email }])
+        .select()
+        .single();
+
+      if (fallbackError) {
+        logger.error(`Error creating user: ${fallbackError.message}`, { error: fallbackError });
+        return res.status(500).json({ error: 'Failed to create user' });
+      }
+
+      return res.status(201).json({
+        message: 'User registered successfully',
+        user: { ...fallbackUser, is_client: true, is_freelancer: true }
+      });
     }
 
-    logger.info(`New user registered: ${stellar_address} as ${role}`);
-    res.status(201).json({ message: 'User registered successfully', user: newUser });
+    logger.info(`New multi-capability user registered: ${stellar_address}`);
+    return res.status(201).json({
+      message: 'User registered successfully',
+      user: { ...newUser, is_client: true, is_freelancer: true }
+    });
   } catch (err: any) {
     logger.error(`Unexpected error in connectWallet: ${err.message}`, { stack: err.stack });
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };
