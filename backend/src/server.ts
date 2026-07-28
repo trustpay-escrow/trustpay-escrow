@@ -9,6 +9,7 @@ import { logger, stream } from './utils/logger.js';
 import projectsRouter from './routes/projectRoutes.js';
 import milestonesRouter from './routes/milestoneRoutes.js';
 import usersRouter from './routes/userRoutes.js';
+import proposalsRouter from './routes/proposalRoutes.js';
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use(express.json());
 app.use('/api/projects', projectsRouter);
 app.use('/api/milestones', milestonesRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/proposals', proposalsRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

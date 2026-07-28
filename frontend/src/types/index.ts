@@ -22,30 +22,42 @@ export interface Project {
   deadline?: string;
   visibility?: string;
   client_id?: string;
+  client_address?: string;
   freelancer_id?: string;
   arbiter_id?: string;
   created_at?: string;
   milestones?: Milestone[];
   applicants?: Applicant[];
+  attachments?: string[];
+  files?: any[];
 }
 
 export interface Applicant {
   id: string;
   project_id?: string;
   freelancer_id?: string;
+  stellar_address?: string;
+  freelancer_address?: string;
   name: string;
   pitch: string;
-  status?: 'pending' | 'granted' | 'rejected';
+  cover_note?: string;
+  portfolio_url?: string;
+  status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   granted?: boolean;
+  created_at?: string;
 }
 
 export interface Proposal {
   id: string;
   project_id: string;
   project_title: string;
+  stellar_address?: string;
+  freelancer_address?: string;
+  cover_note?: string;
+  portfolio_url?: string;
   pitch: string;
   budget: number;
-  status: 'pending' | 'granted' | 'rejected';
+  status: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   created_at: string;
 }
 

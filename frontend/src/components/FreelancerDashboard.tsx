@@ -19,12 +19,25 @@ export function FreelancerDashboard() {
 
   // Selected project for proposal modal
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [proposalPitch, setProposalPitch] = useState('');
+  const [proposalWalletAddress, setProposalWalletAddress] = useState('');
+  const [proposalCoverNote, setProposalCoverNote] = useState('');
+  const [proposalPortfolioUrl, setProposalPortfolioUrl] = useState('');
   const [isSubmittingProposal, setIsSubmittingProposal] = useState(false);
+
+  // Selected project for Project Details Modal
+  const [viewingProjectDetails, setViewingProjectDetails] = useState<Project | null>(null);
 
   // Search and Category filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+
+  // Open Apply Modal and pre-fill wallet address
+  const handleOpenApplyModal = (proj: Project) => {
+    setSelectedProject(proj);
+    setProposalWalletAddress(address || '');
+    setProposalCoverNote('');
+    setProposalPortfolioUrl('');
+  };
 
   // Fetch real projects from backend
   const fetchBackendProjects = async () => {
@@ -44,10 +57,18 @@ export function FreelancerDashboard() {
             deadline: p.deadline || '',
             client_address: p.client_id || 'GAUBK...NLSGV',
             status: p.status || 'open',
-            milestones: (p.milestones || []).map((m: any) => ({
-              id: m.id || String(m.milestone_index),
-              title: m.title,
-              amount: Number(m.amount) || 0
+            files: p.files || [],
+            attachments: p.attachments || [],
+            milestones: (p.milestones || []).map((m: any, idx: number) => ({
+              id: m.id || String(m.milestone_index ?? idx),
+              milestone_index: m.milestone_index ?? idx,
+              title: m.title || `Milestone ${idx + 1}`,
+              description: m.description || '',
+              amount: Number(m.amount) || 0,
+              status: m.status || 'pending',
+              due_date: m.due_date || '',
+              revision_limit: m.revision_limit ?? 0,
+              deliverable_type: m.deliverable_type || ''
             }))
           }));
 
@@ -61,9 +82,39 @@ export function FreelancerDashboard() {
     }
   };
 
+  // Fetch freelancer's submitted proposals from backend API
+  const fetchMyProposals = async () => {
+    if (!address) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/proposals/freelancer/${address}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.proposals && Array.isArray(data.proposals)) {
+          const mapped: Proposal[] = data.proposals.map((p: any) => ({
+            id: p.id,
+            project_id: p.project_id,
+            project_title: p.projects?.title || 'Escrow Project',
+            stellar_address: p.freelancer_address,
+            cover_note: p.cover_note,
+            portfolio_url: p.portfolio_url || undefined,
+            pitch: p.cover_note,
+            budget: Number(p.projects?.budget) || 0,
+            status: p.status || 'pending',
+            created_at: new Date(p.created_at || Date.now()).toISOString().split('T')[0],
+          }));
+          setProposals(mapped);
+        }
+      }
+    } catch (err) {
+      // Graceful fallback
+    }
+  };
+
   useEffect(() => {
     fetchBackendProjects();
-  }, []);
+    fetchMyProposals();
+  }, [address]);
 
   // Filtered projects
   const filteredProjects = projects.filter(p => {
@@ -73,11 +124,17 @@ export function FreelancerDashboard() {
     return matchesSearch && matchesCategory;
   });
 
-  // Handle Proposal Submission
-  const handleSubmitProposal = (e: React.FormEvent) => {
+  // Handle Proposal Submission via Backend API
+  const handleSubmitProposal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!proposalPitch.trim()) {
-      toast.error('Please enter a proposal pitch');
+
+    if (!proposalWalletAddress.trim()) {
+      toast.error('Please enter your Stellar wallet address');
+      return;
+    }
+
+    if (!proposalCoverNote.trim()) {
+      toast.error('Please enter your cover note');
       return;
     }
 
@@ -85,39 +142,63 @@ export function FreelancerDashboard() {
 
     setIsSubmittingProposal(true);
 
-    setTimeout(() => {
-      const newProp: Proposal = {
-        id: `prop-${Date.now()}`,
-        project_id: selectedProject.id,
-        project_title: selectedProject.title,
-        pitch: proposalPitch,
-        budget: selectedProject.budget,
-        status: 'pending',
-        created_at: new Date().toISOString().split('T')[0]
-      };
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/proposals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: selectedProject.id,
+          freelancer_address: proposalWalletAddress.trim(),
+          cover_note: proposalCoverNote.trim(),
+          portfolio_url: proposalPortfolioUrl.trim() || undefined,
+        }),
+      });
 
-      setProposals(prev => [newProp, ...prev]);
+      const data = await res.json();
 
-      // Mark project as applied
-      setProjects(prev => prev.map(p => p.id === selectedProject.id ? { ...p, applicants: [...(p.applicants || []), { id: `app-${Date.now()}`, name: 'You', pitch: proposalPitch }] } : p));
+      if (res.ok && data.proposal) {
+        const p = data.proposal;
+        const newProp: Proposal = {
+          id: p.id,
+          project_id: selectedProject.id,
+          project_title: selectedProject.title,
+          stellar_address: p.freelancer_address,
+          cover_note: p.cover_note,
+          portfolio_url: p.portfolio_url || undefined,
+          pitch: p.cover_note,
+          budget: selectedProject.budget,
+          status: p.status || 'pending',
+          created_at: new Date(p.created_at || Date.now()).toISOString().split('T')[0],
+        };
 
-      toast.success('Proposal submitted successfully to client!');
-      setSelectedProject(null);
-      setProposalPitch('');
+        setProposals((prev) => [newProp, ...prev]);
+
+        toast.success('Application submitted successfully!');
+        setSelectedProject(null);
+        setProposalCoverNote('');
+        setProposalPortfolioUrl('');
+        setActiveTab('proposals');
+        fetchBackendProjects();
+      } else {
+        toast.error(data.error || 'Failed to submit application');
+      }
+    } catch (err) {
+      toast.error('Could not connect to backend server');
+    } finally {
       setIsSubmittingProposal(false);
-      setActiveTab('proposals');
-    }, 600);
+    }
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#121212] text-[#f4f4f5] font-sans p-4 sm:p-6 md:p-10 transition-colors duration-200">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="w-full min-h-screen bg-[#121212] text-[#f4f4f5] font-sans p-3 sm:p-6 md:p-10 transition-colors duration-200">
+      <div className="max-w-4xl mx-auto space-y-5 sm:space-y-6">
         
         {/* Navigation Bar / Mode Selector */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#27272a]">
-          <div className="flex items-center space-x-2 text-sm sm:text-base font-medium text-[#a1a1aa]">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#1e1b4b] text-[#818cf8]">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 sm:pb-4 border-b border-[#27272a]">
+          <div className="flex items-center space-x-2 text-xs sm:text-base font-medium text-[#a1a1aa]">
+            <span className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#1e1b4b] text-[#818cf8]">
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </span>
@@ -133,7 +214,7 @@ export function FreelancerDashboard() {
           <div className="flex items-center space-x-1 bg-[#18181b] p-1 rounded-xl border border-[#27272a]">
             <button
               onClick={() => setActiveTab('explore')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'explore'
                   ? 'bg-[#27272a] text-white shadow-sm'
                   : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]/50'
@@ -143,7 +224,7 @@ export function FreelancerDashboard() {
             </button>
             <button
               onClick={() => setActiveTab('proposals')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'proposals'
                   ? 'bg-[#27272a] text-white shadow-sm'
                   : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]/50'
@@ -156,15 +237,15 @@ export function FreelancerDashboard() {
 
         {/* VIEW 1: EXPLORE PROJECTS */}
         {activeTab === 'explore' && (
-          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 sm:p-6 md:p-8 shadow-2xl space-y-5 sm:space-y-6">
             
             {/* Header & Filter Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-white">
                   Available Projects
                 </h2>
-                <p className="text-xs sm:text-sm text-[#a1a1aa] mt-1">
+                <p className="text-[11px] sm:text-xs md:text-sm text-[#a1a1aa] mt-0.5">
                   Apply for open escrows and submit your milestones.
                 </p>
               </div>
@@ -176,12 +257,12 @@ export function FreelancerDashboard() {
                   placeholder="Search projects..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-3.5 py-1.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs placeholder-[#71717a] focus:outline-none focus:border-indigo-500"
+                  className="w-full sm:w-auto px-3 py-1.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs placeholder-[#71717a] focus:outline-none focus:border-indigo-500"
                 />
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-3 py-1.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  className="w-full sm:w-auto px-3 py-1.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
                 >
                   <option value="All">All Categories</option>
                   <option value="Development">Development</option>
@@ -203,42 +284,50 @@ export function FreelancerDashboard() {
                 <p className="text-[#a1a1aa] text-sm">No open projects found matching criteria.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3.5 sm:space-y-4">
                 {filteredProjects.map((proj) => (
                   <div
                     key={proj.id}
-                    className="bg-[#1c1c20]/80 border border-[#27272a] hover:border-[#3f3f46] rounded-xl p-5 space-y-4 transition-all"
+                    onClick={() => setViewingProjectDetails(proj)}
+                    className="group bg-[#1c1c20]/90 border border-[#27272a] hover:border-indigo-500/50 hover:bg-[#1e1e24] rounded-2xl p-4 sm:p-5 md:p-6 space-y-3.5 transition-all duration-200 cursor-pointer shadow-lg hover:shadow-indigo-500/5 relative"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md uppercase tracking-wider">
+                    {/* Header Row */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md uppercase tracking-wider">
                             {proj.category}
                           </span>
                           {proj.deadline && (
-                            <span className="text-xs text-[#71717a]">
-                              Deadline: {new Date(proj.deadline).toLocaleDateString()}
+                            <span className="text-[10px] sm:text-xs text-[#71717a]">
+                              Deadline: {new Date(proj.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                             </span>
                           )}
+                          <span className="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity font-medium hidden sm:inline-block">
+                            • Click to view details
+                          </span>
                         </div>
-                        <h3 className="text-lg font-bold text-white">
+                        <h3 className="text-sm sm:text-base md:text-lg font-bold text-white group-hover:text-indigo-300 transition-colors leading-snug">
                           {proj.title}
                         </h3>
                       </div>
 
-                      <div className="flex items-center space-x-3">
-                        <span className="text-base font-extrabold text-[#22c55e]">
+                      {/* Right Action Block */}
+                      <div className="flex items-center justify-between sm:justify-end gap-2.5 pt-1 sm:pt-0" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs sm:text-sm md:text-base font-extrabold text-[#22c55e] bg-[#052e16]/60 px-2.5 py-1 rounded-xl border border-[#14532d]/80">
                           {proj.budget} USDC
                         </span>
                         <button
-                          onClick={() => setSelectedProject(proj)}
-                          className="px-4 py-2 text-xs font-bold rounded-xl border bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-500 shadow-md active:scale-95 transition-all"
+                          onClick={() => handleOpenApplyModal(proj)}
+                          className="px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold rounded-xl border bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-500 shadow-md active:scale-95 transition-all flex items-center gap-1"
                         >
-                          Apply Now ↗
+                          <span>Apply Now</span>
+                          <span>↗</span>
                         </button>
                       </div>
                     </div>
 
+                    {/* Short Description */}
                     <p className="text-xs sm:text-sm text-[#a1a1aa] line-clamp-2 leading-relaxed">
                       {proj.description}
                     </p>
@@ -246,10 +335,10 @@ export function FreelancerDashboard() {
                     {/* Milestones list preview */}
                     {proj.milestones && proj.milestones.length > 0 && (
                       <div className="pt-3 border-t border-[#27272a]/60 flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] font-semibold text-[#71717a]">Milestones:</span>
+                        <span className="text-[11px] font-semibold text-[#71717a]">Milestones ({proj.milestones.length}):</span>
                         {proj.milestones.map((m, idx) => (
                           <span
-                            key={m.id}
+                            key={m.id || idx}
                             className="text-[11px] bg-[#232326] text-[#e4e4e7] px-2.5 py-0.5 rounded-md border border-[#333338]"
                           >
                             {idx + 1}. {m.title} ({m.amount} USDC)
@@ -272,14 +361,17 @@ export function FreelancerDashboard() {
                               return (
                                 <div
                                   key={fIdx}
-                                  onClick={() => setLightboxImage({ url: fileUrl, name: fileName })}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxImage({ url: fileUrl, name: fileName });
+                                  }}
                                   className="relative group/img cursor-pointer overflow-hidden rounded-xl border border-[#333338] hover:border-indigo-500 transition-all shadow-md"
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
                                     src={fileUrl}
                                     alt={fileName}
-                                    className="w-16 h-16 object-cover transform group-hover/img:scale-110 transition-transform duration-200"
+                                    className="w-14 h-14 object-cover transform group-hover/img:scale-110 transition-transform duration-200"
                                   />
                                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
                                     🔍 Zoom
@@ -294,6 +386,7 @@ export function FreelancerDashboard() {
                                 href={fileUrl}
                                 target="_blank"
                                 rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
                                 className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-[#232326] hover:bg-[#27272a] text-[#e4e4e7] text-xs rounded-xl border border-[#333338] transition-colors"
                               >
                                 <span>📄</span>
@@ -327,21 +420,47 @@ export function FreelancerDashboard() {
                 {proposals.map((prop) => (
                   <div
                     key={prop.id}
-                    className="bg-[#1c1c20]/80 border border-[#27272a] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    className="bg-[#1c1c20]/80 border border-[#27272a] rounded-xl p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
                   >
-                    <div className="space-y-1.5 max-w-xl">
+                    <div className="space-y-2 max-w-xl">
                       <div className="flex items-center space-x-2">
                         <h3 className="text-base font-bold text-white">
                           {prop.project_title}
                         </h3>
                         <span className="text-xs text-[#71717a]">({prop.budget} USDC)</span>
                       </div>
-                      <p className="text-xs sm:text-sm text-[#a1a1aa] italic">
-                        &quot;{prop.pitch}&quot;
+
+                      {prop.stellar_address && (
+                        <div className="text-xs text-[#a1a1aa] flex items-center space-x-1.5">
+                          <span className="text-[#71717a]">Wallet:</span>
+                          <span className="font-mono text-[#e4e4e7] bg-[#232326] px-2 py-0.5 rounded text-[11px] border border-[#333338]">
+                            {prop.stellar_address}
+                          </span>
+                        </div>
+                      )}
+
+                      <p className="text-xs sm:text-sm text-[#a1a1aa] leading-relaxed">
+                        <span className="font-semibold text-[#e4e4e7] block mb-0.5">Cover Note:</span>
+                        &quot;{prop.cover_note || prop.pitch}&quot;
                       </p>
+
+                      {prop.portfolio_url && (
+                        <div className="text-xs pt-0.5">
+                          <span className="text-[#71717a] mr-1.5">Portfolio:</span>
+                          <a
+                            href={prop.portfolio_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-indigo-400 hover:underline font-medium inline-flex items-center gap-1"
+                          >
+                            <span>{prop.portfolio_url}</span>
+                            <span>↗</span>
+                          </a>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center space-x-3 self-start sm:self-center">
+                    <div className="flex items-center space-x-3 self-start sm:self-start">
                       <span className="text-xs text-[#71717a]">{prop.created_at}</span>
                       {prop.status === 'pending' && (
                         <span className="px-3 py-1 bg-[#451a03] text-[#f97316] border border-[#78350f] text-xs font-semibold rounded-full">
@@ -363,13 +482,199 @@ export function FreelancerDashboard() {
 
       </div>
 
-      {/* Proposal Submission Modal */}
+      {/* Project Details Modal */}
+      {viewingProjectDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-2xl w-full p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-[#27272a] gap-3">
+              <div>
+                <div className="flex items-center space-x-2 mb-1.5">
+                  <span className="text-[9px] sm:text-[10px] font-bold px-2.5 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md uppercase tracking-wider">
+                    {viewingProjectDetails.category}
+                  </span>
+                  {viewingProjectDetails.status && (
+                    <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md uppercase">
+                      {viewingProjectDetails.status}
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-base sm:text-xl md:text-2xl font-extrabold text-white tracking-tight leading-snug">
+                  {viewingProjectDetails.title}
+                </h2>
+                {viewingProjectDetails.deadline && (
+                  <p className="text-[10px] sm:text-xs text-[#71717a] mt-1">
+                    📅 Deadline: {new Date(viewingProjectDetails.deadline).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                )}
+              </div>
+              
+              <div className="flex flex-col items-end gap-2">
+                <span className="text-xs sm:text-base md:text-xl font-extrabold text-[#22c55e] bg-[#052e16] px-2.5 py-1 sm:px-3.5 sm:py-1 rounded-xl border border-[#14532d]">
+                  {viewingProjectDetails.budget} USDC
+                </span>
+                <button
+                  onClick={() => setViewingProjectDetails(null)}
+                  className="text-[#a1a1aa] hover:text-white transition-colors text-base sm:text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1.5">
+              <h3 className="text-[10px] sm:text-xs font-bold text-[#e4e4e7] uppercase tracking-wider">
+                Project Description
+              </h3>
+              <p className="text-xs sm:text-sm text-[#a1a1aa] leading-relaxed whitespace-pre-line bg-[#1c1c20] p-3 sm:p-4 rounded-xl border border-[#27272a]">
+                {viewingProjectDetails.description}
+              </p>
+            </div>
+
+            {/* Milestones Breakdown */}
+            <div className="space-y-2.5 sm:space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[10px] sm:text-xs font-bold text-[#e4e4e7] uppercase tracking-wider">
+                  Milestones Breakdown ({viewingProjectDetails.milestones?.length || 0})
+                </h3>
+                <span className="text-[10px] sm:text-xs font-medium text-indigo-400">
+                  Escrow Protected
+                </span>
+              </div>
+
+              {(!viewingProjectDetails.milestones || viewingProjectDetails.milestones.length === 0) ? (
+                <p className="text-xs text-[#71717a] italic bg-[#1c1c20] p-3 rounded-xl border border-[#27272a]">
+                  No milestones specified for this project.
+                </p>
+              ) : (
+                <div className="space-y-2 sm:space-y-2.5">
+                  {viewingProjectDetails.milestones.map((m, idx) => (
+                    <div
+                      key={m.id || idx}
+                      className="bg-[#1c1c20] border border-[#27272a] rounded-xl p-3 sm:p-4 space-y-1.5 hover:border-[#3f3f46] transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-bold text-[10px] sm:text-xs flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <h4 className="text-xs sm:text-sm font-bold text-white">{m.title}</h4>
+                        </div>
+                        <span className="text-[10px] sm:text-xs font-bold text-[#22c55e] bg-[#22c55e]/10 px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-lg border border-[#22c55e]/20">
+                          {m.amount} USDC
+                        </span>
+                      </div>
+
+                      {m.description && (
+                        <p className="text-[11px] sm:text-xs text-[#a1a1aa] pl-7 sm:pl-8 leading-normal">{m.description}</p>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-0.5 pl-7 sm:pl-8 text-[10px] sm:text-[11px] text-[#71717a]">
+                        {m.due_date && (
+                          <span>📅 Due: {new Date(m.due_date).toLocaleDateString()}</span>
+                        )}
+                        {m.deliverable_type && (
+                          <span className="bg-[#232326] px-1.5 py-0.5 rounded text-[#e4e4e7] border border-[#333338]">
+                            📦 {m.deliverable_type}
+                          </span>
+                        )}
+                        {m.revision_limit !== undefined && (
+                          <span>🔄 Revisions: {m.revision_limit}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Files & Image Attachments */}
+            {((viewingProjectDetails.attachments && viewingProjectDetails.attachments.length > 0) ||
+              (viewingProjectDetails.files && viewingProjectDetails.files.length > 0)) && (
+              <div className="space-y-2 pt-2 border-t border-[#27272a]">
+                <h3 className="text-xs font-bold text-[#e4e4e7] uppercase tracking-wider">
+                  Project Files & Attachments
+                </h3>
+                <div className="flex flex-wrap items-center gap-3">
+                  {(viewingProjectDetails.files || viewingProjectDetails.attachments || []).map((file: any, fIdx: number) => {
+                    const fileUrl = typeof file === 'string' ? file : (file.file_url || file.file_name);
+                    const fileName = typeof file === 'string' ? file : (file.file_name || 'File Attachment');
+                    const isImage = typeof fileUrl === 'string' && (fileUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) || fileUrl.startsWith('data:image'));
+
+                    if (isImage) {
+                      return (
+                        <div
+                          key={fIdx}
+                          onClick={() => setLightboxImage({ url: fileUrl, name: fileName })}
+                          className="relative group/img cursor-pointer overflow-hidden rounded-xl border border-[#333338] hover:border-indigo-500 transition-all shadow-md"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={fileUrl}
+                            alt={fileName}
+                            className="w-20 h-20 object-cover transform group-hover/img:scale-110 transition-transform duration-200"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
+                            🔍 Zoom
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <a
+                        key={fIdx}
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center space-x-2 px-3.5 py-2 bg-[#232326] hover:bg-[#27272a] text-[#e4e4e7] text-xs rounded-xl border border-[#333338] transition-colors"
+                      >
+                        <span>📄</span>
+                        <span className="truncate max-w-[160px]">{fileName}</span>
+                        <span className="text-[#71717a]">↗</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-[#27272a]">
+              <button
+                type="button"
+                onClick={() => setViewingProjectDetails(null)}
+                className="px-4 py-2.5 bg-[#232326] hover:bg-[#27272a] text-[#a1a1aa] hover:text-white text-xs font-semibold rounded-xl border border-[#333338] transition-colors"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const proj = viewingProjectDetails;
+                  setViewingProjectDetails(null);
+                  handleOpenApplyModal(proj);
+                }}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
+              >
+                <span>Apply for this Project</span>
+                <span>↗</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Application Submission Modal */}
       {selectedProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-[#27272a]">
               <div>
-                <h3 className="text-lg font-bold text-white">Submit Proposal</h3>
+                <h3 className="text-lg font-bold text-white">Apply for Project</h3>
                 <p className="text-xs text-[#a1a1aa] mt-0.5">{selectedProject.title} ({selectedProject.budget} USDC)</p>
               </div>
               <button
@@ -381,19 +686,63 @@ export function FreelancerDashboard() {
             </div>
 
             <form onSubmit={handleSubmitProposal} className="space-y-4">
+              {/* 1. Your Stellar Wallet Address */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-[#e4e4e7]">
-                  Your Proposal Pitch
+                  Your Stellar Wallet Address <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={proposalWalletAddress}
+                  onChange={(e) => setProposalWalletAddress(e.target.value)}
+                  placeholder="e.g. GAUBK... (Your Stellar Public Key)"
+                  disabled
+                  readOnly
+                  className="w-full px-3.5 py-2.5 bg-[#1c1c20] border border-[#27272a] rounded-xl text-[#a1a1aa] font-mono text-xs cursor-not-allowed opacity-80 focus:outline-none"
+                  required
+                />
+                {address && (
+                  <p className="text-[11px] text-emerald-400 flex items-center gap-1">
+                    ✓ Connected Stellar address (Locked)
+                  </p>
+                )}
+              </div>
+
+              {/* 2. Cover Note */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-[#e4e4e7]">
+                  Cover Note <span className="text-red-400">*</span>
                 </label>
                 <textarea
                   rows={4}
-                  value={proposalPitch}
-                  onChange={(e) => setProposalPitch(e.target.value)}
-                  placeholder="Explain why you are the best fit for this project, relevant portfolio links, and estimated completion timeline..."
+                  value={proposalCoverNote}
+                  onChange={(e) => setProposalCoverNote(e.target.value)}
+                  placeholder="Explain why you are the best fit for this project, relevant experience, and your proposed timeline..."
                   className="w-full px-3.5 py-2.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-indigo-500 resize-none"
+                  required
                 />
               </div>
 
+              {/* 3. Portfolio Link (Optional but recommended) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-[#e4e4e7]">
+                    Portfolio Link
+                  </label>
+                  <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-medium">
+                    Optional but recommended
+                  </span>
+                </div>
+                <input
+                  type="url"
+                  value={proposalPortfolioUrl}
+                  onChange={(e) => setProposalPortfolioUrl(e.target.value)}
+                  placeholder="https://github.com/username or https://myportfolio.com"
+                  className="w-full px-3.5 py-2.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* 4. Submit Application Button */}
               <div className="flex justify-end space-x-3 pt-2">
                 <button
                   type="button"
@@ -407,7 +756,7 @@ export function FreelancerDashboard() {
                   disabled={isSubmittingProposal}
                   className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
                 >
-                  {isSubmittingProposal ? 'Submitting...' : 'Submit Proposal ↗'}
+                  {isSubmittingProposal ? 'Submitting...' : 'Submit Application ↗'}
                 </button>
               </div>
             </form>
