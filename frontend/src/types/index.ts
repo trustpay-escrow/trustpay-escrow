@@ -37,12 +37,14 @@ export interface Applicant {
   project_id?: string;
   freelancer_id?: string;
   stellar_address?: string;
+  freelancer_address?: string;
   name: string;
   pitch: string;
   cover_note?: string;
   portfolio_url?: string;
-  status?: 'pending' | 'granted' | 'rejected';
+  status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   granted?: boolean;
+  created_at?: string;
 }
 
 export interface Proposal {
@@ -50,11 +52,12 @@ export interface Proposal {
   project_id: string;
   project_title: string;
   stellar_address?: string;
+  freelancer_address?: string;
   cover_note?: string;
   portfolio_url?: string;
   pitch: string;
   budget: number;
-  status: 'pending' | 'granted' | 'rejected';
+  status: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   created_at: string;
 }
 

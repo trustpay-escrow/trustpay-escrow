@@ -27,3 +27,18 @@ export const milestoneSchema = z.object({
 
 export const milestoneArraySchema = z.array(milestoneSchema);
 export type MilestoneFormData = z.infer<typeof milestoneSchema>;
+
+export const proposalSchema = z.object({
+  project_id: z.string().min(1, 'Project ID is required'),
+  freelancer_address: z.string().min(1, 'Freelancer wallet address is required'),
+  cover_note: z.string().min(5, 'Cover note must be at least 5 characters'),
+  portfolio_url: z.string().url('Invalid portfolio URL').optional().or(z.literal('')),
+});
+
+export type ProposalFormData = z.infer<typeof proposalSchema>;
+
+export const updateProposalStatusSchema = z.object({
+  status: z.union([z.literal('accepted'), z.literal('denied'), z.literal('pending')]),
+});
+
+export type UpdateProposalStatusData = z.infer<typeof updateProposalStatusSchema>;

@@ -26,17 +26,43 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
       .from('project_files')
       .select('*');
 
+    // Fetch proposals for all projects
+    const { data: proposals } = await supabase
+      .from('proposals')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     const milestonesList = milestones || [];
     const filesList = projectFiles || [];
+    const proposalsList = proposals || [];
 
     const enrichedProjects = (projects || []).map((proj) => {
       const projMilestones = milestonesList.filter((m) => m.project_id === proj.id);
       const projFiles = filesList.filter((f) => f.project_id === proj.id);
+      const projProposals = proposalsList.filter((p) => p.project_id === proj.id);
+
+      // Map proposals to applicants format for UI compatibility
+      const applicantsMapped = projProposals.map((p) => ({
+        id: p.id,
+        project_id: p.project_id,
+        stellar_address: p.freelancer_address,
+        freelancer_address: p.freelancer_address,
+        name: `${p.freelancer_address.substring(0, 6)}...${p.freelancer_address.substring(p.freelancer_address.length - 4)}`,
+        pitch: p.cover_note,
+        cover_note: p.cover_note,
+        portfolio_url: p.portfolio_url,
+        status: p.status,
+        created_at: p.created_at,
+        granted: p.status === 'accepted',
+      }));
+
       return {
         ...proj,
         milestones: projMilestones,
         files: projFiles,
-        attachments: projFiles.map((f) => f.file_url || f.file_name)
+        attachments: projFiles.map((f) => f.file_url || f.file_name),
+        proposals: projProposals,
+        applicants: applicantsMapped,
       };
     });
 

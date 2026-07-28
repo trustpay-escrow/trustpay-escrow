@@ -7,6 +7,7 @@ import { useWalletStore } from '@/store/walletStore';
 
 import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
+import { ApplicantCard } from './ApplicantCard';
 
 export interface ClientDashboardProps {
   defaultTab?: 'projects' | 'create' | 'applicants';
@@ -154,6 +155,82 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const handleRemoveMilestone = (id: string) => {
     setFormMilestones(prev => prev.filter(m => m.id !== id));
     toast.info('Milestone removed');
+  };
+
+  // Accept proposal/application
+  const handleAcceptProposal = async (proposalId: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'accepted' }),
+      });
+
+      if (res.ok) {
+        toast.success('Proposal accepted successfully!');
+        setProjects((prev) =>
+          prev.map((proj) => ({
+            ...proj,
+            applicants: (proj.applicants || []).map((app) =>
+              app.id === proposalId ? { ...app, status: 'accepted', granted: true } : app
+            ),
+          }))
+        );
+        setSelectedProjectForApplicants((prev) =>
+          prev
+            ? {
+                ...prev,
+                applicants: (prev.applicants || []).map((app) =>
+                  app.id === proposalId ? { ...app, status: 'accepted', granted: true } : app
+                ),
+              }
+            : null
+        );
+      } else {
+        toast.error('Failed to accept proposal');
+      }
+    } catch (err) {
+      toast.error('Error accepting proposal');
+    }
+  };
+
+  // Deny proposal/application
+  const handleDenyProposal = async (proposalId: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'denied' }),
+      });
+
+      if (res.ok) {
+        toast.info('Proposal denied');
+        setProjects((prev) =>
+          prev.map((proj) => ({
+            ...proj,
+            applicants: (proj.applicants || []).map((app) =>
+              app.id === proposalId ? { ...app, status: 'denied', granted: false } : app
+            ),
+          }))
+        );
+        setSelectedProjectForApplicants((prev) =>
+          prev
+            ? {
+                ...prev,
+                applicants: (prev.applicants || []).map((app) =>
+                  app.id === proposalId ? { ...app, status: 'denied', granted: false } : app
+                ),
+              }
+            : null
+        );
+      } else {
+        toast.error('Failed to deny proposal');
+      }
+    } catch (err) {
+      toast.error('Error denying proposal');
+    }
   };
 
   // File Upload Handler
@@ -733,34 +810,12 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
             <div className="space-y-4">
               {selectedProjectForApplicants?.applicants && selectedProjectForApplicants.applicants.length > 0 ? (
                 selectedProjectForApplicants.applicants.map((applicant) => (
-                  <div
+                  <ApplicantCard
                     key={applicant.id}
-                    className="bg-[#1c1c20]/80 border border-[#27272a] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:border-[#3f3f46]"
-                  >
-                    <div className="space-y-2 max-w-xl">
-                      <h3 className="text-base sm:text-lg font-bold text-white">
-                        {applicant.name}
-                      </h3>
-                      <p className="text-xs sm:text-sm text-[#a1a1aa] leading-relaxed italic">
-                        &quot;{applicant.pitch}&quot;
-                      </p>
-                    </div>
-
-                    <div className="self-start sm:self-center">
-                      <button
-                        onClick={() => handleGrantApplicant(applicant)}
-                        disabled={applicant.granted}
-                        className={`inline-flex items-center space-x-1.5 px-4 py-2 font-bold text-xs sm:text-sm rounded-xl border transition-all ${
-                          applicant.granted
-                            ? 'bg-[#14532d] text-[#22c55e] border-[#15803d] cursor-default'
-                            : 'bg-transparent hover:bg-[#27272a] text-white border-[#3f3f46] hover:border-[#52525b] active:scale-95'
-                        }`}
-                      >
-                        <span>{applicant.granted ? 'Granted ✓' : 'Grant'}</span>
-                        {!applicant.granted && <span className="text-sm font-normal">↗</span>}
-                      </button>
-                    </div>
-                  </div>
+                    applicant={applicant}
+                    onAccept={(id) => handleAcceptProposal(id)}
+                    onDeny={(id) => handleDenyProposal(id)}
+                  />
                 ))
               ) : (
                 <div className="text-center py-12 bg-[#1c1c20]/40 rounded-xl border border-[#27272a]">

@@ -82,9 +82,39 @@ export function FreelancerDashboard() {
     }
   };
 
+  // Fetch freelancer's submitted proposals from backend API
+  const fetchMyProposals = async () => {
+    if (!address) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/proposals/freelancer/${address}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.proposals && Array.isArray(data.proposals)) {
+          const mapped: Proposal[] = data.proposals.map((p: any) => ({
+            id: p.id,
+            project_id: p.project_id,
+            project_title: p.projects?.title || 'Escrow Project',
+            stellar_address: p.freelancer_address,
+            cover_note: p.cover_note,
+            portfolio_url: p.portfolio_url || undefined,
+            pitch: p.cover_note,
+            budget: Number(p.projects?.budget) || 0,
+            status: p.status || 'pending',
+            created_at: new Date(p.created_at || Date.now()).toISOString().split('T')[0],
+          }));
+          setProposals(mapped);
+        }
+      }
+    } catch (err) {
+      // Graceful fallback
+    }
+  };
+
   useEffect(() => {
     fetchBackendProjects();
-  }, []);
+    fetchMyProposals();
+  }, [address]);
 
   // Filtered projects
   const filteredProjects = projects.filter(p => {
@@ -94,8 +124,8 @@ export function FreelancerDashboard() {
     return matchesSearch && matchesCategory;
   });
 
-  // Handle Proposal Submission
-  const handleSubmitProposal = (e: React.FormEvent) => {
+  // Handle Proposal Submission via Backend API
+  const handleSubmitProposal = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!proposalWalletAddress.trim()) {
@@ -112,49 +142,52 @@ export function FreelancerDashboard() {
 
     setIsSubmittingProposal(true);
 
-    setTimeout(() => {
-      const coverNoteText = proposalCoverNote.trim();
-      const walletAddr = proposalWalletAddress.trim();
-      const portfolioUrl = proposalPortfolioUrl.trim();
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/proposals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: selectedProject.id,
+          freelancer_address: proposalWalletAddress.trim(),
+          cover_note: proposalCoverNote.trim(),
+          portfolio_url: proposalPortfolioUrl.trim() || undefined,
+        }),
+      });
 
-      const newProp: Proposal = {
-        id: `prop-${Date.now()}`,
-        project_id: selectedProject.id,
-        project_title: selectedProject.title,
-        stellar_address: walletAddr,
-        cover_note: coverNoteText,
-        portfolio_url: portfolioUrl || undefined,
-        pitch: coverNoteText,
-        budget: selectedProject.budget,
-        status: 'pending',
-        created_at: new Date().toISOString().split('T')[0]
-      };
+      const data = await res.json();
 
-      setProposals(prev => [newProp, ...prev]);
+      if (res.ok && data.proposal) {
+        const p = data.proposal;
+        const newProp: Proposal = {
+          id: p.id,
+          project_id: selectedProject.id,
+          project_title: selectedProject.title,
+          stellar_address: p.freelancer_address,
+          cover_note: p.cover_note,
+          portfolio_url: p.portfolio_url || undefined,
+          pitch: p.cover_note,
+          budget: selectedProject.budget,
+          status: p.status || 'pending',
+          created_at: new Date(p.created_at || Date.now()).toISOString().split('T')[0],
+        };
 
-      // Mark project as applied
-      setProjects(prev => prev.map(p => p.id === selectedProject.id ? {
-        ...p,
-        applicants: [
-          ...(p.applicants || []),
-          {
-            id: `app-${Date.now()}`,
-            stellar_address: walletAddr,
-            name: walletAddr ? `${walletAddr.substring(0, 6)}...${walletAddr.substring(walletAddr.length - 4)}` : 'You',
-            pitch: coverNoteText,
-            cover_note: coverNoteText,
-            portfolio_url: portfolioUrl || undefined
-          }
-        ]
-      } : p));
+        setProposals((prev) => [newProp, ...prev]);
 
-      toast.success('Application submitted successfully!');
-      setSelectedProject(null);
-      setProposalCoverNote('');
-      setProposalPortfolioUrl('');
+        toast.success('Application submitted successfully!');
+        setSelectedProject(null);
+        setProposalCoverNote('');
+        setProposalPortfolioUrl('');
+        setActiveTab('proposals');
+        fetchBackendProjects();
+      } else {
+        toast.error(data.error || 'Failed to submit application');
+      }
+    } catch (err) {
+      toast.error('Could not connect to backend server');
+    } finally {
       setIsSubmittingProposal(false);
-      setActiveTab('proposals');
-    }, 600);
+    }
   };
 
   return (
