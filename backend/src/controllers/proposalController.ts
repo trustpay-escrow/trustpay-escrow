@@ -136,6 +136,50 @@ export const updateProposalStatus = async (req: Request, res: Response): Promise
       return res.status(500).json({ error: 'Failed to update proposal status' });
     }
 
+    // If proposal is accepted, delete all other proposals for this project and assign freelancer
+    if (status === 'accepted' && updated?.project_id) {
+      const { error: deleteError } = await supabase
+        .from('proposals')
+        .delete()
+        .eq('project_id', updated.project_id)
+        .neq('id', id);
+
+      if (deleteError) {
+        logger.error(`Error deleting other proposals for project ${updated.project_id}:`, deleteError);
+      } else {
+        logger.info(`Deleted all other proposals for project ${updated.project_id} after proposal ${id} was accepted`);
+      }
+
+      if (updated.freelancer_address) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('stellar_address', updated.freelancer_address)
+          .maybeSingle();
+
+        let freelancerUserId = userData?.id;
+
+        if (!freelancerUserId) {
+          const { data: newUser } = await supabase
+            .from('users')
+            .insert([{ stellar_address: updated.freelancer_address, role: 'freelancer' }])
+            .select('id')
+            .single();
+          freelancerUserId = newUser?.id;
+        }
+
+        if (freelancerUserId) {
+          await supabase
+            .from('projects')
+            .update({
+              freelancer_id: freelancerUserId,
+              status: 'in_progress',
+            })
+            .eq('id', updated.project_id);
+        }
+      }
+    }
+
     logger.info(`Proposal ${id} status updated to ${status}`);
     return res.json({ proposal: updated });
   } catch (err: any) {
