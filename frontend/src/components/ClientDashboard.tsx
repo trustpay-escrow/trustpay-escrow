@@ -172,18 +172,20 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         setProjects((prev) =>
           prev.map((proj) => ({
             ...proj,
-            applicants: (proj.applicants || []).map((app) =>
-              app.id === proposalId ? { ...app, status: 'accepted', granted: true } : app
-            ),
+            status: (proj.applicants || []).some((app) => app.id === proposalId) ? 'in_progress' : proj.status,
+            applicants: (proj.applicants || [])
+              .filter((app) => app.id === proposalId)
+              .map((app) => ({ ...app, status: 'accepted', granted: true })),
           }))
         );
         setSelectedProjectForApplicants((prev) =>
           prev
             ? {
                 ...prev,
-                applicants: (prev.applicants || []).map((app) =>
-                  app.id === proposalId ? { ...app, status: 'accepted', granted: true } : app
-                ),
+                status: 'in_progress',
+                applicants: (prev.applicants || [])
+                  .filter((app) => app.id === proposalId)
+                  .map((app) => ({ ...app, status: 'accepted', granted: true })),
               }
             : null
         );
