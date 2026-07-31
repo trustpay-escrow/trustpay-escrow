@@ -3,38 +3,53 @@ import { supabase } from '../config/supabase.js';
 import { logger } from '../utils/logger.js';
 import { projectSchema } from '../utils/validators.js';
 
-// Get all projects with milestones & files
+// Get all projects with milestones & files (supports pagination)
 export const getProjects = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { data: projects, error: pError } = await supabase
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 6));
+    const offset = (page - 1) * limit;
+
+    const { data: projects, count, error: pError } = await supabase
       .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (pError) {
       logger.error('Error fetching projects from Supabase:', pError);
       return res.status(500).json({ error: 'Failed to fetch projects' });
     }
 
-    // Fetch milestones for all projects
-    const { data: milestones } = await supabase
-      .from('milestones')
-      .select('*');
+    const projectIds = (projects || []).map((p) => p.id);
 
-    // Fetch project files for all projects
-    const { data: projectFiles } = await supabase
-      .from('project_files')
-      .select('*');
+    let milestonesList: any[] = [];
+    let filesList: any[] = [];
+    let proposalsList: any[] = [];
 
-    // Fetch proposals for all projects
-    const { data: proposals } = await supabase
-      .from('proposals')
-      .select('*')
-      .order('created_at', { ascending: false });
+    if (projectIds.length > 0) {
+      // Fetch milestones for projects on this page
+      const { data: milestones } = await supabase
+        .from('milestones')
+        .select('*')
+        .in('project_id', projectIds);
+      milestonesList = milestones || [];
 
-    const milestonesList = milestones || [];
-    const filesList = projectFiles || [];
-    const proposalsList = proposals || [];
+      // Fetch project files for projects on this page
+      const { data: projectFiles } = await supabase
+        .from('project_files')
+        .select('*')
+        .in('project_id', projectIds);
+      filesList = projectFiles || [];
+
+      // Fetch proposals for projects on this page
+      const { data: proposals } = await supabase
+        .from('proposals')
+        .select('*')
+        .in('project_id', projectIds)
+        .order('created_at', { ascending: false });
+      proposalsList = proposals || [];
+    }
 
     const enrichedProjects = (projects || []).map((proj) => {
       const projMilestones = milestonesList.filter((m) => m.project_id === proj.id);
@@ -66,7 +81,20 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
       };
     });
 
-    return res.json({ projects: enrichedProjects });
+    const totalProjects = count || 0;
+    const totalPages = Math.ceil(totalProjects / limit) || 1;
+
+    return res.json({
+      projects: enrichedProjects,
+      pagination: {
+        page,
+        limit,
+        totalProjects,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
   } catch (err: any) {
     logger.error('Unexpected error fetching projects:', err);
     return res.status(500).json({ error: 'Internal server error' });
