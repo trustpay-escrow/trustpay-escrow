@@ -70,3 +70,13 @@ export interface User {
   is_freelancer: boolean;
   created_at?: string;
 }
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  totalProjects: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
