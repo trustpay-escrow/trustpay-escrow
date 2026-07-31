@@ -21,7 +21,7 @@ export const projectSchema = z.object({
   visibility: z.enum(['Public', 'Private'], {
     message: 'Visibility must be Public or Private'
   }),
-  attachments: z.array(z.string()).optional(),
+  attachments: z.array(z.any()).optional(),
   client_address: z.string().min(1, 'Client address is required'),
 });
 

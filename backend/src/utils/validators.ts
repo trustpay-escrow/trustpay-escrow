@@ -8,7 +8,7 @@ export const projectSchema = z.object({
   budget: z.number().positive('Budget must be greater than 0'),
   deadline: z.string().optional(),
   visibility: z.string().optional(),
-  attachments: z.array(z.string()).optional(),
+  attachments: z.array(z.any()).optional(),
   client_address: z.string().min(1, 'Client wallet address is required'),
   milestones: z.array(z.any()).optional()
 });

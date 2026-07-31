@@ -38,8 +38,9 @@ app.use(limiter);
 
 // Security: CORS configuration moved to top
 
-// Parse JSON bodies
-app.use(express.json());
+// Parse JSON & URLencoded bodies with increased size limit for file attachments
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // API Routes
 app.use('/api/projects', projectsRouter);
@@ -55,7 +56,11 @@ app.get('/health', (req, res) => {
 // Error handling middleware (catch-all)
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error(`Unhandled error: ${err.message}`, { stack: err.stack });
-  res.status(500).json({ error: 'Something went wrong on the server!' });
+  const statusCode = err.status || err.statusCode || 500;
+  res.status(statusCode).json({
+    error: err.message || 'Something went wrong on the server!',
+    details: err.type || err.name || 'ServerError'
+  });
 });
 
 app.listen(env.port, () => {
