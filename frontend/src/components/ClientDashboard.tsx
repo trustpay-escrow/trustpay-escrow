@@ -35,7 +35,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [formBudget, setFormBudget] = useState<number | ''>('');
   const [formDeadline, setFormDeadline] = useState('');
   const [formVisibility, setFormVisibility] = useState<'Public' | 'Invite-only'>('Public');
-  const [formAttachments, setFormAttachments] = useState<string[]>([]);
+  const [formAttachments, setFormAttachments] = useState<any[]>([]);
   
   // Today's date string for restricting date pickers to current or future dates
   const todayStr = new Date().toISOString().split('T')[0];
@@ -95,6 +95,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               visibility: p.visibility || 'public',
               milestones: msList,
               applicants: realApplicants,
+              files: p.files || [],
+              attachments: p.attachments || [],
               created_at: p.created_at
             };
           });
@@ -235,13 +237,41 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     }
   };
 
-  // File Upload Handler
+  // File Upload Handler with data URL & file metadata for live thumbnail previews
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const names = Array.from(e.target.files).map(f => f.name);
-      setFormAttachments(prev => [...prev, ...names]);
-      toast.success(`${names.length} file(s) attached!`);
+      const files = Array.from(e.target.files);
+      files.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const fileDataUrl = event.target?.result as string;
+          const isImage = file.type.startsWith('image/') || Boolean(file.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i));
+          
+          setFormAttachments(prev => [
+            ...prev,
+            {
+              name: file.name,
+              url: fileDataUrl,
+              type: isImage ? 'image' : 'file',
+              size: file.size
+            }
+          ]);
+        };
+        reader.readAsDataURL(file);
+      });
+      toast.success(`${files.length} file(s) attached!`);
+      e.target.value = '';
     }
+  };
+
+  // Remove / Cancel Attachment Handler
+  const handleRemoveAttachment = (indexToRemove: number) => {
+    setFormAttachments(prev => {
+      const target = prev[indexToRemove];
+      const name = typeof target === 'object' && target !== null ? (target.name || target.file_name) : String(target);
+      toast.info(`Removed ${name}`);
+      return prev.filter((_, idx) => idx !== indexToRemove);
+    });
   };
 
   // Submit Project Form to Backend
@@ -278,6 +308,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         deadline: formDeadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         visibility: formVisibility,
         client_address: clientAddr,
+        attachments: formAttachments,
         milestones: formMilestones
       };
 
@@ -290,16 +321,28 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       const data = await res.json();
       if (!res.ok) {
         let errorMsg = data.error || data.message || 'Failed to save project';
-        if (data.details && Array.isArray(data.details)) {
-          const detailMsgs = data.details.map((d: any) => `${d.path?.join('.') || 'field'}: ${d.message}`).join(' | ');
-          errorMsg = `Validation failed: ${detailMsgs}`;
+        if (data.details) {
+          if (Array.isArray(data.details)) {
+            const detailMsgs = data.details.map((d: any) => `${d.path?.join('.') || 'field'}: ${d.message}`).join(' | ');
+            errorMsg = `Validation failed: ${detailMsgs}`;
+          } else if (typeof data.details === 'string') {
+            errorMsg = `${errorMsg} (${data.details})`;
+          } else if (typeof data.details === 'object' && data.details.message) {
+            errorMsg = `${errorMsg} (${data.details.message})`;
+          }
         }
-        toast.error(errorMsg, { duration: 6000 });
+        toast.error(errorMsg, { duration: 8000 });
         setIsSubmitting(false);
         return;
       }
 
       toast.success('Project saved successfully to backend!');
+      setFormTitle('');
+      setFormDescription('');
+      setFormBudget('');
+      setFormDeadline('');
+      setFormAttachments([]);
+      setFormMilestones([]);
       await fetchBackendProjects();
       setActiveTab('projects');
     } catch (err: any) {
@@ -658,7 +701,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               </div>
 
               {/* Attachments Dropzone */}
-              <div className="space-y-1.5 pt-1">
+              <div className="space-y-2 pt-1">
                 <label className="block text-xs sm:text-sm font-semibold text-[#e4e4e7]">
                   Attachments
                 </label>
@@ -678,13 +721,77 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     Drop files or click to upload
                   </span>
                 </label>
+
                 {formAttachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {formAttachments.map((f, idx) => (
-                      <span key={idx} className="text-xs bg-[#27272a] text-[#e4e4e7] px-2.5 py-1 rounded-md font-mono border border-[#3f3f46]">
-                        {f}
-                      </span>
-                    ))}
+                  <div className="pt-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs text-[#a1a1aa] font-semibold">
+                      <span>Attached Files ({formAttachments.length})</span>
+                      <span className="text-[11px] text-[#71717a]">Click image to preview • Click ✕ to remove</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2.5">
+                      {formAttachments.map((fileItem, idx) => {
+                        const isObj = typeof fileItem === 'object' && fileItem !== null;
+                        const fileName = isObj ? (fileItem.name || fileItem.file_name || 'Attachment') : String(fileItem);
+                        const fileUrl = isObj ? (fileItem.url || fileItem.file_url || fileItem.name) : String(fileItem);
+                        const fileType = isObj ? (fileItem.type || fileItem.file_type) : (fileName.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? 'image' : 'file');
+                        const fileSize = isObj && fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : null;
+                        const isImage = fileType === 'image' || (typeof fileUrl === 'string' && (fileUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) || fileUrl.startsWith('data:image')));
+
+                        return (
+                          <div
+                            key={idx}
+                            className="group relative bg-[#232326] border border-[#333338] hover:border-[#4f4f56] rounded-xl p-2 pr-3 flex items-center space-x-2.5 max-w-[210px] sm:max-w-[230px] transition-all shadow-sm shrink-0"
+                          >
+                            {/* Cancel / Remove Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveAttachment(idx);
+                              }}
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center text-[8px] font-extrabold leading-none shadow-md transition-transform hover:scale-110 z-10"
+                              title="Remove attachment"
+                            >
+                              ✕
+                            </button>
+
+                            {/* Thumbnail preview or File icon */}
+                            {isImage ? (
+                              <div
+                                onClick={() => setLightboxImage({ url: fileUrl, name: fileName })}
+                                className="relative w-9 h-9 rounded-lg overflow-hidden border border-[#3f3f46] shrink-0 cursor-pointer group/img bg-[#18181b]"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={fileUrl} alt={fileName} className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-200" />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-[9px] text-white font-semibold transition-opacity">
+                                  🔍
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-9 h-9 rounded-lg bg-[#18181b] border border-[#3f3f46] flex items-center justify-center shrink-0 text-blue-400">
+                                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                            )}
+
+                            {/* File Info */}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-white truncate" title={fileName}>
+                                {fileName}
+                              </p>
+                              <div className="flex items-center space-x-1.5 text-[9px] text-[#a1a1aa] mt-0.5">
+                                <span className="uppercase font-mono px-1 py-0.2 rounded bg-[#18181b] border border-[#27272a]">
+                                  {isImage ? 'IMG' : (fileName.split('.').pop()?.toUpperCase() || 'FILE')}
+                                </span>
+                                {fileSize && <span>{fileSize}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

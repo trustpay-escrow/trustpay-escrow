@@ -170,15 +170,24 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
         const fileName = isObj ? fileItem.name || fileItem.file_name : String(fileItem);
         const fileUrl = isObj ? fileItem.url || fileItem.file_url : String(fileItem);
         const fileType = isObj ? fileItem.type || fileItem.file_type : (fileName.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? 'image' : 'file');
+        const fileSize = isObj && fileItem.size ? Number(fileItem.size) : null;
         return {
           project_id: newProject.id,
           file_name: fileName,
           file_url: fileUrl,
           file_type: fileType,
+          file_size: fileSize,
           uploaded_by: userId
         };
       });
-      await supabase.from('project_files').insert(filesToInsert);
+      const { error: filesError } = await supabase.from('project_files').insert(filesToInsert);
+      if (filesError) {
+        logger.error('Error inserting project_files to Supabase:', filesError);
+        return res.status(500).json({
+          error: `Failed to attach project files: ${filesError.message || JSON.stringify(filesError)}`,
+          details: filesError
+        });
+      }
     }
 
     // Re-fetch created project with milestones & files
@@ -203,7 +212,10 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
     });
   } catch (err: any) {
     logger.error('Unexpected error creating project:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({
+      error: err.message || 'Failed to create project',
+      details: err.details || err.stack || err
+    });
   }
 };
 
