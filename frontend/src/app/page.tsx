@@ -2,6 +2,7 @@
 
 import React from 'react';
 import WalletConnect from "@/components/WalletConnect";
+import NotificationBell from "@/components/NotificationBell";
 import Link from 'next/link';
 
 export default function Home() {
@@ -24,12 +25,15 @@ export default function Home() {
             </span>
           </div>
 
-          <Link
-            href="/projects"
-            className="px-4 py-2 bg-[#1c1c20] hover:bg-[#27272a] text-white font-semibold text-xs rounded-xl border border-[#3f3f46] transition-all hover:border-[#52525b]"
-          >
-            Launch Dashboard ↗
-          </Link>
+          <div className="flex items-center space-x-3">
+            <NotificationBell />
+            <Link
+              href="/projects"
+              className="px-4 py-2 bg-[#1c1c20] hover:bg-[#27272a] text-white font-semibold text-xs rounded-xl border border-[#3f3f46] transition-all hover:border-[#52525b]"
+            >
+              Launch Dashboard ↗
+            </Link>
+          </div>
         </div>
       </header>
 

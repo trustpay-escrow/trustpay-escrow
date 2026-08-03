@@ -5,6 +5,7 @@ import { useWalletStore } from '@/store/walletStore';
 import { ClientDashboard } from './ClientDashboard';
 import { FreelancerDashboard } from './FreelancerDashboard';
 import WalletConnect from './WalletConnect';
+import NotificationBell from './NotificationBell';
 
 export function DashboardRouter() {
   const { address, activeRole, setActiveRole, disconnect } = useWalletStore();
@@ -58,30 +59,34 @@ export function DashboardRouter() {
           </button>
         </div>
 
-        {/* Viewing As Mode Switcher */}
-        <div className="flex items-center space-x-2">
-          <span className="text-[#a1a1aa] font-medium text-xs">Viewing as:</span>
-          <div className="flex items-center space-x-1 bg-[#232326] p-1 rounded-xl border border-[#333338]">
-            <button
-              onClick={() => setActiveRole('client')}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center space-x-1 ${
-                activeRole === 'client'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]'
-              }`}
-            >
-              <span>👤 Client</span>
-            </button>
-            <button
-              onClick={() => setActiveRole('freelancer')}
-              className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center space-x-1 ${
-                activeRole === 'freelancer'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]'
-              }`}
-            >
-              <span>💼 Freelancer</span>
-            </button>
+        {/* Right Section: Notification Bell & Mode Switcher */}
+        <div className="flex items-center space-x-4">
+          <NotificationBell />
+
+          <div className="flex items-center space-x-2">
+            <span className="text-[#a1a1aa] font-medium text-xs">Viewing as:</span>
+            <div className="flex items-center space-x-1 bg-[#232326] p-1 rounded-xl border border-[#333338]">
+              <button
+                onClick={() => setActiveRole('client')}
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center space-x-1 ${
+                  activeRole === 'client'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]'
+                }`}
+              >
+                <span>👤 Client</span>
+              </button>
+              <button
+                onClick={() => setActiveRole('freelancer')}
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center space-x-1 ${
+                  activeRole === 'freelancer'
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]'
+                }`}
+              >
+                <span>💼 Freelancer</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { logger } from '../utils/logger.js';
 import { milestoneArraySchema } from '../utils/validators.js';
+import { createNotification } from '../services/notificationService.js';
 
 // Create milestones for a project
 export const createMilestone = async (req: Request, res: Response): Promise<any> => {
@@ -53,7 +54,72 @@ export const createMilestone = async (req: Request, res: Response): Promise<any>
   }
 };
 
-// Update a milestone status (e.g. submitted)
-export const updateMilestoneStatus = async (req: Request, res: Response) => {
-  res.json({ message: `Milestone ${req.params.id} updated` });
+// Update a milestone status (e.g. submitted, approved, disputed)
+export const updateMilestoneStatus = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const { status, actor_address } = req.body;
+
+    if (!id || !status) {
+      return res.status(400).json({ error: 'Milestone ID and status are required' });
+    }
+
+    const validStatuses = ['pending', 'submitted', 'approved', 'disputed'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Invalid milestone status. Must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    const { data: updated, error } = await supabase
+      .from('milestones')
+      .update({ status })
+      .eq('id', id)
+      .select('*, projects(id, title, client_id, freelancer_id, client:users!projects_client_id_fkey(stellar_address), freelancer:users!projects_freelancer_id_fkey(stellar_address))')
+      .single();
+
+    if (error) {
+      logger.error(`Error updating milestone ${id}:`, error);
+      return res.status(500).json({ error: 'Failed to update milestone status' });
+    }
+
+    // Trigger notification based on status change
+    (async () => {
+      try {
+        const projectTitle = updated?.projects?.title || 'Project';
+        const clientAddress = updated?.projects?.client?.stellar_address;
+        const freelancerAddress = updated?.projects?.freelancer?.stellar_address;
+
+        if (status === 'submitted' && clientAddress) {
+          // Freelancer submitted work -> Notify client
+          await createNotification({
+            recipient_address: clientAddress,
+            sender_address: actor_address || freelancerAddress,
+            project_id: updated.project_id,
+            type: 'milestone_submitted',
+            title: 'Milestone Submitted for Review',
+            message: `Milestone '${updated.title}' for project '${projectTitle}' was submitted for approval.`,
+            link: `/projects?id=${updated.project_id}`,
+          });
+        } else if (status === 'approved' && freelancerAddress) {
+          // Client approved milestone -> Notify freelancer
+          await createNotification({
+            recipient_address: freelancerAddress,
+            sender_address: actor_address || clientAddress,
+            project_id: updated.project_id,
+            type: 'milestone_approved',
+            title: 'Milestone Approved! 💰',
+            message: `Milestone '${updated.title}' for project '${projectTitle}' was approved and funds released!`,
+            link: `/projects?id=${updated.project_id}`,
+          });
+        }
+      } catch (notifyErr) {
+        logger.error('Error triggering milestone notification:', notifyErr);
+      }
+    })();
+
+    return res.json({ message: `Milestone ${id} status updated to ${status}`, milestone: updated });
+  } catch (err: any) {
+    logger.error('Unexpected error updating milestone status:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
 };
+
