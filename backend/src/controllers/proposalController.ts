@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
 import { logger } from '../utils/logger.js';
 import { proposalSchema, updateProposalStatusSchema } from '../utils/validators.js';
+import { createNotification } from '../services/notificationService.js';
 
 // Create a new proposal / application
 export const createProposal = async (req: Request, res: Response): Promise<any> => {
@@ -50,6 +51,36 @@ export const createProposal = async (req: Request, res: Response): Promise<any> 
     }
 
     logger.info(`Proposal ${proposal.id} created successfully for project ${project_id}`);
+
+    // Notify project owner (Client) about new proposal
+    (async () => {
+      try {
+        const { data: project } = await supabase
+          .from('projects')
+          .select('title, client_id, users(stellar_address)')
+          .eq('id', project_id)
+          .single();
+
+        const clientAddress = (project as any)?.users?.stellar_address;
+        const projectTitle = project?.title || 'your project';
+
+        if (clientAddress) {
+          const shortFreelancer = `${freelancer_address.substring(0, 6)}...${freelancer_address.substring(freelancer_address.length - 4)}`;
+          await createNotification({
+            recipient_address: clientAddress,
+            sender_address: freelancer_address,
+            project_id: project_id,
+            type: 'proposal_received',
+            title: 'New Proposal Received',
+            message: `Freelancer ${shortFreelancer} submitted a proposal for '${projectTitle}'.`,
+            link: `/projects?id=${project_id}`,
+          });
+        }
+      } catch (notifyErr) {
+        logger.error('Failed to send proposal notification:', notifyErr);
+      }
+    })();
+
     return res.status(201).json({ proposal });
   } catch (err: any) {
     logger.error('Unexpected error creating proposal:', err);
@@ -181,6 +212,36 @@ export const updateProposalStatus = async (req: Request, res: Response): Promise
     }
 
     logger.info(`Proposal ${id} status updated to ${status}`);
+
+    // Notify freelancer of proposal decision
+    if (updated?.freelancer_address && updated?.project_id) {
+      (async () => {
+        try {
+          const { data: project } = await supabase
+            .from('projects')
+            .select('title')
+            .eq('id', updated.project_id)
+            .single();
+
+          const projectTitle = project?.title || 'the project';
+          const isAccepted = status === 'accepted';
+
+          await createNotification({
+            recipient_address: updated.freelancer_address,
+            project_id: updated.project_id,
+            type: isAccepted ? 'proposal_accepted' : 'proposal_denied',
+            title: isAccepted ? 'Proposal Accepted! 🎉' : 'Proposal Status Update',
+            message: isAccepted
+              ? `Your proposal for '${projectTitle}' was accepted! You are now assigned to this project.`
+              : `Your proposal for '${projectTitle}' was not selected.`,
+            link: `/projects?id=${updated.project_id}`,
+          });
+        } catch (notifyErr) {
+          logger.error('Failed to send proposal update notification:', notifyErr);
+        }
+      })();
+    }
+
     return res.json({ proposal: updated });
   } catch (err: any) {
     logger.error('Unexpected error updating proposal status:', err);

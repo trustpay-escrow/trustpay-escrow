@@ -10,6 +10,7 @@ import projectsRouter from './routes/projectRoutes.js';
 import milestonesRouter from './routes/milestoneRoutes.js';
 import usersRouter from './routes/userRoutes.js';
 import proposalsRouter from './routes/proposalRoutes.js';
+import notificationsRouter from './routes/notificationRoutes.js';
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/projects', projectsRouter);
 app.use('/api/milestones', milestonesRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/proposals', proposalsRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
