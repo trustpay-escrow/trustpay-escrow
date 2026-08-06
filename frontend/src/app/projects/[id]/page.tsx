@@ -253,6 +253,24 @@ export default function ProjectDetailsPage() {
                         }`}>
                           {m.status}
                         </span>
+
+                        {m.status === 'submitted' && (
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                            <span>⏳</span>
+                            {(() => {
+                              const autoReleaseTime = m.auto_release_at
+                                ? new Date(m.auto_release_at).getTime()
+                                : (m.submitted_at ? new Date(m.submitted_at).getTime() + 7 * 24 * 60 * 60 * 1000 : null);
+                              
+                              if (!autoReleaseTime) return 'Auto-releases in 7 days';
+                              const diffMs = autoReleaseTime - Date.now();
+                              if (diffMs <= 0) return 'Eligible for Auto-Release';
+                              const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                              const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                              return `Auto-releases in ${days}d ${hours}h`;
+                            })()}
+                          </span>
+                        )}
                       </div>
 
                       {m.description && (
@@ -268,6 +286,9 @@ export default function ProjectDetailsPage() {
                         )}
                         {m.due_date && (
                           <span>Due: <strong className="text-slate-300">{new Date(m.due_date).toLocaleDateString()}</strong></span>
+                        )}
+                        {m.submitted_at && (
+                          <span>Submitted: <strong className="text-slate-300">{new Date(m.submitted_at).toLocaleDateString()}</strong></span>
                         )}
                       </div>
                     </div>

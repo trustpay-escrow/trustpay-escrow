@@ -7,6 +7,8 @@ export interface Milestone {
   amount: number;
   status: 'pending' | 'submitted' | 'approved' | 'disputed';
   due_date?: string;
+  submitted_at?: string;
+  auto_release_at?: string;
   revision_limit?: number;
   deliverable_type?: string;
 }
