@@ -11,6 +11,7 @@ import milestonesRouter from './routes/milestoneRoutes.js';
 import usersRouter from './routes/userRoutes.js';
 import proposalsRouter from './routes/proposalRoutes.js';
 import notificationsRouter from './routes/notificationRoutes.js';
+import { startAutoReleaseWorker } from './services/autoReleaseService.js';
 
 const app = express();
 
@@ -67,4 +68,5 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 app.listen(env.port, () => {
   logger.info(`Server listening on port ${env.port} in ${env.nodeEnv} mode`);
+  startAutoReleaseWorker();
 });

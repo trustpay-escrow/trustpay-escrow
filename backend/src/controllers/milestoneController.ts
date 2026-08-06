@@ -69,9 +69,17 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
       return res.status(400).json({ error: `Invalid milestone status. Must be one of: ${validStatuses.join(', ')}` });
     }
 
+    const updatePayload: Record<string, any> = { status };
+    if (status === 'submitted') {
+      const now = new Date();
+      const autoReleaseDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      updatePayload.submitted_at = now.toISOString();
+      updatePayload.auto_release_at = autoReleaseDate.toISOString();
+    }
+
     const { data: updated, error } = await supabase
       .from('milestones')
-      .update({ status })
+      .update(updatePayload)
       .eq('id', id)
       .select('*, projects(id, title, client_id, freelancer_id, client:users!projects_client_id_fkey(stellar_address), freelancer:users!projects_freelancer_id_fkey(stellar_address))')
       .single();
