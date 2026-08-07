@@ -10,6 +10,8 @@ export const projectSchema = z.object({
   visibility: z.string().optional(),
   attachments: z.array(z.any()).optional(),
   client_address: z.string().min(1, 'Client wallet address is required'),
+  token: z.enum(['USDC', 'EURC', 'XLM', 'PYUSD']).optional().default('USDC'),
+  token_address: z.string().optional(),
   milestones: z.array(z.any()).optional()
 });
 

@@ -117,7 +117,7 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       });
     }
 
-    const { title, description, category, custom_category, budget, deadline, visibility, client_address } = validationResult.data;
+    const { title, description, category, custom_category, budget, deadline, visibility, client_address, token, token_address } = validationResult.data;
 
     // 2. Lookup or auto-create the user UUID using the stellar address
     let userId: string | null = null;
@@ -162,6 +162,8 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
           visibility: visibility ? visibility.toLowerCase() : 'public',
           client_id: userId,
           status: 'draft',
+          token: token || 'USDC',
+          token_address: token_address || null,
         },
       ])
       .select()

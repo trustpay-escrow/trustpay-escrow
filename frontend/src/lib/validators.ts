@@ -23,6 +23,8 @@ export const projectSchema = z.object({
   }),
   attachments: z.array(z.any()).optional(),
   client_address: z.string().min(1, 'Client address is required'),
+  token: z.enum(['USDC', 'EURC', 'XLM', 'PYUSD']).optional().default('USDC'),
+  token_address: z.string().optional(),
 });
 
 export type ProjectFormData = z.infer<typeof projectSchema>;

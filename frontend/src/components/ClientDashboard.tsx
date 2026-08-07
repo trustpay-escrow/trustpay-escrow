@@ -8,6 +8,7 @@ import { useWalletStore } from '@/store/walletStore';
 import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
 import { ApplicantCard } from './ApplicantCard';
+import { SUPPORTED_TOKENS } from '@/config/tokens';
 
 export interface ClientDashboardProps {
   defaultTab?: 'projects' | 'create' | 'applicants';
@@ -38,6 +39,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [customCategory, setCustomCategory] = useState('');
   const [formProjectType, setFormProjectType] = useState('Fixed price');
   const [formBudget, setFormBudget] = useState<number | ''>('');
+  const [formToken, setFormToken] = useState<'USDC' | 'EURC' | 'XLM' | 'PYUSD'>('USDC');
   const [formDeadline, setFormDeadline] = useState('');
   const [formVisibility, setFormVisibility] = useState<'Public' | 'Invite-only'>('Public');
   const [formAttachments, setFormAttachments] = useState<any[]>([]);
@@ -92,10 +94,12 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               id: p.id,
               title: p.title,
               description: p.description || '',
-              subtitle: `${p.budget} USDC - ${msList.length > 0 ? `${msList.length} milestone(s)` : 'awaiting applicants'}`,
+              subtitle: `${p.budget} ${p.token || 'USDC'} - ${msList.length > 0 ? `${msList.length} milestone(s)` : 'awaiting applicants'}`,
               status: statusLabel,
               category: p.category || 'Development',
               budget: Number(p.budget) || 0,
+              token: p.token || 'USDC',
+              token_address: p.token_address || SUPPORTED_TOKENS[p.token || 'USDC']?.issuerOrContractAddress,
               deadline: p.deadline || '',
               visibility: p.visibility || 'public',
               milestones: msList,
@@ -315,6 +319,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         description: formDescription,
         category: finalCategory,
         budget: Number(formBudget),
+        token: formToken,
+        token_address: SUPPORTED_TOKENS[formToken]?.issuerOrContractAddress,
         deadline: formDeadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         visibility: formVisibility,
         client_address: clientAddr,
@@ -350,6 +356,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       setFormTitle('');
       setFormDescription('');
       setFormBudget('');
+      setFormToken('USDC');
       setFormDeadline('');
       setFormAttachments([]);
       setFormMilestones([]);
@@ -704,11 +711,34 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 </div>
               </div>
 
-              {/* Grid: Total Budget & Overall Deadline */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Grid: Escrow Currency, Total Budget & Overall Deadline */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="block text-xs sm:text-sm font-semibold text-[#e4e4e7]">
-                    Total budget (USDC)
+                    Escrow Currency
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={formToken}
+                      onChange={(e) => setFormToken(e.target.value as any)}
+                      className="w-full appearance-none px-4 py-3 bg-[#232326] border border-[#333338] rounded-xl text-white text-sm focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                    >
+                      <option value="USDC">USDC (USD Coin)</option>
+                      <option value="EURC">EURC (Euro Coin)</option>
+                      <option value="XLM">XLM (Stellar Lumens)</option>
+                      <option value="PYUSD">PYUSD (PayPal USD)</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[#a1a1aa]">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs sm:text-sm font-semibold text-[#e4e4e7]">
+                    Total budget ({formToken})
                   </label>
                   <input
                     type="number"
@@ -899,7 +929,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                           </div>
                           <div className="flex items-center space-x-3">
                             <span className="text-sm font-extrabold text-[#22c55e]">
-                              {m.amount} USDC
+                              {m.amount} {selectedProjectForApplicants?.token || 'USDC'}
                             </span>
                             <button
                               type="button"
@@ -1047,7 +1077,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-[#e4e4e7]">
-                    Amount (USDC) <span className="text-red-400">*</span>
+                    Amount ({formToken}) <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="number"

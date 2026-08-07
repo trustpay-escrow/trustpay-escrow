@@ -59,6 +59,8 @@ export function FreelancerDashboard() {
             description: p.description,
             category: p.category || 'Development',
             budget: Number(p.budget) || 0,
+            token: p.token || 'USDC',
+            token_address: p.token_address || undefined,
             deadline: p.deadline || '',
             client_address: p.client_id || 'GAUBK...NLSGV',
             status: p.status || 'open',
@@ -325,7 +327,7 @@ export function FreelancerDashboard() {
                       {/* Right Action Block */}
                       <div className="flex items-center justify-between sm:justify-end gap-2.5 pt-1 sm:pt-0" onClick={(e) => e.stopPropagation()}>
                         <span className="text-xs sm:text-sm md:text-base font-extrabold text-[#22c55e] bg-[#052e16]/60 px-2.5 py-1 rounded-xl border border-[#14532d]/80">
-                          {proj.budget} USDC
+                          {proj.budget} {proj.token || 'USDC'}
                         </span>
                         {(() => {
                           const existingProposal = proposals.find((p) => p.project_id === proj.id);
@@ -380,7 +382,7 @@ export function FreelancerDashboard() {
                             key={m.id || idx}
                             className="text-[11px] bg-[#232326] text-[#e4e4e7] px-2.5 py-0.5 rounded-md border border-[#333338]"
                           >
-                            {idx + 1}. {m.title} ({m.amount} USDC)
+                            {idx + 1}. {m.title} ({m.amount} {proj.token || 'USDC'})
                           </span>
                         ))}
                       </div>
@@ -522,7 +524,7 @@ export function FreelancerDashboard() {
                         <h3 className="text-base font-bold text-white">
                           {prop.project_title}
                         </h3>
-                        <span className="text-xs text-[#71717a]">({prop.budget} USDC)</span>
+                        <span className="text-xs text-[#71717a]">({prop.budget} {projects.find(p => p.id === prop.project_id)?.token || 'USDC'})</span>
                       </div>
 
                       {prop.stellar_address && (
@@ -613,7 +615,7 @@ export function FreelancerDashboard() {
               
               <div className="flex flex-col items-end gap-2">
                 <span className="text-xs sm:text-base md:text-xl font-extrabold text-[#22c55e] bg-[#052e16] px-2.5 py-1 sm:px-3.5 sm:py-1 rounded-xl border border-[#14532d]">
-                  {viewingProjectDetails.budget} USDC
+                  {viewingProjectDetails.budget} {viewingProjectDetails.token || 'USDC'}
                 </span>
                 <button
                   onClick={() => setViewingProjectDetails(null)}
@@ -664,7 +666,7 @@ export function FreelancerDashboard() {
                           <h4 className="text-xs sm:text-sm font-bold text-white">{m.title}</h4>
                         </div>
                         <span className="text-[10px] sm:text-xs font-bold text-[#22c55e] bg-[#22c55e]/10 px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded-lg border border-[#22c55e]/20">
-                          {m.amount} USDC
+                          {m.amount} {viewingProjectDetails.token || 'USDC'}
                         </span>
                       </div>
 
@@ -776,7 +778,7 @@ export function FreelancerDashboard() {
             <div className="flex items-center justify-between pb-3 border-b border-[#27272a]">
               <div>
                 <h3 className="text-lg font-bold text-white">Apply for Project</h3>
-                <p className="text-xs text-[#a1a1aa] mt-0.5">{selectedProject.title} ({selectedProject.budget} USDC)</p>
+                <p className="text-xs text-[#a1a1aa] mt-0.5">{selectedProject.title} ({selectedProject.budget} {selectedProject.token || 'USDC'})</p>
               </div>
               <button
                 onClick={() => setSelectedProject(null)}

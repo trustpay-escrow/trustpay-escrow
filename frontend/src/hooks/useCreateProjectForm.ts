@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { useWalletStore } from '@/store/walletStore';
 import { useRouter } from 'next/navigation';
 
+import { SUPPORTED_TOKENS } from '@/config/tokens';
+
 export function useCreateProjectForm() {
   const router = useRouter();
   const { address } = useWalletStore();
@@ -17,6 +19,8 @@ export function useCreateProjectForm() {
     category: 'Development',
     custom_category: '',
     budget: 0,
+    token: 'USDC',
+    token_address: SUPPORTED_TOKENS.USDC.issuerOrContractAddress,
     deadline: '',
     visibility: 'Public',
     attachments: [],
@@ -110,6 +114,8 @@ export function useCreateProjectForm() {
           category: 'Development',
           custom_category: '',
           budget: 0,
+          token: 'USDC',
+          token_address: SUPPORTED_TOKENS.USDC.issuerOrContractAddress,
           deadline: '',
           visibility: 'Public',
           attachments: [],
