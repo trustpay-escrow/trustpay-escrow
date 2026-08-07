@@ -20,6 +20,8 @@ export interface Project {
   subtitle?: string;
   category: string;
   budget: number;
+  token?: 'USDC' | 'EURC' | 'XLM' | 'PYUSD' | string;
+  token_address?: string;
   status: 'draft' | 'in_progress' | 'completed' | 'disputed' | 'open';
   deadline?: string;
   visibility?: string;

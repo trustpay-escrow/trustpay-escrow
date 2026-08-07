@@ -121,7 +121,7 @@ export default function ProjectDetailsPage() {
             <div className="bg-slate-800/60 border border-slate-700/50 p-4 rounded-2xl flex items-center gap-6 min-w-[200px] justify-between">
               <div>
                 <span className="text-xs text-slate-400 font-medium block">Total Budget</span>
-                <span className="text-2xl font-black text-indigo-400">{project.budget} XLM</span>
+                <span className="text-2xl font-black text-indigo-400">{project.budget} {project.token || 'USDC'}</span>
               </div>
             </div>
           </div>
