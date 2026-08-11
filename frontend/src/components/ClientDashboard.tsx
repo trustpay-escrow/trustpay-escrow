@@ -43,9 +43,24 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [formDeadline, setFormDeadline] = useState('');
   const [formVisibility, setFormVisibility] = useState<'Public' | 'Invite-only'>('Public');
   const [formAttachments, setFormAttachments] = useState<any[]>([]);
+  const [formYieldEnabled, setFormYieldEnabled] = useState(false);
   
   // Today's date string for restricting date pickers to current or future dates
   const todayStr = new Date().toISOString().split('T')[0];
+
+  const calculateEstimatedYield = () => {
+    if (!formYieldEnabled || !formBudget || Number(formBudget) <= 0) return '0.00';
+    const budgetNum = Number(formBudget);
+    const blendPrincipal = budgetNum * 0.70;
+    let days = 14;
+    if (formDeadline) {
+      const diffMs = new Date(formDeadline).getTime() - Date.now();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays > 0) days = diffDays;
+    }
+    const yieldVal = (blendPrincipal * 0.045 * days) / 365;
+    return yieldVal.toFixed(2);
+  };
   
   // Milestones list for form (initialized as empty)
   const [formMilestones, setFormMilestones] = useState<Milestone[]>([]);
@@ -325,7 +340,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         visibility: formVisibility,
         client_address: clientAddr,
         attachments: formAttachments,
-        milestones: formMilestones
+        milestones: formMilestones,
+        yield_enabled: formYieldEnabled,
+        estimated_yield: Number(calculateEstimatedYield()),
       };
 
       const res = await fetch(`${apiUrl}/api/projects`, {
@@ -794,6 +811,104 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     <span className="text-sm font-medium text-[#a1a1aa]">Invite-only</span>
                   </label>
                 </div>
+              </div>
+
+              {/* BLEND PROTOCOL YIELD STRATEGY TOGGLE */}
+              <div className={`p-5 rounded-2xl border transition-all duration-300 ${
+                formYieldEnabled 
+                  ? 'bg-gradient-to-br from-[#064e3b]/30 via-[#022c22]/40 to-[#0f172a]/60 border-emerald-500/40 shadow-lg shadow-emerald-950/40'
+                  : 'bg-[#1c1c20]/60 border-[#27272a]'
+              }`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-bold text-white">Earn Yield with Blend Protocol</span>
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        ~4.5% APY
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#a1a1aa]">
+                      Optionally route 70% of escrowed USDC to Stellar&apos;s Blend Protocol while freelancer completes work.
+                    </p>
+                  </div>
+
+                  {/* Toggle Switch Button */}
+                  <button
+                    type="button"
+                    onClick={() => setFormYieldEnabled(!formYieldEnabled)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      formYieldEnabled ? 'bg-emerald-500' : 'bg-[#3f3f46]'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        formYieldEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Expanded Yield Breakdown Card when ON */}
+                {formYieldEnabled && (
+                  <div className="mt-4 pt-4 border-t border-emerald-500/20 space-y-3.5 animate-fadeIn">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-[#032019]/80 rounded-xl border border-emerald-500/30 gap-2">
+                      <div>
+                        <span className="text-[11px] font-semibold text-emerald-300 uppercase tracking-wider block">Estimated Yield Projection</span>
+                        <div className="text-lg font-black text-emerald-400">
+                          ~${calculateEstimatedYield()} {formToken}
+                        </div>
+                      </div>
+                      <div className="text-xs text-[#a1a1aa] sm:text-right">
+                        on <span className="font-bold text-white">{formBudget || 0} {formToken}</span> over <span className="font-bold text-white">{formDeadline ? Math.max(1, Math.ceil((new Date(formDeadline).getTime() - Date.now()) / 86400000)) : 14} days</span>
+                      </div>
+                    </div>
+
+                    {/* Deposit & Yield Split Breakdown */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="p-3 bg-[#111827]/80 rounded-xl border border-[#1f2937]">
+                        <div className="font-semibold text-white mb-1 flex items-center justify-between">
+                          <span>Deposit Split</span>
+                          <span className="text-[10px] text-[#9ca3af]">Principal</span>
+                        </div>
+                        <div className="space-y-1 text-[#9ca3af]">
+                          <div className="flex justify-between">
+                            <span>📈 70% Blend Yield Pool:</span>
+                            <span className="font-bold text-emerald-400">${formBudget ? (Number(formBudget) * 0.7).toFixed(2) : '0.00'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>🛡️ 30% Instant Reserve:</span>
+                            <span className="font-bold text-blue-400">${formBudget ? (Number(formBudget) * 0.3).toFixed(2) : '0.00'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-[#111827]/80 rounded-xl border border-[#1f2937]">
+                        <div className="font-semibold text-white mb-1 flex items-center justify-between">
+                          <span>Yield Share</span>
+                          <span className="text-[10px] text-[#9ca3af]">Interest</span>
+                        </div>
+                        <div className="space-y-1 text-[#9ca3af]">
+                          <div className="flex justify-between">
+                            <span>👤 Client Share:</span>
+                            <span className="font-bold text-emerald-400">70%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>🏛️ Platform Fee:</span>
+                            <span className="font-bold text-amber-400">30%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>🛠️ Freelancer Share:</span>
+                            <span className="font-bold text-zinc-400">0% (100% principal)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-[#a1a1aa] italic">
+                      ℹ️ 30% reserve is liquid for instant dispute payouts. The 70% in Blend is withdrawn upon milestone completion or resolution.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Attachments Dropzone */}

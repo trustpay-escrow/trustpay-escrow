@@ -117,7 +117,7 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       });
     }
 
-    const { title, description, category, custom_category, budget, deadline, visibility, client_address, token, token_address } = validationResult.data;
+    const { title, description, category, custom_category, budget, deadline, visibility, client_address, token, token_address, yield_enabled, estimated_yield, blend_pool_address } = validationResult.data;
 
     // 2. Lookup or auto-create the user UUID using the stellar address
     let userId: string | null = null;
@@ -164,6 +164,9 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
           status: 'draft',
           token: token || 'USDC',
           token_address: token_address || null,
+          yield_enabled: yield_enabled || false,
+          estimated_yield: estimated_yield || 0,
+          blend_pool_address: blend_pool_address || null,
         },
       ])
       .select()

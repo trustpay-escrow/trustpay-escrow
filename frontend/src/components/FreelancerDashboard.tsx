@@ -66,6 +66,8 @@ export function FreelancerDashboard() {
             status: p.status || 'open',
             files: p.files || [],
             attachments: p.attachments || [],
+            yield_enabled: p.yield_enabled || false,
+            estimated_yield: Number(p.estimated_yield) || 0,
             milestones: (p.milestones || []).map((m: any, idx: number) => ({
               id: m.id || String(m.milestone_index ?? idx),
               milestone_index: m.milestone_index ?? idx,

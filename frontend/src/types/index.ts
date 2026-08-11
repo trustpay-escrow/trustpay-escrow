@@ -34,6 +34,9 @@ export interface Project {
   applicants?: Applicant[];
   attachments?: string[];
   files?: any[];
+  yield_enabled?: boolean;
+  estimated_yield?: number;
+  blend_pool_address?: string;
 }
 
 export interface Applicant {
