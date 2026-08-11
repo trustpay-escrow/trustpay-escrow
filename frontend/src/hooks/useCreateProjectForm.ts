@@ -25,6 +25,8 @@ export function useCreateProjectForm() {
     visibility: 'Public',
     attachments: [],
     client_address: address || '',
+    yield_enabled: false,
+    estimated_yield: 0,
   });
 
   useEffect(() => {
@@ -32,6 +34,19 @@ export function useCreateProjectForm() {
       setFormData(prev => ({ ...prev, client_address: address }));
     }
   }, [address]);
+
+  // Recalculate estimated yield whenever budget, deadline, or yield_enabled changes
+  useEffect(() => {
+    if (formData.yield_enabled && formData.budget > 0) {
+      const days = calculateDaysFromDeadline(formData.deadline);
+      // 70% of budget into Blend pool earning ~4.5% APY
+      const blendAmount = formData.budget * 0.70;
+      const estYield = (blendAmount * 0.045 * days) / 365;
+      setFormData(prev => ({ ...prev, estimated_yield: Number(estYield.toFixed(2)) }));
+    } else {
+      setFormData(prev => ({ ...prev, estimated_yield: 0 }));
+    }
+  }, [formData.budget, formData.deadline, formData.yield_enabled]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -42,6 +57,10 @@ export function useCreateProjectForm() {
     if (errors[name as keyof ProjectFormData]) {
       setErrors(prev => ({ ...prev, [name]: undefined }));
     }
+  };
+
+  const toggleYield = (enabled: boolean) => {
+    setFormData(prev => ({ ...prev, yield_enabled: enabled }));
   };
 
   const handleFileUploadMock = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,6 +139,8 @@ export function useCreateProjectForm() {
           visibility: 'Public',
           attachments: [],
           client_address: address || '',
+          yield_enabled: false,
+          estimated_yield: 0,
         });
         setErrors({});
       }
@@ -135,7 +156,17 @@ export function useCreateProjectForm() {
     loading,
     errors,
     handleChange,
+    toggleYield,
     handleFileUploadMock,
     handleSubmit
   };
+}
+
+export function calculateDaysFromDeadline(deadlineStr: string): number {
+  if (!deadlineStr) return 14; // Default fallback duration 14 days
+  const deadlineDate = new Date(deadlineStr);
+  const now = new Date();
+  const diffMs = deadlineDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 14;
 }

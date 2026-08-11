@@ -140,6 +140,54 @@ export default function ProjectDetailsPage() {
             </div>
           )}
 
+          {/* Blend Protocol Yield Strategy Card */}
+          {project.yield_enabled && (
+            <div className="mt-6 p-5 rounded-2xl bg-gradient-to-br from-emerald-950/40 via-teal-900/20 to-slate-900 border border-emerald-500/30 shadow-xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-emerald-500/20">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📈</span>
+                  <span className="text-sm font-bold text-white">Blend Protocol Yield Strategy Active</span>
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    ~4.5% APY
+                  </span>
+                </div>
+                <span className="text-xs font-mono text-emerald-400">
+                  Est. Yield: ~${project.estimated_yield || '0.00'} {project.token || 'USDC'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 font-semibold block mb-1">Capital Split (70/30)</span>
+                  <div className="space-y-1 text-slate-300">
+                    <div className="flex justify-between">
+                      <span>💎 Blend Pool (70%):</span>
+                      <span className="font-bold text-emerald-400">${((Number(project.budget) || 0) * 0.7).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>🛡️ Instant Reserve (30%):</span>
+                      <span className="font-bold text-blue-400">${((Number(project.budget) || 0) * 0.3).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                  <span className="text-slate-400 font-semibold block mb-1">Yield Share (Interest)</span>
+                  <div className="space-y-1 text-slate-300">
+                    <div className="flex justify-between">
+                      <span>👤 Client Share:</span>
+                      <span className="font-bold text-emerald-400">70%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>🏛️ Platform Fee:</span>
+                      <span className="font-bold text-amber-400">30%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Attached Files & Images Section */}
           {((project.attachments && project.attachments.length > 0) || (project.files && project.files.length > 0)) && (
             <div className="mt-6 pt-6 border-t border-slate-800">

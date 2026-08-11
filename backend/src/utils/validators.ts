@@ -12,6 +12,9 @@ export const projectSchema = z.object({
   client_address: z.string().min(1, 'Client wallet address is required'),
   token: z.enum(['USDC', 'EURC', 'XLM', 'PYUSD']).optional().default('USDC'),
   token_address: z.string().optional(),
+  yield_enabled: z.boolean().optional().default(false),
+  estimated_yield: z.number().optional().default(0),
+  blend_pool_address: z.string().optional(),
   milestones: z.array(z.any()).optional()
 });
 
