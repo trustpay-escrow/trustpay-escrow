@@ -150,29 +150,50 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
     }
 
     // 3. Insert into projects table
-    const { data: newProject, error } = await supabase
+    const projectPayload: Record<string, any> = {
+      title,
+      description,
+      category: category === 'Other' && custom_category ? custom_category : category,
+      budget,
+      deadline: deadline || null,
+      visibility: visibility ? visibility.toLowerCase() : 'public',
+      client_id: userId,
+      status: 'draft',
+      token: token || 'USDC',
+      token_address: token_address || null,
+    };
+
+    if (yield_enabled !== undefined) projectPayload.yield_enabled = yield_enabled;
+    if (estimated_yield !== undefined && estimated_yield > 0) projectPayload.estimated_yield = estimated_yield;
+    if (blend_pool_address) projectPayload.blend_pool_address = blend_pool_address;
+
+    let newProject: any = null;
+    let { data: insertedProject, error } = await supabase
       .from('projects')
-      .insert([
-        {
-          title,
-          description,
-          category: category === 'Other' && custom_category ? custom_category : category,
-          budget,
-          deadline: deadline || null,
-          visibility: visibility ? visibility.toLowerCase() : 'public',
-          client_id: userId,
-          status: 'draft',
-          token: token || 'USDC',
-          token_address: token_address || null,
-          yield_enabled: yield_enabled || false,
-          estimated_yield: estimated_yield || 0,
-          blend_pool_address: blend_pool_address || null,
-        },
-      ])
+      .insert([projectPayload])
       .select()
       .single();
 
-    if (error) {
+    if (error && (error.message?.includes('schema cache') || error.message?.includes('column') || error.details?.includes('column'))) {
+      logger.warn('Supabase DB missing yield columns, falling back to basic project insert:', error.message);
+      // Remove optional yield columns if DB migration hasn't been run yet
+      delete projectPayload.yield_enabled;
+      delete projectPayload.estimated_yield;
+      delete projectPayload.blend_pool_address;
+
+      const fallbackResult = await supabase
+        .from('projects')
+        .insert([projectPayload])
+        .select()
+        .single();
+
+      insertedProject = fallbackResult.data;
+      error = fallbackResult.error;
+    }
+
+    newProject = insertedProject;
+
+    if (error || !newProject) {
       logger.error('Error inserting project to Supabase:', error);
       return res.status(500).json({ error: 'Failed to create project', details: error });
     }
