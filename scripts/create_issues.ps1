@@ -1,11 +1,11 @@
 # TrustPay Escrow — Automated GitHub Issues Publisher for Drip Wave
 
-Write-Host "🚀 Starting automated creation of 45 Drip Wave issues..." -ForegroundColor Green
+Write-Host "[+] Starting automated creation of 45 Drip Wave issues..." -ForegroundColor Green
 
 # Ensure gh is authenticated
 gh auth status
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ GitHub CLI is not authenticated. Please run 'gh auth login' first." -ForegroundColor Red
+    Write-Host "[-] GitHub CLI is not authenticated. Please run 'gh auth login' first." -ForegroundColor Red
     exit 1
 }
 
@@ -32,7 +32,7 @@ $labels = @(
     @{name="testing"; color="c5def5"; description="Unit & integration testing"}
 )
 
-Write-Host "🏷️ Ensuring repository labels exist on GitHub..." -ForegroundColor Yellow
+Write-Host "[+] Ensuring repository labels exist on GitHub..." -ForegroundColor Yellow
 foreach ($lbl in $labels) {
     gh label create $lbl.name --color $lbl.color --description $lbl.description --force 2>$null
 }
@@ -272,7 +272,7 @@ $issues = @(
 )
 
 # 3. Publish all issues safely
-Write-Host "📦 Publishing 45 Drip Wave issues to GitHub..." -ForegroundColor Green
+Write-Host "[+] Publishing 45 Drip Wave issues to GitHub..." -ForegroundColor Green
 $count = 1
 foreach ($item in $issues) {
     Write-Host "[$count/45] Creating: $($item.title)..." -ForegroundColor Cyan
@@ -280,4 +280,4 @@ foreach ($item in $issues) {
     $count++
 }
 
-Write-Host "🎉 All 45 Drip Wave issues published successfully to GitHub!" -ForegroundColor Green
+Write-Host "[+] All 45 Drip Wave issues published successfully to GitHub!" -ForegroundColor Green
