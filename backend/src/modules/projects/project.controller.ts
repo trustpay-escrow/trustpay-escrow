@@ -140,6 +140,7 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       return res.status(400).json({ error: 'Failed to resolve client user ID' });
     }
 
+    // 3. Insert into projects table
     const projectPayload: Record<string, any> = {
       title,
       description,
@@ -166,6 +167,7 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
 
     if (error && (error.message?.includes('schema cache') || error.message?.includes('column') || error.details?.includes('column'))) {
       logger.warn('Supabase DB missing yield columns, falling back to basic project insert:', error.message);
+      // Remove optional yield columns if DB migration hasn't been run yet
       delete projectPayload.yield_enabled;
       delete projectPayload.estimated_yield;
       delete projectPayload.blend_pool_address;

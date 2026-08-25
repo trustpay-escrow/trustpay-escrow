@@ -26,6 +26,14 @@ TrustPay Escrow is a decentralized payment infrastructure and web application bu
 
 TrustPay Escrow solves this by locking funds in a non-custodial Soroban smart contract upon project initialization. Funds are automatically released milestone by milestone as work is submitted and approved. If disputes arise, a designated arbiter resolves the locked funds according to verifiable contract rules. Additionally, TrustPay Escrow integrates optional yield optimization protocols (such as Blend) to generate yield on escrowed balances while work is in progress.
 
+=======
+## Overview
+
+TrustPay Escrow is a decentralized payment infrastructure and web application built on the **Stellar blockchain** using **Soroban smart contracts**. It resolves the core trust dilemma inherent in client-freelancer relationships: clients hesitate to pay full amounts upfront, while freelancers risk non-payment after delivering work.
+
+TrustPay Escrow solves this by locking funds in a non-custodial Soroban smart contract upon project initialization. Funds are automatically released milestone by milestone as work is submitted and approved. If disputes arise, a designated arbiter resolves the locked funds according to verifiable contract rules. Additionally, TrustPay Escrow integrates optional yield optimization protocols (such as Blend) to generate yield on escrowed balances while work is in progress.
+
+>>>>>>> origin/main
 > **Drip Wave Submission Note:** This repository contains the complete end-to-end product implementation for TrustPay Escrow on Stellar, including Soroban smart contracts, TypeScript SDK bindings, Express API services, Supabase database schemas, and a Next.js web client.
 
 ---
