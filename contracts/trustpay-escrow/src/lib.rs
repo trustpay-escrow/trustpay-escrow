@@ -121,7 +121,7 @@ impl TrustPayEscrow {
     pub fn accrue_yield(env: Env, project_id: u64, yield_amount: i128) {
         let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
         assert!(project.yield_enabled, "Yield not enabled for project");
-        assert!(project.state == ProjectState::Active, "Project not active");
+        assert!(project.state == ProjectState::Active || project.state == ProjectState::Disputed, "Project not active or disputed");
         
         project.accrued_yield += yield_amount;
         env.storage().persistent().set(&DataKey::Project(project_id), &project);

@@ -1,0 +1,90 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  smart-contracts:
+    name: Soroban Smart Contracts (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Cargo Tests
+        run: |
+          cd contracts/trustpay-escrow
+          cargo test
+
+      - name: Build WASM Target
+        run: |
+          cd contracts/trustpay-escrow
+          cargo build --target wasm32-unknown-unknown --release
+
+  backend:
+    name: Express API Backend (Node / TS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build Production Output
+        run: npm run build
+        env:
+          PORT: 5000
+          SUPABASE_URL: https://dummy-supabase-project.supabase.co
+          SUPABASE_ANON_KEY: dummy-anon-key-for-ci-build-purposes
+
+  frontend:
+    name: Next.js Frontend (React / TS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Next.js Typecheck & Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://dummy-supabase-project.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key-for-ci-build-purposes
+          NEXT_PUBLIC_SOROBAN_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"

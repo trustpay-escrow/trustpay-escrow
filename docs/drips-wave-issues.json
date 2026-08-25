@@ -1,0 +1,923 @@
+[
+  {
+    "id": "FE-01",
+    "title": "[FEAT]: Interactive Milestone Progress and Payout Calculator",
+    "summary": "Add dynamic visual progress bar and payout calculator widget on Project Details page.",
+    "background": "Clients and freelancers lack real-time visual feedback on remaining locked escrow funds vs approved payouts.",
+    "proposedSolution": "Build interactive progress bar component calculating approved USDC, locked USDC, and estimated Blend yield.",
+    "filesLikelyAffected": [
+      "frontend/src/app/projects/[id]/page.tsx",
+      "frontend/src/components/MilestoneTracker.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Progress bar dynamically updates based on milestone states (Pending, Submitted, Approved).",
+      "Displays total paid USDC, locked USDC, and estimated Blend yield."
+    ],
+    "testingRequirements": "Mock milestone states and test rendering across various budget splits.",
+    "category": "Frontend",
+    "milestone": "Milestone 1 - Core Features",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["frontend", "drip-wave", "enhancement", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FE-02",
+    "title": "[FEAT]: Advanced Filter and Search for Client/Freelancer Dashboards",
+    "summary": "Enhance dashboard view with multi-criteria filtering and real-time search.",
+    "background": "Users with multiple active projects struggle to find specific projects.",
+    "proposedSolution": "Add filter controls for status, date range, client address, and budget threshold with URL query sync.",
+    "filesLikelyAffected": [
+      "frontend/src/components/ClientDashboard.tsx",
+      "frontend/src/components/FreelancerDashboard.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Real-time search filter without full page reloads.",
+      "URL query state sync (e.g. ?status=active&search=website)."
+    ],
+    "testingRequirements": "Verify filter logic with empty results and multi-select combinations.",
+    "category": "Frontend",
+    "milestone": "Milestone 1 - Core Features",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["frontend", "drip-wave", "good-first-issue", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "FE-03",
+    "title": "[FEAT]: Toast Notification System for Stellar Wallet Signature States",
+    "summary": "Provide feedback toasts during transaction signing and submission phases.",
+    "background": "Users are confused while waiting for Freighter wallet signatures or ledger confirmation.",
+    "proposedSolution": "Implement toast component showing signing, broadcasting, confirmation, and failure states with StellarExpert links.",
+    "filesLikelyAffected": [
+      "frontend/src/hooks/useStellarTx.ts",
+      "frontend/src/components/Toast.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Displays Stellar transaction hash with direct link to StellarExpert explorer.",
+      "Auto-dismisses on success after 5 seconds."
+    ],
+    "testingRequirements": "Simulate rejected wallet signatures and network timeouts.",
+    "category": "Frontend",
+    "milestone": "Milestone 1 - Core Features",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["frontend", "drip-wave", "ux", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FE-04",
+    "title": "[FEAT]: Drag-and-Drop File Upload with Image Lightbox Preview",
+    "summary": "Create file uploader supporting drag-and-drop attachment with image lightbox preview.",
+    "background": "Uploading project specifications and proof of work requires clunky file inputs.",
+    "proposedSolution": "Build drag-and-drop upload zone integrated with Supabase storage and a full-screen lightbox modal.",
+    "filesLikelyAffected": [
+      "frontend/src/components/FileUploadModal.tsx",
+      "frontend/src/components/ImageLightboxModal.tsx"
+    ],
+    "acceptanceCriteria": [
+      "File size validation (< 10MB) and file type restriction (PDF, PNG, JPG, ZIP).",
+      "Lightbox modal allows full-screen preview and direct download."
+    ],
+    "testingRequirements": "Test uploading invalid file extensions and large files.",
+    "category": "Frontend",
+    "milestone": "Milestone 2 - UI/UX Polish",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["frontend", "drip-wave", "ui", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FE-05",
+    "title": "[FEAT]: Global Dark / Light Theme Switcher",
+    "summary": "Implement theme toggle matching modern glassmorphism design system.",
+    "background": "The application currently defaults to dark mode without theme switching capability.",
+    "proposedSolution": "Add theme context provider and toggle button storing choice in localStorage.",
+    "filesLikelyAffected": [
+      "frontend/src/components/ThemeToggle.tsx",
+      "frontend/src/app/globals.css"
+    ],
+    "acceptanceCriteria": [
+      "Persists preference in localStorage and respects system prefers-color-scheme.",
+      "Zero layout shift during theme transition."
+    ],
+    "testingRequirements": "Verify toggle state across browser reloads.",
+    "category": "Frontend",
+    "milestone": "Milestone 2 - UI/UX Polish",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["frontend", "drip-wave", "good-first-issue", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "FE-06",
+    "title": "[FEAT]: Responsive Mobile Navigation Drawer and Wallet Switcher",
+    "summary": "Build smooth sliding mobile navigation drawer with role switcher and wallet disconnect.",
+    "background": "Navigation controls wrap awkwardly on mobile devices below 480px width.",
+    "proposedSolution": "Create responsive slide-over drawer containing menu links, active role toggle, and wallet status.",
+    "filesLikelyAffected": [
+      "frontend/src/components/Navbar.tsx",
+      "frontend/src/components/MobileDrawer.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Touch-friendly hamburger menu triggers slide-over drawer.",
+      "Tested across screen widths down to 360px."
+    ],
+    "testingRequirements": "Test open/close animations and breakpoint triggers on mobile viewports.",
+    "category": "Frontend",
+    "milestone": "Milestone 2 - Mobile Responsiveness",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["frontend", "drip-wave", "mobile", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FE-07",
+    "title": "[FEAT]: Form Validation and Auto-Save Drafts for Project Creation",
+    "summary": "Add Zod schema validation to project creation forms and auto-save progress.",
+    "background": "Accidentally refreshing the project creation modal loses all typed milestone details.",
+    "proposedSolution": "Validate form inputs with Zod and save form draft state to sessionStorage.",
+    "filesLikelyAffected": [
+      "frontend/src/hooks/useCreateProjectForm.ts",
+      "frontend/src/components/CreateProjectModal.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Shows clear inline error messages for invalid wallet addresses, negative amounts, or past due dates.",
+      "Restores draft automatically if page is refreshed."
+    ],
+    "testingRequirements": "Submit invalid payloads and verify error messages.",
+    "category": "Frontend",
+    "milestone": "Milestone 1 - Core Features",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["frontend", "drip-wave", "ux", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "FE-08",
+    "title": "[FEAT]: Milestone Delivery Verification Modal with Code/Link Submission",
+    "summary": "Provide freelancers structured submission modal to attach PR links and demo URLs.",
+    "background": "Submitting a milestone currently lacks a dedicated interface to attach proof of work.",
+    "proposedSolution": "Build submission modal prompting for deliverable description, PR link, and live demo URL.",
+    "filesLikelyAffected": [
+      "frontend/src/components/SubmitMilestoneModal.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Validates URL syntax for GitHub PRs and demo links.",
+      "Triggers Soroban submit_milestone transaction upon form submission."
+    ],
+    "testingRequirements": "Verify form submission and contract call trigger.",
+    "category": "Frontend",
+    "milestone": "Milestone 1 - Core Features",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["frontend", "drip-wave", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FE-09",
+    "title": "[FEAT]: On-Chain Transaction History Log Component",
+    "summary": "Create audit trail component displaying historical contract calls for a project.",
+    "background": "Users cannot view the complete chronological sequence of contract transactions.",
+    "proposedSolution": "Build transaction history tab fetching and listing contract operations with block explorer links.",
+    "filesLikelyAffected": [
+      "frontend/src/components/ProjectHistoryTab.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Displays timestamp, calling wallet address, operation type, and Stellar block explorer links."
+    ],
+    "testingRequirements": "Verify history rendering for active and completed projects.",
+    "category": "Frontend",
+    "milestone": "Milestone 2 - Audit & Analytics",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["frontend", "drip-wave", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FE-10",
+    "title": "[FEAT]: Interactive Proposal Bidding List and Accept/Reject UI",
+    "summary": "Create client workspace view to inspect freelancer proposals and trigger single-click acceptance.",
+    "background": "Clients cannot compare candidate proposals directly inside the project details page.",
+    "proposedSolution": "Add proposals tab to project workspace rendering applicant cover notes, portfolio links, and Accept/Deny actions.",
+    "filesLikelyAffected": [
+      "frontend/src/components/ProposalsList.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Client can accept a proposal, binding freelancer address and updating project status.",
+      "Provides confirmation modal before denying competing proposals."
+    ],
+    "testingRequirements": "Test proposal acceptance and denial state changes.",
+    "category": "Frontend",
+    "milestone": "Milestone 1 - Core Features",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["frontend", "drip-wave", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "FE-11",
+    "title": "[FEAT]: Custom Loading Skeleton Screens across All Views",
+    "summary": "Replace generic loading spinners with CSS skeleton loaders matching card layouts.",
+    "background": "Spinner loaders cause abrupt layout shifts when data finishes loading.",
+    "proposedSolution": "Create pulse-animated skeleton loader components mirroring project cards and table rows.",
+    "filesLikelyAffected": [
+      "frontend/src/components/skeletons/ProjectCardSkeleton.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Pulse animation implemented using pure CSS.",
+      "Applied to dashboards, project detail pages, and proposal lists."
+    ],
+    "testingRequirements": "Inspect visual transition from loading state to populated data.",
+    "category": "Frontend",
+    "milestone": "Milestone 2 - UI/UX Polish",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["frontend", "drip-wave", "good-first-issue", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "FE-12",
+    "title": "[FEAT]: Export Project Report as PDF / JSON",
+    "summary": "Add export button to generate downloadable PDF audit receipt containing project summary.",
+    "background": "Freelancers and clients need official documentation of escrow payouts for tax/accounting.",
+    "proposedSolution": "Integrate PDF generation library to create summary document with milestone payout hashes and timestamps.",
+    "filesLikelyAffected": [
+      "frontend/src/components/ExportReceiptButton.tsx",
+      "frontend/src/lib/pdfGenerator.ts"
+    ],
+    "acceptanceCriteria": [
+      "PDF includes client address, freelancer address, total amount, milestone breakdown, and timestamp."
+    ],
+    "testingRequirements": "Generate PDF report and verify data accuracy against on-chain records.",
+    "category": "Frontend",
+    "milestone": "Milestone 3 - Enterprise Features",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["frontend", "drip-wave", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "FE-13",
+    "title": "[FEAT]: Real-Time WebSocket Notification Toast Banner",
+    "summary": "Display instant notification banner when project state changes or milestones are approved.",
+    "background": "Users have to manually refresh the page to know if a client approved a milestone.",
+    "proposedSolution": "Connect frontend client to Express WebSocket server and dispatch real-time toast alerts on contract events.",
+    "filesLikelyAffected": [
+      "frontend/src/hooks/useWebSocketNotifications.ts"
+    ],
+    "acceptanceCriteria": [
+      "Shows instant toast alert when milestone is submitted, approved, or disputed.",
+      "Plays subtle notification sound effect (optional)."
+    ],
+    "testingRequirements": "Trigger backend event and verify toast appears without manual refresh.",
+    "category": "Frontend",
+    "milestone": "Milestone 3 - Real-Time Features",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["frontend", "drip-wave", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "FE-14",
+    "title": "[FEAT]: Arbiter Dispute Resolution Workspace Interface",
+    "summary": "Build dedicated dashboard for assigned arbiters to review evidence and submit split payouts.",
+    "background": "Arbiters lack a dedicated interface to inspect disputed projects and enter fund split allocations.",
+    "proposedSolution": "Create arbiter workspace view rendering client vs freelancer claims, attachments, and resolution controls.",
+    "filesLikelyAffected": [
+      "frontend/src/components/ArbiterWorkspace.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Calculates total remaining locked balance and validates split sum before transaction signing.",
+      "Only accessible if connected wallet matches designated project arbiter address."
+    ],
+    "testingRequirements": "Connect non-arbiter wallet and verify access denial modal.",
+    "category": "Frontend",
+    "milestone": "Milestone 1 - Core Features",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["frontend", "drip-wave", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "FE-15",
+    "title": "[FEAT]: Accessible Keyboard Navigation and Screen Reader Support",
+    "summary": "Implement full ARIA attributes, focus rings, and keyboard navigation across modals.",
+    "background": "Interactive modals and custom dropdowns are not fully accessible via keyboard (Tab/Escape).",
+    "proposedSolution": "Audit all UI components for ARIA roles, focus management, and keyboard event handlers.",
+    "filesLikelyAffected": [
+      "frontend/src/components/Modal.tsx",
+      "frontend/src/components/Dropdown.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Modals close on Escape key press and trap focus within container.",
+      "Passes automated accessibility audit with zero critical errors."
+    ],
+    "testingRequirements": "Navigate application using only keyboard and VoiceOver/NVDA.",
+    "category": "Frontend",
+    "milestone": "Milestone 2 - Accessibility",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["frontend", "drip-wave", "ux", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "BE-01",
+    "title": "[BEAT]: Automated Milestone Timelock Auto-Release Cron Service",
+    "summary": "Implement Express background cron job to auto-release submitted milestones after 14 days.",
+    "background": "If a client becomes unresponsive after a freelancer submits work, funds remain locked indefinitely.",
+    "proposedSolution": "Create cron worker scanning for submitted milestones exceeding 14 days and triggering contract auto-release.",
+    "filesLikelyAffected": [
+      "backend/src/cron/autoReleaseWorker.ts",
+      "backend/src/server.ts"
+    ],
+    "acceptanceCriteria": [
+      "Cron job runs on configurable schedule (e.g. every hour).",
+      "Triggers auto-release contract invocation for unapproved submitted milestones past timelock duration."
+    ],
+    "testingRequirements": "Mock milestone submission date in local database and trigger cron execution.",
+    "category": "Backend",
+    "milestone": "Milestone 1 - Background Workers",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["backend", "drip-wave", "cron", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "BE-02",
+    "title": "[BEAT]: Soroban RPC Contract Event Polling & Cache Sync",
+    "summary": "Build background event poller scanning Soroban RPC ledger logs to update Supabase state.",
+    "background": "On-chain state transitions (e.g. direct contract calls) need to sync reliably into off-chain database.",
+    "proposedSolution": "Implement RPC polling loop querying getEvents and syncing project/milestone states into Supabase.",
+    "filesLikelyAffected": [
+      "backend/src/services/sorobanRpcListener.ts"
+    ],
+    "acceptanceCriteria": [
+      "Handles network retries and keeps track of last ingested ledger sequence.",
+      "Updates project and milestone states in Supabase within 10 seconds of on-chain confirmation."
+    ],
+    "testingRequirements": "Simulate Soroban contract execution and verify Supabase record update.",
+    "category": "Backend",
+    "milestone": "Milestone 1 - Indexer",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["backend", "drip-wave", "stellar", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "BE-03",
+    "title": "[BEAT]: Express API Rate Limiting & Security Hardening",
+    "summary": "Add express-rate-limit and Helmet security headers to prevent DDoS and abusive requests.",
+    "background": "Public backend API endpoints are susceptible to spam and malicious automated requests.",
+    "proposedSolution": "Configure rate limiting middleware (100 requests / 15 minutes per IP) and strict Helmet HTTP security headers.",
+    "filesLikelyAffected": [
+      "backend/src/middleware/rateLimiter.ts",
+      "backend/src/server.ts"
+    ],
+    "acceptanceCriteria": [
+      "Returns HTTP 429 Too Many Requests when rate limit exceeded.",
+      "Injects strict Content Security Policy and HTTP security headers."
+    ],
+    "testingRequirements": "Send automated request burst and verify 429 response.",
+    "category": "Backend",
+    "milestone": "Milestone 2 - Security",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["backend", "drip-wave", "security", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "BE-04",
+    "title": "[BEAT]: Supabase Presigned URL Upload Endpoint for Milestone Deliverables",
+    "summary": "Build backend endpoint generating secure temporary presigned URLs for object uploads.",
+    "background": "Direct public uploads to Supabase storage bypass backend validation checks.",
+    "proposedSolution": "Create POST /api/v1/attachments/upload-url verifying user authorization before returning presigned upload token.",
+    "filesLikelyAffected": [
+      "backend/src/routes/attachments.ts",
+      "backend/src/controllers/attachmentController.ts"
+    ],
+    "acceptanceCriteria": [
+      "Validates file mime type and enforces 10MB size limit.",
+      "Returns short-lived (15 minute) presigned upload URL."
+    ],
+    "testingRequirements": "Request upload URL with invalid mime type and verify 400 bad request response.",
+    "category": "Backend",
+    "milestone": "Milestone 1 - Core Services",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["backend", "drip-wave", "database", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "BE-05",
+    "title": "[BEAT]: Real-Time WebSocket Server Gateway for Contract Updates",
+    "summary": "Implement WebSocket gateway dispatching live push notifications to connected clients.",
+    "background": "Frontend clients currently rely on short polling to check status updates.",
+    "proposedSolution": "Setup ws server module emitting event payloads whenever contract state changes are ingested.",
+    "filesLikelyAffected": [
+      "backend/src/websocket/wsServer.ts"
+    ],
+    "acceptanceCriteria": [
+      "Supports subscription channels by project ID (e.g. subscribe:project_1).",
+      "Broadcasts event payload within 500ms of database sync."
+    ],
+    "testingRequirements": "Connect WebSocket client, broadcast mock event, and verify message receipt.",
+    "category": "Backend",
+    "milestone": "Milestone 3 - Real-Time Features",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["backend", "drip-wave", "reliability", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "BE-06",
+    "title": "[BEAT]: Winston Structured Logging & Healthcheck Endpoint",
+    "summary": "Implement JSON structured logging with log levels and GET /health check endpoint.",
+    "background": "Console.log statements make production debugging and monitoring difficult.",
+    "proposedSolution": "Integrate Winston logger writing structured JSON logs and create GET /health endpoint checking database connectivity.",
+    "filesLikelyAffected": [
+      "backend/src/utils/logger.ts",
+      "backend/src/routes/health.ts"
+    ],
+    "acceptanceCriteria": [
+      "GET /health returns HTTP 200 with database ping latency.",
+      "Logs errors with full stack traces and context payloads in JSON format."
+    ],
+    "testingRequirements": "Query /health endpoint and verify response structure.",
+    "category": "Backend",
+    "milestone": "Milestone 2 - Observability",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["backend", "drip-wave", "observability", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "BE-07",
+    "title": "[BEAT]: Automated Email Notification Service via SendGrid / Resend",
+    "summary": "Dispatch automated transactional emails when projects are created or milestones submitted.",
+    "background": "Users miss important contract updates if they aren't actively viewing the web dashboard.",
+    "proposedSolution": "Integrate transactional email client sending HTML notification emails on key milestone events.",
+    "filesLikelyAffected": [
+      "backend/src/services/emailService.ts"
+    ],
+    "acceptanceCriteria": [
+      "Sends formatted email notification to client when milestone submitted.",
+      "Supports template customization and respects user notification preferences."
+    ],
+    "testingRequirements": "Trigger email notification event and verify template rendering.",
+    "category": "Backend",
+    "milestone": "Milestone 3 - Email Gateway",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["backend", "drip-wave", "notifications", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "BE-08",
+    "title": "[BEAT]: Proposal Cleanup & Auto-Denial Worker",
+    "summary": "Automatically reject remaining pending proposals once a client accepts an applicant.",
+    "background": "When a proposal is accepted, competing proposals remain stuck in 'Pending' status.",
+    "proposedSolution": "Build service logic updating status of remaining proposals to 'Denied' when proposal is accepted.",
+    "filesLikelyAffected": [
+      "backend/src/services/proposalService.ts"
+    ],
+    "acceptanceCriteria": [
+      "Atomically updates accepted proposal to 'Accepted' and all other project proposals to 'Denied'.",
+      "Sends notification to denied applicants."
+    ],
+    "testingRequirements": "Accept a proposal with multiple active applicants and verify status updates.",
+    "category": "Backend",
+    "milestone": "Milestone 1 - Core Services",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["backend", "drip-wave", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "BE-09",
+    "title": "[BEAT]: Redis Caching Layer for Frequently Queried Dashboard Data",
+    "summary": "Cache project list and user profile database queries in Redis to improve response latency.",
+    "background": "Repeated dashboard reloads create unnecessary read load on Supabase database.",
+    "proposedSolution": "Integrate ioredis client caching GET /projects responses with 60-second TTL and cache invalidation on mutation.",
+    "filesLikelyAffected": [
+      "backend/src/lib/redis.ts",
+      "backend/src/controllers/projectController.ts"
+    ],
+    "acceptanceCriteria": [
+      "Reduces dashboard query response time to < 20ms for cached hits.",
+      "Invalidates project cache key immediately when contract state changes."
+    ],
+    "testingRequirements": "Benchmark API endpoint response time with Redis cache enabled.",
+    "category": "Backend",
+    "milestone": "Milestone 3 - Performance",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["backend", "drip-wave", "performance", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "BE-10",
+    "title": "[BEAT]: Database Migration Framework & Seeding Scripts",
+    "summary": "Setup automated Supabase migration runner and local development seeding script.",
+    "background": "New contributors need an easy way to seed mock projects and proposals in local development environment.",
+    "proposedSolution": "Write TypeScript seed script generating mock projects, milestones, proposals, and attachments.",
+    "filesLikelyAffected": [
+      "backend/src/scripts/seedDatabase.ts",
+      "supabase/migrations/"
+    ],
+    "acceptanceCriteria": [
+      "Command npm run db:seed populates local database with realistic test datasets.",
+      "Migrations apply cleanly in sequential order without errors."
+    ],
+    "testingRequirements": "Run db:seed on fresh database instance and verify record population.",
+    "category": "Backend",
+    "milestone": "Milestone 1 - Developer Tooling",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["backend", "drip-wave", "database", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "SC-01",
+    "title": "[SCAT]: Multi-Asset Support (USDC, EURC, XLM, PYUSD) for Soroban Escrow",
+    "summary": "Support arbitrary Stellar Asset Contracts (SAC) beyond single default USDC token address.",
+    "background": "Escrow contracts should support multi-currency settlement (e.g. EURC or native XLM wrapper).",
+    "proposedSolution": "Refactor contract initialization to accept any valid Soroban SAC token address.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs",
+      "contracts/trustpay-escrow/src/test.rs"
+    ],
+    "acceptanceCriteria": [
+      "Successfully executes create_project and milestone transfers using various test SAC tokens.",
+      "Enforces token address validity checks."
+    ],
+    "testingRequirements": "Write Rust unit tests verifying escrow initialization across 4 distinct token contracts.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 1 - Core Smart Contract",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["smart-contract", "drip-wave", "stellar", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "SC-02",
+    "title": "[SCAT]: Reentrancy Protection and Safe Math Audit Guards",
+    "summary": "Implement explicit reentrancy guards and overflow checks on all token transfer operations.",
+    "background": "State transitions following external token transfer calls could be exposed to unexpected reentrancy vectors.",
+    "proposedSolution": "Update project state variables prior to calling token.transfer and enforce checked arithmetic.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "All math operations use checked_add, checked_sub, checked_mul.",
+      "State update precedes external token transfer invocation."
+    ],
+    "testingRequirements": "Execute unit tests verifying math overflow panics correctly.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 1 - Security",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["smart-contract", "drip-wave", "security", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "SC-03",
+    "title": "[SCAT]: Multi-Arbiter Dispute Committee Voting Mechanism",
+    "summary": "Extend single arbiter model to 2-of-3 multi-signature arbiter dispute resolution committee.",
+    "background": "Relying on a single arbiter address creates a single point of failure during dispute settlement.",
+    "proposedSolution": "Store vector of 3 arbiter addresses and require 2 matching dispute split signatures to finalize payout.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Collects arbiter votes and executes payout split once threshold (2-of-3) is met.",
+      "Rejects unauthorized non-committee signers."
+    ],
+    "testingRequirements": "Simulate 2 valid arbiter approvals and verify payout execution.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 3 - Advanced Governance",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["smart-contract", "drip-wave", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "SC-04",
+    "title": "[SCAT]: Granular Contract Event Emission for Off-Chain Indexing",
+    "summary": "Emit structured Soroban topics and data events for every state-changing contract function.",
+    "background": "Off-chain indexers struggle to parse generic contract state updates without explicit event emissions.",
+    "proposedSolution": "Emit env.events().publish() events with topics (e.g. ('project', 'created'), ('milestone', 'approved')).",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Emits events containing project_id, timestamp, caller, and updated amounts.",
+      "Event topics follow standardized indexing convention."
+    ],
+    "testingRequirements": "Assert event emissions in Rust test suite using env.events().all().",
+    "category": "Smart Contract",
+    "milestone": "Milestone 1 - Core Smart Contract",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["smart-contract", "drip-wave", "stellar", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "SC-05",
+    "title": "[SCAT]: On-Chain Client Rating and Feedback Score Data Structure",
+    "summary": "Allow clients to attach a 1-5 star rating score when approving milestones, saved on-chain.",
+    "background": "Freelancers want immutable on-chain proof of reputation and client feedback score.",
+    "proposedSolution": "Store rating rating: Option<u32> inside Milestone struct and expose getter for freelancer reputation summary.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Enforces rating range (1 to 5).",
+      "Stores rating permanently in project storage."
+    ],
+    "testingRequirements": "Submit milestone approval with rating = 5 and assert saved struct value.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 2 - Reputation",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["smart-contract", "drip-wave", "good-first-issue", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "SC-06",
+    "title": "[SCAT]: Automatic Emergency Freeze & Pause Admin Module",
+    "summary": "Add admin emergency pause flag blocking new project creation during security vulnerabilities.",
+    "background": "If a security flaw is discovered, maintainers need ability to pause new contract deposits.",
+    "proposedSolution": "Implement require_not_paused guard on create_project controlled by admin multisig.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Admin can set paused = true, preventing new project initialization.",
+      "Existing active project milestone approvals remain functional."
+    ],
+    "testingRequirements": "Pause contract in test environment and verify create_project panics.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 2 - Emergency Security",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["smart-contract", "drip-wave", "security", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "SC-07",
+    "title": "[SCAT]: Dynamic Protocol Fee Deduction Engine",
+    "summary": "Deduct configurable platform service fee percentage (e.g. 1%) upon milestone settlement.",
+    "background": "Platform sustainability requires deducting a small protocol service fee from milestone payouts.",
+    "proposedSolution": "Calculate fee_amount = (milestone_amount * fee_basis_points) / 10000 and transfer fee to platform treasury.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Deducts fee accurately and transfers net amount to freelancer.",
+      "Fee percentage capped at maximum 5% (500 bps)."
+    ],
+    "testingRequirements": "Verify payout amounts split between freelancer and treasury address.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 2 - Monetization",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["smart-contract", "drip-wave", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "SC-08",
+    "title": "[SCAT]: Blend Yield Protocol Interface Adapter",
+    "summary": "Implement Soroban contract adapter depositing idle principal into Blend pool contracts.",
+    "background": "Escrowed funds earn zero yield while waiting for milestone delivery.",
+    "proposedSolution": "Integrate Blend pool deposit and withdraw WASM interface bindings into contract lib.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Deposits 70% of total escrow principal into Blend lending contract upon create_project.",
+      "Withdraws principal + yield upon project completion."
+    ],
+    "testingRequirements": "Mock Blend contract client in Rust test environment and test yield calculation.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 3 - DeFi Integrations",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["smart-contract", "drip-wave", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "SC-09",
+    "title": "[SCAT]: Storage TTL Extension Worker Module",
+    "summary": "Extend Soroban instance and persistent storage TTL automatically to prevent data archival.",
+    "background": "Soroban smart contract storage entries expire if TTL is not extended periodically.",
+    "proposedSolution": "Add env.storage().persistent().extend_ttl() calls on project access.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Extends storage TTL to maximum allowable ledger threshold whenever project is accessed.",
+      "Prevents contract state archival."
+    ],
+    "testingRequirements": "Verify storage TTL value using Soroban test utilities.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 1 - Core Smart Contract",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["smart-contract", "drip-wave", "stellar", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "SC-10",
+    "title": "[SCAT]: Soroban Smart Contract Gas & Footprint Optimization Audit",
+    "summary": "Optimize memory allocations and data structures to minimize Soroban invocation CPU gas.",
+    "background": "Large vectors or unnecessary storage lookups increase transaction gas fees for users.",
+    "proposedSolution": "Refactor data structures, replace large vectors with targeted storage keys, and optimize loops.",
+    "filesLikelyAffected": [
+      "contracts/trustpay-escrow/src/lib.rs"
+    ],
+    "acceptanceCriteria": [
+      "Reduces CPU instruction footprint by > 15% across contract calls.",
+      "Maintains 100% test suite pass rate."
+    ],
+    "testingRequirements": "Compare CPU instruction count before and after optimization using Soroban budget metrics.",
+    "category": "Smart Contract",
+    "milestone": "Milestone 2 - Performance",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["smart-contract", "drip-wave", "performance", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "FS-01",
+    "title": "[FULL]: End-to-End Soroban Testnet Integration Test Suite",
+    "summary": "Create automated Playwright e2e test suite simulating full escrow lifecycle on Stellar Testnet.",
+    "background": "Manual browser testing of Freighter wallet connection and milestone release is slow.",
+    "proposedSolution": "Write Playwright E2E tests mocking Freighter extension interactions and verifying flow execution.",
+    "filesLikelyAffected": [
+      "frontend/e2e/escrowFlow.spec.ts"
+    ],
+    "acceptanceCriteria": [
+      "Executes complete project creation, submission, approval, and payout flow.",
+      "Runs headlessly in CI pipeline."
+    ],
+    "testingRequirements": "Run npx playwright test in CI environment.",
+    "category": "Fullstack",
+    "milestone": "Milestone 2 - Testing & Reliability",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["fullstack", "drip-wave", "testing", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "FS-02",
+    "title": "[FULL]: Real-Time Analytics Dashboard for Platform Total Locked Value (TVL)",
+    "summary": "Build public analytics page rendering platform TVL, active projects, and total yield generated.",
+    "background": "Ecosystem participants lack visibility into aggregate platform usage metrics and active USDC volume.",
+    "proposedSolution": "Create /analytics route rendering charts (Recharts) for TVL growth, volume, and active user stats.",
+    "filesLikelyAffected": [
+      "frontend/src/app/analytics/page.tsx",
+      "backend/src/controllers/analyticsController.ts"
+    ],
+    "acceptanceCriteria": [
+      "Calculates TVL dynamically from smart contract balances.",
+      "Renders responsive area charts for monthly volume."
+    ],
+    "testingRequirements": "Verify data consistency between analytics endpoint and on-chain total balances.",
+    "category": "Fullstack",
+    "milestone": "Milestone 3 - Analytics",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["fullstack", "drip-wave", "ui", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FS-03",
+    "title": "[FULL]: User Profile & Reputation Summary Component",
+    "summary": "Build user profile page showcasing completed escrows, total earned/paid USDC, and rating score.",
+    "background": "Freelancers need a public profile URL to showcase verified escrow completion metrics to prospective clients.",
+    "proposedSolution": "Create /profile/[address] route compiling historical project records into a shareable badge card.",
+    "filesLikelyAffected": [
+      "frontend/src/app/profile/[address]/page.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Displays total completed projects, total USDC volume, average client rating, and dispute ratio.",
+      "Includes copyable share link and OpenGraph image generator."
+    ],
+    "testingRequirements": "Inspect profile card rendering for wallets with multiple completed projects.",
+    "category": "Fullstack",
+    "milestone": "Milestone 2 - Reputation",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["fullstack", "drip-wave", "good-first-issue", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FS-04",
+    "title": "[FULL]: Automated GitHub Repository CI Workflow Matrix Optimization",
+    "summary": "Speed up GitHub Actions pipeline using parallel jobs and dependency caching.",
+    "background": "The current CI pipeline executes jobs sequentially, leading to longer build wait times.",
+    "proposedSolution": "Reorganize .github/workflows/ci.yml into parallel matrix jobs with cache-dependency-path configurations.",
+    "filesLikelyAffected": [
+      ".github/workflows/ci.yml"
+    ],
+    "acceptanceCriteria": [
+      "Reduces total CI pipeline execution time by > 40%.",
+      "Runs contract tests, backend build, and frontend build concurrently."
+    ],
+    "testingRequirements": "Trigger GitHub Actions run and measure total execution duration.",
+    "category": "DevOps",
+    "milestone": "Milestone 1 - CI/CD",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["fullstack", "drip-wave", "good-first-issue", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "FS-05",
+    "title": "[FULL]: Comprehensive Soroban SDK TypeScript Type Generation Pipeline",
+    "summary": "Automate contract WASM interface to TypeScript type bindings generation using soroban-cli.",
+    "background": "Manually typing Soroban contract invocation parameters leads to runtime payload errors.",
+    "proposedSolution": "Add npm run generate-types script invoking soroban contract bindings typescript to produce exact types.",
+    "filesLikelyAffected": [
+      "frontend/src/types/contractBindings.ts",
+      "package.json"
+    ],
+    "acceptanceCriteria": [
+      "Generates strongly typed TypeScript functions matching contract methods.",
+      "Runs automatically before frontend build step."
+    ],
+    "testingRequirements": "Execute typegen script and verify exported contract interface types.",
+    "category": "Fullstack",
+    "milestone": "Milestone 1 - Tooling",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["fullstack", "drip-wave", "stellar", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FS-06",
+    "title": "[FULL]: Interactive OpenAPI / Swagger Documentation Gateway",
+    "summary": "Embed interactive Swagger UI endpoint at GET /docs for backend REST API inspection.",
+    "background": "External developers lack interactive API documentation to test Express backend endpoints.",
+    "proposedSolution": "Integrate swagger-ui-express module reading swagger.yaml schema definition.",
+    "filesLikelyAffected": [
+      "backend/src/docs/swagger.yaml",
+      "backend/src/server.ts"
+    ],
+    "acceptanceCriteria": [
+      "Navigating to GET /docs renders interactive Swagger UI with execute buttons.",
+      "Documents all project, proposal, attachment, and health endpoints."
+    ],
+    "testingRequirements": "Inspect GET /docs in browser and send test request via Swagger UI interface.",
+    "category": "Fullstack",
+    "milestone": "Milestone 2 - Documentation",
+    "complexity": "Low",
+    "points": 100,
+    "labels": ["fullstack", "drip-wave", "good-first-issue", "complexity:trivial", "100-pts"]
+  },
+  {
+    "id": "FS-07",
+    "title": "[FULL]: Automated Database Migration Rollback and Disaster Recovery Tooling",
+    "summary": "Create automated database backup and migration down scripts for Supabase schema management.",
+    "background": "Schema migration failures require manual intervention without rollback scripts.",
+    "proposedSolution": "Add down migration files for all Supabase migration steps and write automated backup script.",
+    "filesLikelyAffected": [
+      "supabase/migrations/",
+      "scripts/backup_db.sh"
+    ],
+    "acceptanceCriteria": [
+      "Executing migration rollback returns database schema cleanly to previous version.",
+      "Includes automated daily pg_dump backup script."
+    ],
+    "testingRequirements": "Run migration up and down in local PostgreSQL instance.",
+    "category": "DevOps",
+    "milestone": "Milestone 3 - Reliability",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["fullstack", "drip-wave", "database", "complexity:medium", "150-pts"]
+  },
+  {
+    "id": "FS-08",
+    "title": "[FULL]: Multi-Language Internationalization (i18n) Framework",
+    "summary": "Add i18n support for English, Spanish, Portuguese, and French across all user interface views.",
+    "background": "Stellar gig economy users reside globally and require localized language interfaces.",
+    "proposedSolution": "Integrate next-intl framework with translation JSON dictionaries for key languages.",
+    "filesLikelyAffected": [
+      "frontend/src/i18n/",
+      "frontend/src/app/[locale]/layout.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Users can select preferred language from header dropdown.",
+      "Persists language preference in URL path (e.g. /es/projects) and cookie."
+    ],
+    "testingRequirements": "Switch language to Spanish and verify text translation across dashboard.",
+    "category": "Frontend",
+    "milestone": "Milestone 3 - i18n",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["fullstack", "drip-wave", "ux", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "FS-09",
+    "title": "[FULL]: On-Chain Encrypted Private Messaging between Client & Freelancer",
+    "summary": "Enable end-to-end encrypted messaging using wallet public keys for confidential project chatter.",
+    "background": "Clients and freelancers need to exchange sensitive credentials (API keys, credentials) securely.",
+    "proposedSolution": "Implement E2E encryption using Web Crypto API (ECDH key exchange via Stellar wallet keys).",
+    "filesLikelyAffected": [
+      "frontend/src/lib/cryptoMessaging.ts",
+      "frontend/src/components/ProjectChat.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Messages are encrypted on client device before transmission to backend database.",
+      "Only wallet holding corresponding private key can decrypt message content."
+    ],
+    "testingRequirements": "Inspect message payload in Supabase DB to verify cipher text state.",
+    "category": "Fullstack",
+    "milestone": "Milestone 3 - Security & Privacy",
+    "complexity": "High",
+    "points": 200,
+    "labels": ["fullstack", "drip-wave", "security", "complexity:high", "200-pts"]
+  },
+  {
+    "id": "FS-10",
+    "title": "[FULL]: Comprehensive Automated Benchmark Performance Audit & Web Vitals Optimization",
+    "summary": "Optimize Lighthouse score to > 95 across Performance, Accessibility, Best Practices, and SEO.",
+    "background": "Initial bundle size and unoptimized images impair mobile loading speeds.",
+    "proposedSolution": "Optimize Next.js bundle, dynamic imports, image formats (WebP/AVIF), and critical CSS path.",
+    "filesLikelyAffected": [
+      "frontend/next.config.ts",
+      "frontend/src/app/layout.tsx"
+    ],
+    "acceptanceCriteria": [
+      "Lighthouse audit score > 95 on Desktop and Mobile viewports.",
+      "First Contentful Paint (FCP) < 1.2s and Largest Contentful Paint (LCP) < 2.0s."
+    ],
+    "testingRequirements": "Run Google Lighthouse audit on production build bundle.",
+    "category": "Frontend",
+    "milestone": "Milestone 2 - Performance",
+    "complexity": "Medium",
+    "points": 150,
+    "labels": ["fullstack", "drip-wave", "performance", "complexity:medium", "150-pts"]
+  }
+]

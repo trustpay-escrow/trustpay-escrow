@@ -1,10 +1,9 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase.js';
-import { logger } from '../utils/logger.js';
-import { proposalSchema, updateProposalStatusSchema } from '../utils/validators.js';
-import { createNotification } from '../services/notificationService.js';
+import { supabase } from '../../config/supabase.js';
+import { logger } from '../../shared/utils/logger.js';
+import { proposalSchema, updateProposalStatusSchema } from '../../shared/utils/validators.js';
+import { createNotification } from '../notifications/notification.service.js';
 
-// Create a new proposal / application
 export const createProposal = async (req: Request, res: Response): Promise<any> => {
   try {
     const validationResult = proposalSchema.safeParse(req.body);
@@ -18,7 +17,6 @@ export const createProposal = async (req: Request, res: Response): Promise<any> 
 
     const { project_id, freelancer_address, cover_note, portfolio_url } = validationResult.data;
 
-    // Check if proposal already exists for this project and freelancer address
     const { data: existing } = await supabase
       .from('proposals')
       .select('id')
@@ -30,7 +28,6 @@ export const createProposal = async (req: Request, res: Response): Promise<any> 
       return res.status(409).json({ error: 'You have already submitted an application for this project' });
     }
 
-    // Insert new proposal into database
     const { data: proposal, error } = await supabase
       .from('proposals')
       .insert([
@@ -52,7 +49,6 @@ export const createProposal = async (req: Request, res: Response): Promise<any> 
 
     logger.info(`Proposal ${proposal.id} created successfully for project ${project_id}`);
 
-    // Notify project owner (Client) about new proposal
     (async () => {
       try {
         const { data: project } = await supabase
@@ -88,7 +84,6 @@ export const createProposal = async (req: Request, res: Response): Promise<any> 
   }
 };
 
-// Get all proposals for a specific project
 export const getProposalsByProject = async (req: Request, res: Response): Promise<any> => {
   try {
     const { projectId } = req.params;
@@ -114,7 +109,6 @@ export const getProposalsByProject = async (req: Request, res: Response): Promis
   }
 };
 
-// Get proposals submitted by a freelancer address
 export const getProposalsByFreelancer = async (req: Request, res: Response): Promise<any> => {
   try {
     const { address } = req.params;
@@ -140,7 +134,6 @@ export const getProposalsByFreelancer = async (req: Request, res: Response): Pro
   }
 };
 
-// Update proposal status (accept or deny)
 export const updateProposalStatus = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
@@ -167,7 +160,6 @@ export const updateProposalStatus = async (req: Request, res: Response): Promise
       return res.status(500).json({ error: 'Failed to update proposal status' });
     }
 
-    // If proposal is accepted, delete all other proposals for this project and assign freelancer
     if (status === 'accepted' && updated?.project_id) {
       const { error: deleteError } = await supabase
         .from('proposals')
@@ -213,7 +205,6 @@ export const updateProposalStatus = async (req: Request, res: Response): Promise
 
     logger.info(`Proposal ${id} status updated to ${status}`);
 
-    // Notify freelancer of proposal decision
     if (updated?.freelancer_address && updated?.project_id) {
       (async () => {
         try {

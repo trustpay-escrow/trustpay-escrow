@@ -1,9 +1,8 @@
 import { Request, Response } from 'express';
-import { supabase } from '../config/supabase.js';
-import { logger } from '../utils/logger.js';
-import { projectSchema } from '../utils/validators.js';
+import { supabase } from '../../config/supabase.js';
+import { logger } from '../../shared/utils/logger.js';
+import { projectSchema } from '../../shared/utils/validators.js';
 
-// Get all projects with milestones & files (supports pagination)
 export const getProjects = async (req: Request, res: Response): Promise<any> => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -28,21 +27,18 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
     let proposalsList: any[] = [];
 
     if (projectIds.length > 0) {
-      // Fetch milestones for projects on this page
       const { data: milestones } = await supabase
         .from('milestones')
         .select('*')
         .in('project_id', projectIds);
       milestonesList = milestones || [];
 
-      // Fetch project files for projects on this page
       const { data: projectFiles } = await supabase
         .from('project_files')
         .select('*')
         .in('project_id', projectIds);
       filesList = projectFiles || [];
 
-      // Fetch proposals for projects on this page
       const { data: proposals } = await supabase
         .from('proposals')
         .select('*')
@@ -56,7 +52,6 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
       const projFiles = filesList.filter((f) => f.project_id === proj.id);
       const projProposals = proposalsList.filter((p) => p.project_id === proj.id);
 
-      // Map proposals to applicants format for UI compatibility
       const applicantsMapped = projProposals.map((p) => ({
         id: p.id,
         project_id: p.project_id,
@@ -101,10 +96,8 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
   }
 };
 
-// Create a new project (draft) with milestones & files
 export const createProject = async (req: Request, res: Response): Promise<any> => {
   try {
-    // 1. Validate payload using Zod
     const validationResult = projectSchema.safeParse(req.body);
     if (!validationResult.success) {
       const errorMessages = validationResult.error.issues
@@ -119,7 +112,6 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
 
     const { title, description, category, custom_category, budget, deadline, visibility, client_address, token, token_address, yield_enabled, estimated_yield, blend_pool_address } = validationResult.data;
 
-    // 2. Lookup or auto-create the user UUID using the stellar address
     let userId: string | null = null;
     const { data: userData } = await supabase
       .from('users')
@@ -130,7 +122,6 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
     if (userData && userData.id) {
       userId = userData.id;
     } else {
-      // Auto-upsert user for seamless project creation
       const { data: newUser } = await supabase
         .from('users')
         .insert([{ stellar_address: client_address, role: 'client' }])
@@ -198,7 +189,6 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       return res.status(500).json({ error: 'Failed to create project', details: error });
     }
 
-    // 4. Insert Milestones if provided
     const milestones = req.body.milestones;
     if (Array.isArray(milestones) && milestones.length > 0 && newProject) {
       const milestonesToInsert = milestones.map((m: any, idx: number) => ({
@@ -216,7 +206,6 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       await supabase.from('milestones').insert(milestonesToInsert);
     }
 
-    // 5. Insert Project Files / Attachments if provided
     const attachments = req.body.attachments;
     if (Array.isArray(attachments) && attachments.length > 0 && newProject) {
       const filesToInsert = attachments.map((fileItem: any) => {
@@ -244,7 +233,6 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       }
     }
 
-    // Re-fetch created project with milestones & files
     const { data: createdMilestones } = await supabase
       .from('milestones')
       .select('*')
@@ -273,7 +261,6 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
   }
 };
 
-// Get a specific project with milestones & files
 export const getProjectById = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;

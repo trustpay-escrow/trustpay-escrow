@@ -1,0 +1,51 @@
+name: 💡 Feature Proposal
+description: Suggest an enhancement or new feature for TrustPay Escrow
+title: "[FEAT]: "
+labels: ["enhancement", "drip-wave"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggesting a new feature or ecosystem enhancement? We welcome community ideas!
+  - type: input
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: Concise summary of the feature proposal.
+      placeholder: e.g., Add automated email notification service on milestone submit
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem & Motivation
+      description: What problem does this feature solve? Why is it beneficial?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the technical implementation strategy.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance Criteria
+      description: List measurable criteria to mark this feature complete.
+      placeholder: |
+        - [ ] Feature works across all supported viewports
+        - [ ] Unit tests cover happy and failure paths
+    validations:
+      required: true
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Drips Wave Complexity Level
+      options:
+        - High (200 Points)
+        - Medium (150 Points)
+        - Trivial / Low (100 Points)
+    validations:
+      required: true
