@@ -29,7 +29,13 @@ $labels = @(
     @{name="stellar"; color="1e88e5"; description="Stellar network & RPC tasks"},
     @{name="notifications"; color="e99695"; description="Email & webhook alerts"},
     @{name="performance"; color="d4c5f9"; description="Performance optimization"},
-    @{name="testing"; color="c5def5"; description="Unit & integration testing"}
+    @{name="testing"; color="c5def5"; description="Unit & integration testing"},
+    @{name="complexity:high"; color="d93f0b"; description="High complexity task (200 Pts)"},
+    @{name="complexity:medium"; color="fbca04"; description="Medium complexity task (150 Pts)"},
+    @{name="complexity:trivial"; color="0e8a16"; description="Trivial complexity task (100 Pts)"},
+    @{name="200-pts"; color="b60205"; description="200 Drips Wave points"},
+    @{name="150-pts"; color="e99695"; description="150 Drips Wave points"},
+    @{name="100-pts"; color="c2e0c6"; description="100 Drips Wave points"}
 )
 
 Write-Host "[+] Ensuring repository labels exist on GitHub..." -ForegroundColor Yellow

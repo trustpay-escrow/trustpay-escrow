@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Community Discussion & Questions
+    url: https://github.com/OluwapelumiElisha/trustpay-escrow/discussions
+    about: Ask questions, share ideas, or discuss implementation details with maintainers.
+  - name: Security Vulnerability Disclosure
+    url: mailto:security@trustpay.network
+    about: Privately disclose sensitive security vulnerabilities.

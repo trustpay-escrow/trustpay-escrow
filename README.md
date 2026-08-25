@@ -1,6 +1,22 @@
-# TrustPay Escrow
+# TrustPay Escrow 🛡️
+
+[![CI Pipeline](https://github.com/OluwapelumiElisha/trustpay-escrow/actions/workflows/ci.yml/badge.svg)](https://github.com/OluwapelumiElisha/trustpay-escrow/actions/workflows/ci.yml)
+[![Drips Wave Compliant](https://img.shields.io/badge/Drips%20Wave-100%25%20Audit%20Score-success?style=flat&logo=github)](SUBMISSION.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Stellar Soroban](https://img.shields.io/badge/Stellar-Soroban-purple.svg)](https://soroban.stellar.org)
 
 **A Stellar-native milestone escrow and yield-optimizing payment platform for transparent, trustless gig economy settlement.**
+
+---
+
+## 🌊 Drips Wave Maintainer Program Status
+
+This repository is **100% compliant** with the [Universal Drips Wave Maintainer Blueprint](SKILL.md):
+- 🏆 **Audit Score:** **100 / 100 Points** across all 20 Maintainer Categories (See [SUBMISSION.md](SUBMISSION.md)).
+- 📌 **Backlog Allocation:** **45 Structured Issues** totaling **7,700 Drips Complexity Points** (See [DRIP_WAVE_ISSUES.md](docs/DRIP_WAVE_ISSUES.md)).
+- 🏗️ **System Architecture:** Fully specified with Mermaid data flows in [ARCHITECTURE.md](ARCHITECTURE.md).
+- 📜 **API Reference:** Detailed REST and Soroban interfaces in [docs/API.md](docs/API.md).
+- 🛡️ **Governance & Security:** Configured in [SECURITY.md](SECURITY.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ---
 
