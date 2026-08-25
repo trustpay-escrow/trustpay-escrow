@@ -1,11 +1,9 @@
 import { Request, Response } from 'express';
+import { supabase } from '../../config/supabase.js';
+import { logger } from '../../shared/utils/logger.js';
+import { milestoneArraySchema } from '../../shared/utils/validators.js';
+import { createNotification } from '../notifications/notification.service.js';
 
-import { supabase } from '../config/supabase.js';
-import { logger } from '../utils/logger.js';
-import { milestoneArraySchema } from '../utils/validators.js';
-import { createNotification } from '../services/notificationService.js';
-
-// Create milestones for a project
 export const createMilestone = async (req: Request, res: Response): Promise<any> => {
   try {
     const { projectId, milestones } = req.body;
@@ -54,7 +52,6 @@ export const createMilestone = async (req: Request, res: Response): Promise<any>
   }
 };
 
-// Update a milestone status (e.g. submitted, approved, disputed)
 export const updateMilestoneStatus = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
@@ -89,7 +86,6 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
       return res.status(500).json({ error: 'Failed to update milestone status' });
     }
 
-    // Trigger notification based on status change
     (async () => {
       try {
         const projectTitle = updated?.projects?.title || 'Project';
@@ -97,7 +93,6 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
         const freelancerAddress = updated?.projects?.freelancer?.stellar_address;
 
         if (status === 'submitted' && clientAddress) {
-          // Freelancer submitted work -> Notify client
           await createNotification({
             recipient_address: clientAddress,
             sender_address: actor_address || freelancerAddress,
@@ -108,7 +103,6 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
             link: `/projects?id=${updated.project_id}`,
           });
         } else if (status === 'approved' && freelancerAddress) {
-          // Client approved milestone -> Notify freelancer
           await createNotification({
             recipient_address: freelancerAddress,
             sender_address: actor_address || clientAddress,
@@ -130,4 +124,3 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
-

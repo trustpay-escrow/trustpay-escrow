@@ -1,11 +1,7 @@
-import { supabase } from '../config/supabase.js';
-import { logger } from '../utils/logger.js';
-import { createNotification } from './notificationService.js';
+import { supabase } from '../../config/supabase.js';
+import { logger } from '../../shared/utils/logger.js';
+import { createNotification } from '../notifications/notification.service.js';
 
-/**
- * Sends daily reminder notifications to clients on Day 3, 4, 5, and 6
- * after milestone submission to ensure both parties stay informed before auto-release.
- */
 export const checkAndProcessTimelockReminders = async (): Promise<void> => {
   try {
     const { data: activeMilestones, error } = await supabase
@@ -57,7 +53,6 @@ export const checkAndProcessTimelockReminders = async (): Promise<void> => {
       }
 
       if (targetReminderDay > 0) {
-        // Send notification
         await createNotification({
           recipient_address: clientAddress,
           sender_address: milestone.projects?.freelancer?.stellar_address || undefined,
@@ -68,7 +63,6 @@ export const checkAndProcessTimelockReminders = async (): Promise<void> => {
           link: `/projects?id=${milestone.project_id}`,
         });
 
-        // Update last_reminder_day
         await supabase
           .from('milestones')
           .update({ last_reminder_day: targetReminderDay })
@@ -82,15 +76,10 @@ export const checkAndProcessTimelockReminders = async (): Promise<void> => {
   }
 };
 
-/**
- * Checks for submitted milestones past their 7-day auto-release timelock
- * and automatically approves them in Supabase & notifies relevant parties.
- */
 export const checkAndProcessAutoReleases = async (): Promise<void> => {
   try {
     const nowIso = new Date().toISOString();
 
-    // Fetch submitted milestones where auto_release_at <= now
     const { data: expiredMilestones, error } = await supabase
       .from('milestones')
       .select('*, projects(id, title, client_id, freelancer_id, client:users!projects_client_id_fkey(stellar_address), freelancer:users!projects_freelancer_id_fkey(stellar_address))')
@@ -110,7 +99,6 @@ export const checkAndProcessAutoReleases = async (): Promise<void> => {
 
     for (const milestone of expiredMilestones) {
       try {
-        // Mark status as approved
         const { error: updateErr } = await supabase
           .from('milestones')
           .update({ status: 'approved' })
@@ -127,7 +115,6 @@ export const checkAndProcessAutoReleases = async (): Promise<void> => {
         const freelancerAddr = milestone.projects?.freelancer?.stellar_address;
         const clientAddr = milestone.projects?.client?.stellar_address;
 
-        // Send notifications
         if (freelancerAddr) {
           await createNotification({
             recipient_address: freelancerAddr,
@@ -160,18 +147,12 @@ export const checkAndProcessAutoReleases = async (): Promise<void> => {
   }
 };
 
-/**
- * Initializes the background interval worker for auto-release and timelock reminders.
- * @param intervalMs Interval in milliseconds (defaults to 5 minutes)
- */
 export const startAutoReleaseWorker = (intervalMs: number = 5 * 60 * 1000): NodeJS.Timeout => {
   logger.info(`Starting Auto-Release Timelock worker & daily reminder checks (every ${intervalMs / 1000}s)...`);
   
-  // Run once immediately on startup
   checkAndProcessTimelockReminders();
   checkAndProcessAutoReleases();
 
-  // Schedule periodic execution
   return setInterval(async () => {
     await checkAndProcessTimelockReminders();
     await checkAndProcessAutoReleases();

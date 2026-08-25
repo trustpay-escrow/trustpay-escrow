@@ -1,5 +1,5 @@
-import { supabase } from '../config/supabase.js';
-import { logger } from '../utils/logger.js';
+import { supabase } from '../../config/supabase.js';
+import { logger } from '../../shared/utils/logger.js';
 
 export interface CreateNotificationInput {
   recipient_address: string;

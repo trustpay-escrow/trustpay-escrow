@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { supabase } from '../config/supabase.js';
-import { UserConnectRequest } from '../types/index.js';
-import { logger } from '../utils/logger.js';
+import { supabase } from '../../config/supabase.js';
+import { UserConnectRequest } from '../../shared/types/index.js';
+import { logger } from '../../shared/utils/logger.js';
 
 export const connectWallet = async (req: UserConnectRequest, res: Response) => {
   try {
@@ -12,7 +12,6 @@ export const connectWallet = async (req: UserConnectRequest, res: Response) => {
       return res.status(400).json({ error: 'Stellar address is required' });
     }
 
-    // Check if single user identity already exists for this wallet address
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('*')
@@ -36,13 +35,11 @@ export const connectWallet = async (req: UserConnectRequest, res: Response) => {
       });
     }
 
-    // User does not exist, require an email to proceed
     const { email } = req.body;
     if (!email) {
       return res.status(403).json({ requiresRegistration: true, message: 'Please provide an email to register.' });
     }
 
-    // Email provided, create a single multi-capability user record
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert([{
@@ -56,7 +53,6 @@ export const connectWallet = async (req: UserConnectRequest, res: Response) => {
       .single();
 
     if (insertError) {
-      // If table doesn't have is_client / is_freelancer columns yet, fallback to inserting without them
       const { data: fallbackUser, error: fallbackError } = await supabase
         .from('users')
         .insert([{ stellar_address, role: 'client', email }])
