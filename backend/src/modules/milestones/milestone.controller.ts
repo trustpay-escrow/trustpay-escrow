@@ -78,7 +78,7 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
       .from('milestones')
       .update(updatePayload)
       .eq('id', id)
-      .select('*, projects(id, title, client_id, freelancer_id, client:users!projects_client_id_fkey(stellar_address), freelancer:users!projects_freelancer_id_fkey(stellar_address))')
+      .select('*')
       .single();
 
     if (error) {
@@ -86,11 +86,46 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
       return res.status(500).json({ error: 'Failed to update milestone status' });
     }
 
+    let enrichedProject: any = null;
+    if (updated?.project_id) {
+      const { data: proj } = await supabase
+        .from('projects')
+        .select('id, title, client_id, freelancer_id')
+        .eq('id', updated.project_id)
+        .single();
+
+      if (proj) {
+        const userIds = [proj.client_id, proj.freelancer_id].filter(Boolean);
+        let usersMap: Record<string, string> = {};
+        if (userIds.length > 0) {
+          const { data: users } = await supabase
+            .from('users')
+            .select('id, stellar_address')
+            .in('id', userIds);
+          if (users) {
+            for (const u of users) {
+              usersMap[u.id] = u.stellar_address;
+            }
+          }
+        }
+        enrichedProject = {
+          ...proj,
+          client: proj.client_id ? { stellar_address: usersMap[proj.client_id] } : null,
+          freelancer: proj.freelancer_id ? { stellar_address: usersMap[proj.freelancer_id] } : null,
+        };
+      }
+    }
+
+    const milestoneWithProject = {
+      ...updated,
+      projects: enrichedProject,
+    };
+
     (async () => {
       try {
-        const projectTitle = updated?.projects?.title || 'Project';
-        const clientAddress = updated?.projects?.client?.stellar_address;
-        const freelancerAddress = updated?.projects?.freelancer?.stellar_address;
+        const projectTitle = milestoneWithProject?.projects?.title || 'Project';
+        const clientAddress = milestoneWithProject?.projects?.client?.stellar_address;
+        const freelancerAddress = milestoneWithProject?.projects?.freelancer?.stellar_address;
 
         if (status === 'submitted' && clientAddress) {
           await createNotification({
@@ -118,7 +153,7 @@ export const updateMilestoneStatus = async (req: Request, res: Response): Promis
       }
     })();
 
-    return res.json({ message: `Milestone ${id} status updated to ${status}`, milestone: updated });
+    return res.json({ message: `Milestone ${id} status updated to ${status}`, milestone: milestoneWithProject });
   } catch (err: any) {
     logger.error('Unexpected error updating milestone status:', err);
     return res.status(500).json({ error: 'Internal server error' });
