@@ -2,22 +2,75 @@ import { supabase } from '../../config/supabase.js';
 import { logger } from '../../shared/utils/logger.js';
 import { createNotification } from '../notifications/notification.service.js';
 
+async function enrichMilestonesWithProjects(milestones: any[]): Promise<any[]> {
+  if (!milestones || milestones.length === 0) return [];
+
+  const projectIds = [...new Set(milestones.map((m) => m.project_id).filter(Boolean))];
+  if (projectIds.length === 0) return milestones;
+
+  const { data: projects, error: pErr } = await supabase
+    .from('projects')
+    .select('id, title, client_id, freelancer_id')
+    .in('id', projectIds);
+
+  if (pErr || !projects) {
+    logger.error('Error fetching projects for milestones enrichment:', pErr);
+    return milestones;
+  }
+
+  const userIds = [...new Set(projects.flatMap((p) => [p.client_id, p.freelancer_id]).filter(Boolean))];
+  let usersMap: Record<string, string> = {};
+
+  if (userIds.length > 0) {
+    const { data: users, error: uErr } = await supabase
+      .from('users')
+      .select('id, stellar_address')
+      .in('id', userIds);
+
+    if (!uErr && users) {
+      for (const u of users) {
+        usersMap[u.id] = u.stellar_address;
+      }
+    }
+  }
+
+  const projectsMap: Record<string, any> = {};
+  for (const proj of projects) {
+    projectsMap[proj.id] = {
+      ...proj,
+      client: proj.client_id ? { stellar_address: usersMap[proj.client_id] } : null,
+      freelancer: proj.freelancer_id ? { stellar_address: usersMap[proj.freelancer_id] } : null,
+    };
+  }
+
+  return milestones.map((m) => ({
+    ...m,
+    projects: projectsMap[m.project_id] || null,
+  }));
+}
+
 export const checkAndProcessTimelockReminders = async (): Promise<void> => {
   try {
-    const { data: activeMilestones, error } = await supabase
+    const { data: rawMilestones, error } = await supabase
       .from('milestones')
-      .select('*, projects(id, title, client_id, freelancer_id, client:users!projects_client_id_fkey(stellar_address), freelancer:users!projects_freelancer_id_fkey(stellar_address))')
+      .select('*')
       .eq('status', 'submitted')
       .not('submitted_at', 'is', null);
 
     if (error) {
-      logger.error('Error fetching active submitted milestones for reminders:', error);
+      if (error.message?.includes('column') || error.message?.includes('does not exist')) {
+        logger.warn('Timelock reminder skipped: milestones.submitted_at column missing in Supabase schema.');
+      } else {
+        logger.error('Error fetching active submitted milestones for reminders:', error);
+      }
       return;
     }
 
-    if (!activeMilestones || activeMilestones.length === 0) {
+    if (!rawMilestones || rawMilestones.length === 0) {
       return;
     }
+
+    const activeMilestones = await enrichMilestonesWithProjects(rawMilestones);
 
     const now = Date.now();
 
@@ -80,20 +133,26 @@ export const checkAndProcessAutoReleases = async (): Promise<void> => {
   try {
     const nowIso = new Date().toISOString();
 
-    const { data: expiredMilestones, error } = await supabase
+    const { data: rawMilestones, error } = await supabase
       .from('milestones')
-      .select('*, projects(id, title, client_id, freelancer_id, client:users!projects_client_id_fkey(stellar_address), freelancer:users!projects_freelancer_id_fkey(stellar_address))')
+      .select('*')
       .eq('status', 'submitted')
       .lte('auto_release_at', nowIso);
 
     if (error) {
-      logger.error('Error fetching expired auto-release milestones:', error);
+      if (error.message?.includes('column') || error.message?.includes('does not exist')) {
+        logger.warn('Auto-release worker skipped: milestones.auto_release_at column missing in Supabase schema.');
+      } else {
+        logger.error('Error fetching expired auto-release milestones:', error);
+      }
       return;
     }
 
-    if (!expiredMilestones || expiredMilestones.length === 0) {
+    if (!rawMilestones || rawMilestones.length === 0) {
       return;
     }
+
+    const expiredMilestones = await enrichMilestonesWithProjects(rawMilestones);
 
     logger.info(`Found ${expiredMilestones.length} milestone(s) ready for auto-release.`);
 
