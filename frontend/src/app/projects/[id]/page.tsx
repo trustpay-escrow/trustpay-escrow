@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { Milestone, Project } from '@/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
+import { ProjectDetailSkeleton } from '@/components/skeletons';
 
 export default function ProjectDetailsPage() {
   const params = useParams();
@@ -42,14 +43,7 @@ export default function ProjectDetailsPage() {
   }, [projectId]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-400 font-medium text-sm animate-pulse">Loading project overview...</p>
-        </div>
-      </div>
-    );
+    return <ProjectDetailSkeleton />;
   }
 
   if (!project) {
