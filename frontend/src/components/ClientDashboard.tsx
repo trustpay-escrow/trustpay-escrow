@@ -8,6 +8,7 @@ import { useWalletStore } from '@/store/walletStore';
 import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
 import { ApplicantCard } from './ApplicantCard';
+import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 
 export interface ClientDashboardProps {
@@ -471,10 +472,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
             </div>
 
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 text-[#a1a1aa]">
-                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-xs">Loading real projects from database...</p>
-              </div>
+              <ProjectCardSkeletonList count={3} />
             ) : projects.length === 0 ? (
               <div className="text-center py-12 bg-[#1c1c20]/50 border border-[#27272a] rounded-xl">
                 <p className="text-[#a1a1aa] text-sm mb-4">No projects created yet in the database.</p>

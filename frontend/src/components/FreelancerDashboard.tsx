@@ -7,6 +7,7 @@ import { useWalletStore } from '@/store/walletStore';
 
 import { Milestone, Project, Proposal } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
+import { ProjectCardSkeletonList, ProposalSkeletonList } from '@/components/skeletons';
 
 export function FreelancerDashboard() {
   const router = useRouter();
@@ -289,10 +290,7 @@ export function FreelancerDashboard() {
 
             {/* Project List */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 text-[#a1a1aa]">
-                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-xs">Fetching open projects...</p>
-              </div>
+              <ProjectCardSkeletonList count={3} variant="freelancer" />
             ) : filteredProjects.length === 0 ? (
               <div className="text-center py-12 bg-[#1c1c20]/50 border border-[#27272a] rounded-xl">
                 <p className="text-[#a1a1aa] text-sm">No open projects found matching criteria.</p>
@@ -510,7 +508,9 @@ export function FreelancerDashboard() {
               My Submitted Proposals
             </h2>
 
-            {proposals.length === 0 ? (
+            {loading ? (
+              <ProposalSkeletonList count={3} />
+            ) : proposals.length === 0 ? (
               <div className="text-center py-12 bg-[#1c1c20]/40 rounded-xl border border-[#27272a]">
                 <p className="text-sm text-[#a1a1aa]">You haven&apos;t submitted any proposals yet.</p>
               </div>

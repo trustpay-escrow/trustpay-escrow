@@ -53,3 +53,18 @@ button {
 button {
   cursor: pointer;
 }
+
+/* Skeleton loader pure CSS pulse animation */
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.animate-skeleton-pulse {
+  animation: skeleton-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
