@@ -5,7 +5,8 @@ import { createNotification } from '../notifications/notification.service.js';
 
 export const getProjectMessages = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { projectId } = req.params;
+    const rawProjectId = req.params.projectId;
+    const projectId = (Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId) as string;
 
     if (!projectId) {
       return res.status(400).json({ error: 'Project ID is required' });
@@ -35,7 +36,8 @@ export const getProjectMessages = async (req: Request, res: Response): Promise<a
 
 export const sendMessage = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { projectId } = req.params;
+    const rawProjectId = req.params.projectId;
+    const projectId = (Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId) as string;
     const { sender_address, receiver_address, content } = req.body;
 
     if (!projectId) {
