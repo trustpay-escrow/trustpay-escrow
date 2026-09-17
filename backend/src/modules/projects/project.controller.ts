@@ -8,10 +8,37 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 6));
     const offset = (page - 1) * limit;
+    const clientAddress = req.query.client_address as string;
 
-    const { data: projects, count, error: pError } = await supabase
+    let query = supabase
       .from('projects')
-      .select('*', { count: 'exact' })
+      .select('*, client:client_id(stellar_address), freelancer:freelancer_id(stellar_address)', { count: 'exact' });
+
+    if (clientAddress) {
+      const { data: user } = await supabase
+        .from('users')
+        .select('id')
+        .eq('stellar_address', clientAddress)
+        .single();
+
+      if (user && user.id) {
+        query = query.eq('client_id', user.id);
+      } else {
+        return res.json({
+          projects: [],
+          pagination: {
+            page,
+            limit,
+            totalProjects: 0,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        });
+      }
+    }
+
+    const { data: projects, count, error: pError } = await query
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -68,6 +95,8 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
 
       return {
         ...proj,
+        client_address: proj.client?.stellar_address || null,
+        freelancer_address: proj.freelancer?.stellar_address || null,
         milestones: projMilestones,
         files: projFiles,
         attachments: projFiles.map((f) => f.file_url || f.file_name),
@@ -166,11 +195,13 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       .single();
 
     if (error && (error.message?.includes('schema cache') || error.message?.includes('column') || error.details?.includes('column'))) {
-      logger.warn('Supabase DB missing yield columns, falling back to basic project insert:', error.message);
-      // Remove optional yield columns if DB migration hasn't been run yet
+      logger.warn('Supabase DB missing optional columns, falling back to basic project insert:', error.message);
+      // Remove optional yield and token columns if DB migration hasn't been run yet
       delete projectPayload.yield_enabled;
       delete projectPayload.estimated_yield;
       delete projectPayload.blend_pool_address;
+      delete projectPayload.token;
+      delete projectPayload.token_address;
 
       const fallbackResult = await supabase
         .from('projects')

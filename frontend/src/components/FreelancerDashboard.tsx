@@ -7,6 +7,7 @@ import { useWalletStore } from '@/store/walletStore';
 
 import { Milestone, Project, Proposal } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
+import { ProjectChatModal } from './ProjectChatModal';
 import { ProjectCardSkeletonList, ProposalSkeletonList } from '@/components/skeletons';
 
 export function FreelancerDashboard() {
@@ -17,6 +18,23 @@ export function FreelancerDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name?: string } | null>(null);
+
+  // Chat Modal State
+  const [chatModalState, setChatModalState] = useState<{
+    isOpen: boolean;
+    projectId: string;
+    projectTitle: string;
+    senderAddress: string;
+    receiverAddress: string;
+    recipientRoleLabel: string;
+  }>({
+    isOpen: false,
+    projectId: '',
+    projectTitle: '',
+    senderAddress: '',
+    receiverAddress: '',
+    recipientRoleLabel: 'Client',
+  });
 
   // Selected project for proposal modal
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -43,6 +61,113 @@ export function FreelancerDashboard() {
     setProposalWalletAddress(address || '');
     setProposalCoverNote('');
     setProposalPortfolioUrl('');
+  };
+
+  // Helper to render action button or status badge for a project
+  const renderProjectActionBadge = (proj: Project, isModal = false) => {
+    const existingProposal = proposals.find((p) => p.project_id === proj.id) ||
+      (proj.applicants || []).find((a: any) => a.stellar_address === address || a.freelancer_address === address) ||
+      (proj.proposals || []).find((p: any) => p.freelancer_address === address || p.stellar_address === address);
+
+    if (existingProposal) {
+      if (existingProposal.status === 'accepted' || existingProposal.status === 'granted') {
+        const clientAddr = proj.client_address || (proj as any).client?.stellar_address || '';
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isModal) setViewingProjectDetails(null);
+                setChatModalState({
+                  isOpen: true,
+                  projectId: proj.id,
+                  projectTitle: proj.title,
+                  senderAddress: address || '',
+                  receiverAddress: clientAddr,
+                  recipientRoleLabel: 'Client',
+                });
+              }}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+            >
+              <span>💬 Chat with Client</span>
+            </button>
+            <span className={isModal 
+              ? "px-5 py-2.5 bg-[#052e16] text-[#22c55e] border border-[#14532d] text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md"
+              : "px-3.5 py-1.5 bg-[#052e16] text-[#22c55e] border border-[#14532d] text-xs font-bold rounded-xl flex items-center gap-1"
+            }>
+              <span>Application Accepted ✓</span>
+            </span>
+          </div>
+        );
+      }
+      if (existingProposal.status === 'pending') {
+        return (
+          <span className={isModal 
+            ? "px-5 py-2.5 bg-[#451a03] text-[#f97316] border border-[#78350f] text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md"
+            : "px-3.5 py-1.5 bg-[#451a03] text-[#f97316] border border-[#78350f] text-xs font-bold rounded-xl flex items-center gap-1"
+          }>
+            <span>Applied (Pending Review)</span>
+          </span>
+        );
+      }
+      if (existingProposal.status === 'denied' || existingProposal.status === 'rejected') {
+        return (
+          <span className={isModal 
+            ? "px-5 py-2.5 bg-[#450a0a] text-[#f87171] border border-[#7f1d1d] text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md"
+            : "px-3.5 py-1.5 bg-[#450a0a] text-[#f87171] border border-[#7f1d1d] text-xs font-bold rounded-xl flex items-center gap-1"
+          }>
+            <span>Application Denied ✕</span>
+          </span>
+        );
+      }
+    }
+
+    // Check if project is assigned to someone else
+    const isAssigned = proj.status === 'in_progress' || 
+      (proj.status as string) === 'in progress' || 
+      proj.status === 'completed' || 
+      Boolean((proj as any).freelancer_id) || 
+      (proj.applicants || []).some((a: any) => a.status === 'accepted' || a.status === 'granted' || a.granted) ||
+      (proj.proposals || []).some((p: any) => p.status === 'accepted' || p.status === 'granted');
+
+    if (isAssigned) {
+      return (
+        <span className={isModal 
+          ? "px-5 py-2.5 bg-[#1e1b4b] text-[#818cf8] border border-[#3730a3] text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md"
+          : "px-3.5 py-1.5 bg-[#1e1b4b] text-[#818cf8] border border-[#3730a3] text-xs font-bold rounded-xl flex items-center gap-1"
+        }>
+          <span>Assigned to Freelancer ✓</span>
+        </span>
+      );
+    }
+
+    // Unassigned open project
+    if (isModal) {
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            setViewingProjectDetails(null);
+            handleOpenApplyModal(proj);
+          }}
+          className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
+        >
+          <span>Apply for this Project</span>
+          <span>↗</span>
+        </button>
+      );
+    }
+
+    return (
+      <button
+        onClick={() => handleOpenApplyModal(proj)}
+        className="px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold rounded-xl border bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-500 shadow-md active:scale-95 transition-all flex items-center gap-1"
+      >
+        <span>Apply Now</span>
+        <span>↗</span>
+      </button>
+    );
   };
 
   // Fetch real projects from backend
@@ -329,42 +454,7 @@ export function FreelancerDashboard() {
                         <span className="text-xs sm:text-sm md:text-base font-extrabold text-[#22c55e] bg-[#052e16]/60 px-2.5 py-1 rounded-xl border border-[#14532d]/80">
                           {proj.budget} {proj.token || 'USDC'}
                         </span>
-                        {(() => {
-                          const existingProposal = proposals.find((p) => p.project_id === proj.id);
-                          if (!existingProposal) {
-                            return (
-                              <button
-                                onClick={() => handleOpenApplyModal(proj)}
-                                className="px-3.5 py-1.5 sm:px-4 sm:py-2 text-xs font-bold rounded-xl border bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-500 shadow-md active:scale-95 transition-all flex items-center gap-1"
-                              >
-                                <span>Apply Now</span>
-                                <span>↗</span>
-                              </button>
-                            );
-                          }
-                          if (existingProposal.status === 'pending') {
-                            return (
-                              <span className="px-3.5 py-1.5 bg-[#451a03] text-[#f97316] border border-[#78350f] text-xs font-bold rounded-xl flex items-center gap-1">
-                                <span>Applied (Pending)</span>
-                              </span>
-                            );
-                          }
-                          if (existingProposal.status === 'accepted' || existingProposal.status === 'granted') {
-                            return (
-                              <span className="px-3.5 py-1.5 bg-[#052e16] text-[#22c55e] border border-[#14532d] text-xs font-bold rounded-xl flex items-center gap-1">
-                                <span>Application Accepted ✓</span>
-                              </span>
-                            );
-                          }
-                          if (existingProposal.status === 'denied' || existingProposal.status === 'rejected') {
-                            return (
-                              <span className="px-3.5 py-1.5 bg-[#450a0a] text-[#f87171] border border-[#7f1d1d] text-xs font-bold rounded-xl flex items-center gap-1">
-                                <span>Application Denied ✕</span>
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
+                        {renderProjectActionBadge(proj, false)}
                       </div>
                     </div>
 
@@ -567,9 +657,29 @@ export function FreelancerDashboard() {
                         </span>
                       )}
                       {(prop.status === 'granted' || prop.status === 'accepted') && (
-                        <span className="px-3 py-1 bg-[#052e16] text-[#22c55e] border border-[#14532d] text-xs font-semibold rounded-full">
-                          Granted ✓
-                        </span>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetProj = projects.find((p) => p.id === prop.project_id);
+                              const clientAddr = targetProj?.client_address || (targetProj as any)?.client?.stellar_address || '';
+                              setChatModalState({
+                                isOpen: true,
+                                projectId: prop.project_id,
+                                projectTitle: prop.project_title || targetProj?.title || 'Contract Chat',
+                                senderAddress: address || '',
+                                receiverAddress: clientAddr,
+                                recipientRoleLabel: 'Client',
+                              });
+                            }}
+                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                          >
+                            <span>💬 Chat with Client</span>
+                          </button>
+                          <span className="px-3 py-1 bg-[#052e16] text-[#22c55e] border border-[#14532d] text-xs font-semibold rounded-full">
+                            Granted ✓
+                          </span>
+                        </div>
                       )}
                       {(prop.status === 'denied' || prop.status === 'rejected') && (
                         <span className="px-3 py-1 bg-[#450a0a] text-[#f87171] border border-[#7f1d1d] text-xs font-semibold rounded-full flex items-center gap-1">
@@ -755,18 +865,7 @@ export function FreelancerDashboard() {
               >
                 Close
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const proj = viewingProjectDetails;
-                  setViewingProjectDetails(null);
-                  handleOpenApplyModal(proj);
-                }}
-                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
-              >
-                <span>Apply for this Project</span>
-                <span>↗</span>
-              </button>
+              {renderProjectActionBadge(viewingProjectDetails, true)}
             </div>
 
           </div>
@@ -874,6 +973,17 @@ export function FreelancerDashboard() {
         imageUrl={lightboxImage?.url || null}
         imageAlt={lightboxImage?.name}
         onClose={() => setLightboxImage(null)}
+      />
+
+      {/* Project Direct Chat Modal */}
+      <ProjectChatModal
+        isOpen={chatModalState.isOpen}
+        onClose={() => setChatModalState((prev) => ({ ...prev, isOpen: false }))}
+        projectId={chatModalState.projectId}
+        projectTitle={chatModalState.projectTitle}
+        senderAddress={chatModalState.senderAddress}
+        receiverAddress={chatModalState.receiverAddress}
+        recipientRoleLabel={chatModalState.recipientRoleLabel}
       />
     </div>
   );

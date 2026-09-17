@@ -8,6 +8,7 @@ import { useWalletStore } from '@/store/walletStore';
 import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
 import { ApplicantCard } from './ApplicantCard';
+import { ProjectChatModal } from './ProjectChatModal';
 import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 
@@ -21,6 +22,23 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [activeTab, setActiveTab] = useState<'projects' | 'create' | 'applicants'>(defaultTab);
   const [loading, setLoading] = useState(true);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name?: string } | null>(null);
+
+  // Chat Modal State
+  const [chatModalState, setChatModalState] = useState<{
+    isOpen: boolean;
+    projectId: string;
+    projectTitle: string;
+    senderAddress: string;
+    receiverAddress: string;
+    recipientRoleLabel: string;
+  }>({
+    isOpen: false,
+    projectId: '',
+    projectTitle: '',
+    senderAddress: '',
+    receiverAddress: '',
+    recipientRoleLabel: 'Freelancer',
+  });
 
   // Projects state initialized from backend
   const [projects, setProjects] = useState<Project[]>([]);
@@ -80,7 +98,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     setLoading(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl}/api/projects?page=${pageToFetch}&limit=6`);
+      const clientParam = address ? `&client_address=${encodeURIComponent(address)}` : '';
+      const res = await fetch(`${apiUrl}/api/projects?page=${pageToFetch}&limit=6${clientParam}`);
       if (res.ok) {
         const data = await res.json();
         if (data.projects && Array.isArray(data.projects)) {
@@ -127,9 +146,11 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
           });
 
           setProjects(mapped);
-          if (mapped.length > 0 && !selectedProjectForApplicants) {
+          if (mapped.length > 0) {
             const projectWithApplicants = mapped.find(p => p.applicants && p.applicants.length > 0) || mapped[0];
             setSelectedProjectForApplicants(projectWithApplicants);
+          } else {
+            setSelectedProjectForApplicants(null);
           }
         }
         if (data.pagination) {
@@ -147,7 +168,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   useEffect(() => {
     fetchBackendProjects();
-  }, []);
+  }, [address]);
 
   // Add Milestone to Form
   const handleAddMilestone = () => {
@@ -370,7 +391,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         return;
       }
 
-      toast.success('Project saved successfully to backend!');
+      toast.success('Project saved successfully!');
       setFormTitle('');
       setFormDescription('');
       setFormBudget('');
@@ -1133,6 +1154,20 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     applicant={applicant}
                     onAccept={(id) => handleAcceptProposal(id)}
                     onDeny={(id) => handleDenyProposal(id)}
+                    onOpenChat={(freelancerAddr) => {
+                      if (!address) {
+                        toast.error('Please connect your Freighter wallet first');
+                        return;
+                      }
+                      setChatModalState({
+                        isOpen: true,
+                        projectId: selectedProjectForApplicants?.id || '',
+                        projectTitle: selectedProjectForApplicants?.title || 'Escrow Project',
+                        senderAddress: address,
+                        receiverAddress: freelancerAddr,
+                        recipientRoleLabel: 'Freelancer',
+                      });
+                    }}
                   />
                 ))
               ) : (
@@ -1275,6 +1310,17 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         imageUrl={lightboxImage?.url || null}
         imageAlt={lightboxImage?.name}
         onClose={() => setLightboxImage(null)}
+      />
+
+      {/* Project Direct Chat Modal */}
+      <ProjectChatModal
+        isOpen={chatModalState.isOpen}
+        onClose={() => setChatModalState((prev) => ({ ...prev, isOpen: false }))}
+        projectId={chatModalState.projectId}
+        projectTitle={chatModalState.projectTitle}
+        senderAddress={chatModalState.senderAddress}
+        receiverAddress={chatModalState.receiverAddress}
+        recipientRoleLabel={chatModalState.recipientRoleLabel}
       />
     </div>
   );

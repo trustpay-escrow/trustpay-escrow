@@ -32,6 +32,7 @@ export interface Project {
   created_at?: string;
   milestones?: Milestone[];
   applicants?: Applicant[];
+  proposals?: Proposal[];
   attachments?: string[];
   files?: any[];
   yield_enabled?: boolean;
