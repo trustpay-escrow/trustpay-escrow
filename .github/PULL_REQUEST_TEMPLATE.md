@@ -1,4 +1,4 @@
-# Drip Wave Contribution Pull Request
+# Pull Request
 
 ## 📌 Description
 Provide a clear, concise summary of the changes introduced in this PR. Mention the specific issue number this PR resolves (e.g., `Fixes #12`).
@@ -26,7 +26,7 @@ Provide a clear, concise summary of the changes introduced in this PR. Mention t
 
 Before submitting your PR, please verify:
 
-- [ ] **Issue Linked:** This PR references a valid Drip Wave issue.
+- [ ] **Issue Linked:** This PR references a valid GitHub issue.
 - [ ] **Builds Cleanly:** Code compiles without errors (`cargo test` for contracts, `npm run build` for frontend/backend).
 - [ ] **Tests Included:** Unit or integration tests have been added or updated.
 - [ ] **Conventional Commits:** Commit messages follow conventional commits format (`feat: ...`, `fix: ...`, `docs: ...`).

@@ -1,7 +1,7 @@
 name: 💡 Feature Proposal
 description: Suggest an enhancement or new feature for TrustPay Escrow
 title: "[FEAT]: "
-labels: ["enhancement", "drip-wave"]
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
@@ -40,12 +40,12 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: complexity
+    id: priority
     attributes:
-      label: Drips Wave Complexity Level
+      label: Priority Level
       options:
-        - High (200 Points)
-        - Medium (150 Points)
-        - Trivial / Low (100 Points)
+        - High (Core feature or critical improvement)
+        - Medium (Valuable enhancement)
+        - Low (Nice to have / minor UX polish)
     validations:
       required: true
