@@ -1,0 +1,5 @@
+# Gitleaks ignore patterns
+.env.example
+Cargo.lock
+frontend/package-lock.json
+backend/package-lock.json

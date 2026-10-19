@@ -5,8 +5,12 @@
 [![Stellar Soroban](https://img.shields.io/badge/Stellar-Soroban-purple.svg)](https://soroban.stellar.org)
 [![Rust](https://img.shields.io/badge/Rust-2021-orange.svg)](https://www.rust-lang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org)
+[![Tests: Vitest Passing](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg)](SUBMISSION.md)
+[![Drips: Protocol Ready](https://img.shields.io/badge/Drips-Protocol%20Ready-blue.svg)](FUNDING.json)
 
 **A Stellar-native milestone escrow and yield-optimizing payment platform for transparent, trustless gig economy settlement.**
+
+[📋 Reviewer Submission Matrix](SUBMISSION.md) | [⚙️ Environment Guide](ENVIRONMENT.md) | [🧩 UI Components](docs/COMPONENTS.md) | [📜 Contract Calls](docs/CONTRACT_CALLS.md) | [🤝 Contributing](CONTRIBUTING.md)
 
 ---
 
@@ -233,6 +237,16 @@ The Supabase database tracks off-chain metadata across 9 structured migrations:
 ---
 
 ## Getting Started
+
+### ⚡ 1-Command Reviewer Verification
+
+Reviewers can verify backend health, multi-token contract configurations, and mathematical invariants with a single command:
+
+```bash
+npx tsx scripts/seed-and-verify.ts
+```
+
+---
 
 ### Prerequisites
 

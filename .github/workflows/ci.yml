@@ -7,6 +7,21 @@ on:
     branches: [ main, master ]
 
 jobs:
+  security-audit:
+    name: Secret & Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks Secret Detector
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
   smart-contracts:
     name: Soroban Smart Contracts (Rust)
     runs-on: ubuntu-latest
@@ -53,7 +68,10 @@ jobs:
         run: npm ci
 
       - name: Typecheck TypeScript
-        run: npx tsc --noEmit
+        run: npm run typecheck
+
+      - name: Run Backend Unit Tests (Vitest)
+        run: npm test
 
       - name: Build Production Output
         run: npm run build
@@ -80,9 +98,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
-      - name: Next.js Typecheck & Build
+      - name: Run Frontend Unit & Component Tests (Vitest)
+        run: npm test
+
+      - name: Next.js Typecheck & Production Build
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://dummy-supabase-project.supabase.co

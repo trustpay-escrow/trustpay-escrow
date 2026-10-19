@@ -1,0 +1,22 @@
+title = "TrustPay Escrow Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for public keys and non-sensitive hashes"
+paths = [
+  '''\.env\.example$''',
+  '''package-lock\.json$''',
+  '''Cargo\.lock$''',
+  '''frontend/src/config/tokens\.ts$''',
+  '''docs/.*\.md$''',
+  '''ENVIRONMENT\.md$''',
+  '''FUNDING\.json$'''
+]
+regexes = [
+  '''CCW67TSB3SSS423DNE2B2RQLI274W2YQY35J5XEEGBB5AKWODHBB545G''',
+  '''CDLZFC3SYJYDVR72CC2CPEMV3N3K5ZCGKFW5R4GMLGQO6PBA3RPAV4T9''',
+  '''CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYZYY55COEHWY53''',
+  '''GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFOGOF2W2GOGC25NC47WG'''
+]
