@@ -1,6 +1,6 @@
 # TrustPay Escrow 🛡️
 
-[![CI Pipeline](https://github.com/OluwapelumiElisha/trustpay-escrow/actions/workflows/ci.yml/badge.svg)](https://github.com/OluwapelumiElisha/trustpay-escrow/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/trustpay-escrow/trustpay-escrow/actions/workflows/ci.yml/badge.svg)](https://github.com/trustpay-escrow/trustpay-escrow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Stellar Soroban](https://img.shields.io/badge/Stellar-Soroban-purple.svg)](https://soroban.stellar.org)
 [![Rust](https://img.shields.io/badge/Rust-2021-orange.svg)](https://www.rust-lang.org)
