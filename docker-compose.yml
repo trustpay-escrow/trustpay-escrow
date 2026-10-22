@@ -32,9 +32,25 @@ services:
       SUPABASE_URL: http://localhost:54321
       SUPABASE_ANON_KEY: dummy-anon-key
       SOROBAN_RPC_URL: https://soroban-testnet.stellar.org
+      REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: trustpay-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   frontend:
     build:
@@ -51,3 +67,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

@@ -11,6 +11,7 @@ import usersRouter from './modules/users/user.routes.js';
 import proposalsRouter from './modules/proposals/proposal.routes.js';
 import notificationsRouter from './modules/notifications/notification.routes.js';
 import messageRouter from './modules/messages/message.router.js';
+import { redisCache } from './config/redis.js';
 
 export const app = express();
 
@@ -50,6 +51,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     architecture: 'Modular Domain Architecture',
+    cache: redisCache.isReady() ? 'connected' : 'bypassed',
     message: 'TrustPay Escrow API is running securely'
   });
 });

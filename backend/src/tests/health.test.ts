@@ -8,6 +8,7 @@ describe('Backend API Health & Liveness Probes', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('status', 'ok');
     expect(res.body).toHaveProperty('architecture', 'Modular Domain Architecture');
+    expect(res.body).toHaveProperty('cache');
     expect(res.body).toHaveProperty('message');
   });
 
