@@ -28,7 +28,7 @@ export function DashboardRouter() {
               Connect Your Wallet
             </h1>
             <p className="text-sm text-[#a1a1aa] leading-relaxed max-w-md mx-auto">
-              Please connect your Freighter Stellar wallet to access your projects, submit proposals, or create escrows.
+              Please connect your Stellar wallet (Freighter, xBull, Albedo, etc.) to access your projects, submit proposals, or create escrows.
             </p>
           </div>
 

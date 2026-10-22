@@ -22,6 +22,7 @@ describe('useWalletStore Zustand Store', () => {
     expect(state.address).toBe(mockAddress);
     expect(state.isClient).toBe(true);
     expect(state.isFreelancer).toBe(true);
+    expect(state.walletName).toBe('Freighter');
   });
 
   it('toggles between client and freelancer roles', () => {

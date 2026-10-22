@@ -338,7 +338,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     }
 
     if (!address) {
-      toast.error('Please connect your Freighter wallet first');
+      toast.error('Please connect your Stellar wallet first');
       return;
     }
 
@@ -1156,7 +1156,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     onDeny={(id) => handleDenyProposal(id)}
                     onOpenChat={(freelancerAddr) => {
                       if (!address) {
-                        toast.error('Please connect your Freighter wallet first');
+                        toast.error('Please connect your Stellar wallet first');
                         return;
                       }
                       setChatModalState({
