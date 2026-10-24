@@ -1,6 +1,7 @@
 # TrustPay Escrow 🛡️
 
 [![CI Pipeline](https://github.com/trustpay-escrow/trustpay-escrow/actions/workflows/ci.yml/badge.svg)](https://github.com/trustpay-escrow/trustpay-escrow/actions/workflows/ci.yml)
+[![Branch: contributions](https://img.shields.io/badge/Branch-contributions-purple.svg)](CONTRIBUTING.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Stellar Soroban](https://img.shields.io/badge/Stellar-Soroban-purple.svg)](https://soroban.stellar.org)
 [![Rust](https://img.shields.io/badge/Rust-2021-orange.svg)](https://www.rust-lang.org)
@@ -10,7 +11,7 @@
 
 **A Stellar-native milestone escrow and yield-optimizing payment platform for transparent, trustless gig economy settlement.**
 
-[📋 Reviewer Submission Matrix](SUBMISSION.md) | [⚙️ Environment Guide](ENVIRONMENT.md) | [🧩 UI Components](docs/COMPONENTS.md) | [📜 Contract Calls](docs/CONTRACT_CALLS.md) | [🤝 Contributing](CONTRIBUTING.md)
+[📋 Reviewer Submission Matrix](SUBMISSION.md) | [⚙️ Environment Guide](ENVIRONMENT.md) | [🧩 UI Components](docs/COMPONENTS.md) | [📜 Contract Calls](docs/CONTRACT_CALLS.md) | [🤝 Contributing (contributions branch)](CONTRIBUTING.md)
 
 ---
 
@@ -279,8 +280,9 @@ stellar contract deploy \
 ```bash
 cd backend
 
-# Install dependencies
+# Install dependencies & generate Prisma client
 npm install
+npm run prisma:generate
 
 # Configure environment variables
 cp .env.example .env
@@ -315,6 +317,59 @@ Open [http://localhost:3000](http://localhost:3000) in your browser with the Fre
 - [x] Yield optimization parameter tracking (Blend protocol integration)
 - [ ] On-chain ledger timestamp auto-release enforcement
 - [ ] Contract security audit & mainnet deployment
+
+---
+
+## 🤝 Contributing & Branching Model
+
+We actively welcome community contributions to advance TrustPay Escrow!
+
+### 🌿 The `contributions` Branch
+
+All community contributions, feature proposals, bug fixes, and documentation improvements are actively developed and submitted against the **`contributions`** branch.
+
+```
+main (Production releases & protected stable deployment)
+ ▲
+ │ (Maintainer release merges)
+contributions (Active integration & target for all contributor PRs)
+ ▲
+ ├── feat/your-feature-name
+ ├── fix/bugfix-description
+ └── docs/documentation-update
+```
+
+### Quick Contribution Guide
+
+1. **Clone & switch to `contributions`:**
+   ```bash
+   git clone https://github.com/trustpay-escrow/trustpay-escrow.git
+   cd trustpay-escrow
+   git checkout contributions
+   git pull origin contributions
+   ```
+
+2. **Branch off `contributions`:**
+   ```bash
+   git checkout -b feat/your-feature-name
+   ```
+
+3. **Verify tests & quality checks:**
+   ```bash
+   # Backend
+   cd backend && npm run typecheck && npm test && cd ..
+
+   # Frontend
+   cd frontend && npm run typecheck && npm test && cd ..
+
+   # Smart Contracts
+   cd contracts/trustpay-escrow && cargo test && cd ../..
+   ```
+
+4. **Submit a Pull Request targeting `contributions`:**
+   When submitting your PR on GitHub, ensure the **Base branch** is set to **`contributions`** (not `main`).
+
+For detailed contribution conventions, PR templates, and coding standards, refer to [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

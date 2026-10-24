@@ -26,6 +26,7 @@ Provide a clear, concise summary of the changes introduced in this PR. Mention t
 
 Before submitting your PR, please verify:
 
+- [ ] **Target Branch:** This PR targets the `contributions` branch (not `main`).
 - [ ] **Issue Linked:** This PR references a valid GitHub issue.
 - [ ] **Builds Cleanly:** Code compiles without errors (`cargo test` for contracts, `npm run build` for frontend/backend).
 - [ ] **Tests Included:** Unit or integration tests have been added or updated.
