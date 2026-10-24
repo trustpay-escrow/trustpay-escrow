@@ -8,6 +8,8 @@ interface Config {
   nodeEnv: string;
   supabaseUrl: string;
   supabaseServiceKey: string;
+  databaseUrl: string;
+  directUrl: string;
   redisUrl: string;
   redisEnabled: boolean;
 }
@@ -17,6 +19,8 @@ export const env: Config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   supabaseUrl: process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
   supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || 'placeholder_service_key',
+  databaseUrl: process.env.DATABASE_URL || '',
+  directUrl: process.env.DIRECT_URL || process.env.DATABASE_URL || '',
   redisUrl: process.env.REDIS_URL || '',
   redisEnabled: process.env.REDIS_ENABLED === 'true' || Boolean(process.env.REDIS_URL),
 };

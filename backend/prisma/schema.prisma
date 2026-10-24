@@ -1,0 +1,202 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==============================================================================
+// 1. Users Model (mirrors supabase 'users' table)
+// ==============================================================================
+model User {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stellarAddress String        @unique @map("stellar_address")
+  email          String?
+  role           String?       // client | freelancer | arbiter
+  isClient       Boolean?      @default(true) @map("is_client")
+  isFreelancer   Boolean?      @default(true) @map("is_freelancer")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  clientProjects     Project[]     @relation("ClientProjects")
+  freelancerProjects Project[]     @relation("FreelancerProjects")
+  arbiterProjects    Project[]     @relation("ArbiterProjects")
+  uploadedFiles      ProjectFile[] @relation("UserUploadedFiles")
+  disputesRaised     Dispute[]     @relation("UserDisputes")
+
+  @@map("users")
+}
+
+// ==============================================================================
+// 2. Projects Model (mirrors supabase 'projects' table)
+// ==============================================================================
+model Project {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title               String
+  description         String
+  category            String?
+  clientId            String?       @map("client_id") @db.Uuid
+  freelancerId        String?       @map("freelancer_id") @db.Uuid
+  arbiterId           String?       @map("arbiter_id") @db.Uuid
+  status              String?       @default("draft") // draft | in_progress | completed | disputed
+  budget              Decimal       @db.Decimal
+  deadline            DateTime?     @db.Timestamptz
+  visibility          String?       @default("public")
+  contractId          String?       @map("contract_id")
+  projectIdOnchain    BigInt?       @map("project_id_onchain")
+  token               String?       @default("USDC")
+  tokenAddress        String?       @map("token_address")
+  yieldEnabled        Boolean?      @default(false) @map("yield_enabled")
+  estimatedYield      Decimal?      @default(0) @map("estimated_yield") @db.Decimal
+  yieldEarnedClient   Decimal?      @default(0) @map("yield_earned_client") @db.Decimal
+  yieldEarnedPlatform Decimal?      @default(0) @map("yield_earned_platform") @db.Decimal
+  blendPoolAddress    String?       @map("blend_pool_address")
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  client        User?          @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
+  freelancer    User?          @relation("FreelancerProjects", fields: [freelancerId], references: [id], onDelete: SetNull)
+  arbiter       User?          @relation("ArbiterProjects", fields: [arbiterId], references: [id], onDelete: SetNull)
+  milestones    Milestone[]
+  disputes      Dispute[]
+  projectFiles  ProjectFile[]
+  proposals     Proposal[]
+  notifications Notification[]
+  messages      Message[]
+
+  @@map("projects")
+}
+
+// ==============================================================================
+// 3. Milestones Model (mirrors supabase 'milestones' table)
+// ==============================================================================
+model Milestone {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId       String    @map("project_id") @db.Uuid
+  milestoneIndex  Int       @map("milestone_index")
+  title           String
+  description     String?
+  amount          Decimal   @db.Decimal
+  status          String?   @default("pending") // pending | submitted | approved | disputed
+  dueDate         DateTime? @map("due_date") @db.Timestamptz
+  revisionLimit   Int?      @default(0) @map("revision_limit")
+  deliverableType String?   @map("deliverable_type")
+  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz
+  autoReleaseAt   DateTime? @map("auto_release_at") @db.Timestamptz
+  lastReminderDay Int?      @default(0) @map("last_reminder_day")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  disputes Dispute[]
+
+  @@index([status, autoReleaseAt], map: "idx_milestones_auto_release")
+  @@map("milestones")
+}
+
+// ==============================================================================
+// 4. Disputes Model (mirrors supabase 'disputes' table)
+// ==============================================================================
+model Dispute {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId         String    @map("project_id") @db.Uuid
+  milestoneId       String    @map("milestone_id") @db.Uuid
+  raisedBy          String    @map("raised_by")
+  reason            String
+  status            String?   @default("open") // open | resolved
+  resolutionDetails String?   @map("resolution_details")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  raiser    User      @relation("UserDisputes", fields: [raisedBy], references: [stellarAddress])
+
+  @@map("disputes")
+}
+
+// ==============================================================================
+// 5. Project Files Model (mirrors supabase 'project_files' table)
+// ==============================================================================
+model ProjectFile {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId  String    @map("project_id") @db.Uuid
+  fileName   String    @map("file_name")
+  fileUrl    String    @map("file_url")
+  fileType   String?   @map("file_type")
+  fileSize   BigInt?   @map("file_size")
+  uploadedBy String?   @map("uploaded_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader User?   @relation("UserUploadedFiles", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@index([projectId], map: "idx_project_files_project_id")
+  @@map("project_files")
+}
+
+// ==============================================================================
+// 6. Proposals Model (mirrors supabase 'proposals' table)
+// ==============================================================================
+model Proposal {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId         String    @map("project_id") @db.Uuid
+  freelancerAddress String    @map("freelancer_address")
+  coverNote         String    @map("cover_note")
+  portfolioUrl      String?   @map("portfolio_url")
+  status            String?   @default("pending") // pending | accepted | denied
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId], map: "idx_proposals_project_id")
+  @@index([freelancerAddress], map: "idx_proposals_freelancer_address")
+  @@map("proposals")
+}
+
+// ==============================================================================
+// 7. Notifications Model (mirrors supabase 'notifications' table)
+// ==============================================================================
+model Notification {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipientAddress String    @map("recipient_address")
+  senderAddress    String?   @map("sender_address")
+  projectId        String?   @map("project_id") @db.Uuid
+  type             String
+  title            String
+  message          String
+  link             String?
+  isRead           Boolean?  @default(false) @map("is_read")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([recipientAddress], map: "idx_notifications_recipient")
+  @@index([recipientAddress, isRead], map: "idx_notifications_unread")
+  @@map("notifications")
+}
+
+// ==============================================================================
+// 8. Messages Model (mirrors supabase 'messages' table)
+// ==============================================================================
+model Message {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId       String    @map("project_id") @db.Uuid
+  senderAddress   String    @map("sender_address")
+  receiverAddress String    @map("receiver_address")
+  content         String
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Asc)], map: "idx_messages_project_id")
+  @@map("messages")
+}
