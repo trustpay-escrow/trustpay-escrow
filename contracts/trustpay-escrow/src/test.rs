@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env, Vec};
 use soroban_sdk::token;
 
 #[test]
@@ -236,4 +236,101 @@ fn test_yield_dispute_resolution_with_reserve() {
     assert_eq!(token_client.balance(&platform_addr), 15);
 }
 
+#[test]
+fn test_auto_release_milestone_timelock() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Set initial ledger timestamp
+    env.ledger().set_timestamp(1_000_000);
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(600);
+    amounts.push_back(400);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    // Freelancer submits milestone 0 at timestamp 1_000_000
+    escrow_client.submit_milestone(&p_id, &0);
+    let proj_after_sub = escrow_client.get_project(&p_id);
+    let m0 = proj_after_sub.milestones.get(0).unwrap();
+    assert_eq!(m0.state, MilestoneState::Submitted);
+    assert_eq!(m0.submitted_at, 1_000_000);
+
+    // Fast-forward ledger time past 7 days (7 * 24 * 60 * 60 = 604_800s)
+    // 1_000_000 + 604_800 = 1_604_800
+    env.ledger().set_timestamp(1_000_000 + 604_800);
+
+    // Call auto_release_milestone (caller can be anyone, does not require client.require_auth())
+    escrow_client.auto_release_milestone(&p_id, &0, &None);
+
+    // Freelancer balance should now be 600
+    assert_eq!(token_client.balance(&freelancer_addr), 600);
+
+    let proj_after_release = escrow_client.get_project(&p_id);
+    assert_eq!(proj_after_release.milestones.get(0).unwrap().state, MilestoneState::Approved);
+}
+
+#[test]
+#[should_panic(expected = "Timelock review period has not expired")]
+fn test_auto_release_before_timelock_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    env.ledger().set_timestamp(1_000_000);
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.submit_milestone(&p_id, &0);
+
+    // Advance only 6 days (518_400 seconds)
+    env.ledger().set_timestamp(1_000_000 + 518_400);
+
+    // Must panic because 7 days have not elapsed
+    escrow_client.auto_release_milestone(&p_id, &0, &None);
+}
 

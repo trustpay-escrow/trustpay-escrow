@@ -46,6 +46,7 @@ pub enum DataKey {
 pub struct Milestone {
     pub amount: i128,
     pub state: MilestoneState,
+    pub submitted_at: u64,
 }
 
 #[contracttype]
@@ -101,7 +102,7 @@ Called by the freelancer upon completing deliverables for a specific milestone.
 - **Preconditions:**
   - `project.state == ProjectState::Active`
   - Milestone must be in `MilestoneState::Pending`
-- **Effect:** Milestone state transitions to `MilestoneState::Submitted`.
+- **Effect:** Milestone state transitions to `MilestoneState::Submitted`, and `milestone.submitted_at = env.ledger().timestamp()` starts the 7-day review timelock.
 
 ---
 
@@ -124,6 +125,32 @@ Called by the client to approve completed milestone work and release payment.
   - Milestone state transitions to `MilestoneState::Approved`.
   - Transfers milestone funds: `token_client.transfer(&contract_address, &project.freelancer, &milestone.amount)`.
   - If all milestones are approved, project transitions to `ProjectState::Completed` and distributes accrued yield (70% Client, 30% Platform).
+
+---
+
+---
+
+### 3b. `auto_release_milestone`
+Self-executing on-chain auto-release once the 7-day review timelock has elapsed.
+
+- **Signature:**
+  ```rust
+  pub fn auto_release_milestone(
+      env: Env,
+      project_id: u64,
+      milestone_index: u32,
+      platform: Option<Address>,
+  )
+  ```
+- **Authorization:** None required for client (callable by freelancer, platform relayer, or any caller).
+- **Preconditions:**
+  - `project.state == ProjectState::Active`
+  - `milestone.state == MilestoneState::Submitted`
+  - `env.ledger().timestamp() >= milestone.submitted_at + 7 * 24 * 60 * 60` (604,800 seconds / 7 days)
+- **Effect:**
+  - Releases milestone funds without requiring `client.require_auth()`: `token_client.transfer(&contract_address, &project.freelancer, &milestone.amount)`.
+  - Transitions milestone to `MilestoneState::Approved`.
+  - If all milestones complete, settles final project state and yield distribution.
 
 ---
 

@@ -181,7 +181,7 @@ export const checkAndProcessAutoReleases = async (): Promise<void> => {
             project_id: milestone.project_id,
             type: 'milestone_approved',
             title: 'Milestone Auto-Released! ⏳💰',
-            message: `Milestone '${milestone.title}' for project '${projectTitle}' was automatically released to your wallet after 7 days!`,
+            message: `The 7-day review timelock for milestone '${milestone.title}' on '${projectTitle}' has expired. Escrow funds can now be released directly on-chain!`,
             link: `/projects?id=${milestone.project_id}`,
           });
         }
