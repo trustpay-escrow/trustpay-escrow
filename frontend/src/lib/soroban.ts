@@ -395,3 +395,44 @@ export async function resolveDisputeOnChain(params: {
     onStatusUpdate,
   });
 }
+
+/**
+ * Executes the on-chain auto_release_milestone invocation once the 7-day review timelock has elapsed.
+ * Can be called by the freelancer, a platform relayer, or any caller without requiring client authorization.
+ */
+export async function autoReleaseMilestoneOnChain(params: {
+  callerAddress: string;
+  projectIdOnChain: number | bigint | string;
+  milestoneIndex: number;
+  platformAddress?: string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const {
+    callerAddress,
+    projectIdOnChain,
+    milestoneIndex,
+    platformAddress,
+    contractAddress,
+    onStatusUpdate,
+  } = params;
+
+  const platformScVal = platformAddress
+    ? Address.fromString(platformAddress).toScVal()
+    : xdr.ScVal.scvVoid();
+
+  const args: xdr.ScVal[] = [
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    nativeToScVal(milestoneIndex, { type: 'u32' }),
+    platformScVal,
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress,
+    contractAddress,
+    functionName: 'auto_release_milestone',
+    args,
+    onStatusUpdate,
+  });
+}
+

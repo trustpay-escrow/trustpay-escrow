@@ -14,6 +14,7 @@ import {
   createProjectOnChain,
   submitMilestoneOnChain,
   approveMilestoneOnChain,
+  autoReleaseMilestoneOnChain,
   raiseDisputeOnChain,
   resolveDisputeOnChain,
   getStellarExplorerUrl,
@@ -298,6 +299,58 @@ export default function ProjectDetailsPage() {
     } catch (err: any) {
       setTxState((prev) => ({ ...prev, stage: 'error', error: err.message || String(err) }));
       toast.error(`Milestone approval failed: ${err.message || err}`);
+    }
+  };
+
+  
+  // 3b. Self-Executing Timelock Action: Auto-Release Milestone after 7 days
+  const handleAutoReleaseMilestone = async (milestone: Milestone) => {
+    if (!address) {
+      toast.error('Please connect your wallet first.');
+      return;
+    }
+
+    const onChainId = project?.project_id_onchain ?? 1;
+
+    setTxState({
+      isOpen: true,
+      stage: 'preparing',
+      message: `Executing on-chain timelock auto-release for milestone #${milestone.milestone_index + 1}...`,
+    });
+
+    try {
+      const res = await autoReleaseMilestoneOnChain({
+        callerAddress: address,
+        projectIdOnChain: onChainId,
+        milestoneIndex: milestone.milestone_index,
+        onStatusUpdate: (stage, message) => {
+          setTxState((prev) => ({ ...prev, stage, message }));
+        },
+      });
+
+      setTxState((prev) => ({
+        ...prev,
+        stage: 'success',
+        txHash: res.txHash,
+        message: `Milestone #${milestone.milestone_index + 1} funds released via on-chain timelock!`,
+      }));
+
+      // Update backend milestone status
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await fetch(`${apiUrl}/api/milestones/${milestone.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'approved',
+          actor_address: address,
+        }),
+      });
+
+      toast.success(`Milestone auto-released on-chain! ${milestone.amount} ${tokenSymbol} transferred.`);
+      await fetchProject();
+    } catch (err: any) {
+      setTxState((prev) => ({ ...prev, stage: 'error', error: err.message || String(err) }));
+      toast.error(`Auto-release failed: ${err.message || err}`);
     }
   };
 
@@ -726,12 +779,30 @@ export default function ProjectDetailsPage() {
 
                         {/* Client Approve & Release Button */}
                         {m.status === 'submitted' && (
-                          <Button
-                            onClick={() => setActiveApproveModal(m)}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold px-4 py-2 shadow-lg shadow-emerald-600/20"
-                          >
-                            Approve & Release 💰
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={() => setActiveApproveModal(m)}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold px-4 py-2 shadow-lg shadow-emerald-600/20"
+                            >
+                              Approve & Release 💰
+                            </Button>
+                            {(() => {
+                              const isTimelockExpired = m.submitted_at
+                                ? Date.now() >= new Date(m.submitted_at).getTime() + 7 * 24 * 60 * 60 * 1000
+                                : m.auto_release_at
+                                ? Date.now() >= new Date(m.auto_release_at).getTime()
+                                : false;
+                              return isTimelockExpired ? (
+                                <Button
+                                  onClick={() => handleAutoReleaseMilestone(m)}
+                                  className="bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold px-3 py-2 shadow-lg shadow-amber-600/20"
+                                  title="7-day review timelock expired: anyone can trigger self-executing release on-chain"
+                                >
+                                  ⚡ Claim Timelock Release
+                                </Button>
+                              ) : null;
+                            })()}
+                          </div>
                         )}
 
                         {m.status === 'approved' && (

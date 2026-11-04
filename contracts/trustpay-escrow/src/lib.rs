@@ -27,6 +27,7 @@ pub enum MilestoneState {
 pub struct Milestone {
     pub amount: i128,
     pub state: MilestoneState,
+    pub submitted_at: u64,
 }
 
 #[contracttype]
@@ -75,6 +76,7 @@ impl TrustPayEscrow {
             milestones.push_back(Milestone {
                 amount,
                 state: MilestoneState::Pending,
+                submitted_at: 0,
             });
         }
 
@@ -137,6 +139,7 @@ impl TrustPayEscrow {
         assert!(milestone.state == MilestoneState::Pending, "Milestone not pending");
         
         milestone.state = MilestoneState::Submitted;
+        milestone.submitted_at = env.ledger().timestamp();
         project.milestones.set(milestone_index, milestone);
         
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
@@ -170,6 +173,63 @@ impl TrustPayEscrow {
             project.state = ProjectState::Completed;
 
             // Distribute accrued yield if yield is enabled
+            if project.yield_enabled && project.accrued_yield > 0 {
+                let client_yield = (project.accrued_yield * 70) / 100;
+                let platform_yield = project.accrued_yield - client_yield;
+
+                if client_yield > 0 {
+                    token_client.transfer(&env.current_contract_address(), &project.client, &client_yield);
+                }
+                if platform_yield > 0 {
+                    let platform_recipient = platform.unwrap_or_else(|| project.arbiter.clone());
+                    token_client.transfer(&env.current_contract_address(), &platform_recipient, &platform_yield);
+                }
+                project.accrued_yield = 0;
+            }
+        }
+
+        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+    }
+
+    /// Automatically releases milestone escrow funds to the freelancer once the 7-day review timelock expires.
+    /// Can be executed by the freelancer, a platform relayer, or any caller without requiring client authorization.
+    pub fn auto_release_milestone(
+        env: Env,
+        project_id: u64,
+        milestone_index: u32,
+        platform: Option<Address>,
+    ) {
+        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        assert!(project.state == ProjectState::Active, "Project is not active");
+
+        let mut milestone = project.milestones.get(milestone_index).unwrap();
+        assert!(milestone.state == MilestoneState::Submitted, "Milestone not submitted");
+
+        let now = env.ledger().timestamp();
+        let auto_release_delay: u64 = 7 * 24 * 60 * 60; // 7 days in seconds (604,800s)
+        assert!(
+            now >= milestone.submitted_at + auto_release_delay,
+            "Timelock review period has not expired"
+        );
+
+        milestone.state = MilestoneState::Approved;
+        project.milestones.set(milestone_index, milestone.clone());
+
+        // Release milestone funds directly to freelancer
+        let token_client = token::Client::new(&env, &project.token);
+        token_client.transfer(&env.current_contract_address(), &project.freelancer, &milestone.amount);
+
+        // Check if all milestones completed and handle final project settlement & yield
+        let mut all_completed = true;
+        for m in project.milestones.iter() {
+            if m.state != MilestoneState::Approved {
+                all_completed = false;
+                break;
+            }
+        }
+        if all_completed {
+            project.state = ProjectState::Completed;
+
             if project.yield_enabled && project.accrued_yield > 0 {
                 let client_yield = (project.accrued_yield * 70) / 100;
                 let platform_yield = project.accrued_yield - client_yield;
