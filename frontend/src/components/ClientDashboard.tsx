@@ -11,6 +11,11 @@ import { ApplicantCard } from './ApplicantCard';
 import { ProjectChatModal } from './ProjectChatModal';
 import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
+import {
+  createProjectOnChain,
+  getStellarExplorerUrl,
+  DEFAULT_ESCROW_CONTRACT_ID,
+} from '@/lib/soroban';
 
 export interface ClientDashboardProps {
   defaultTab?: 'projects' | 'create' | 'applicants';
@@ -63,6 +68,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [formVisibility, setFormVisibility] = useState<'Public' | 'Invite-only'>('Public');
   const [formAttachments, setFormAttachments] = useState<any[]>([]);
   const [formYieldEnabled, setFormYieldEnabled] = useState(false);
+  const [formFreelancerAddress, setFormFreelancerAddress] = useState('');
+  const [formLockImmediately, setFormLockImmediately] = useState(false);
+  const [fundingTxMessage, setFundingTxMessage] = useState('');
   
   // Today's date string for restricting date pickers to current or future dates
   const todayStr = new Date().toISOString().split('T')[0];
@@ -137,6 +145,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               token_address: p.token_address || SUPPORTED_TOKENS[p.token || 'USDC']?.issuerOrContractAddress,
               deadline: p.deadline || '',
               visibility: p.visibility || 'public',
+              contract_id: p.contract_id,
+              project_id_onchain: p.project_id_onchain,
+              client_address: p.client_address,
+              freelancer_address: p.freelancer_address,
               milestones: msList,
               applicants: realApplicants,
               files: p.files || [],
@@ -210,8 +222,42 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     toast.info('Milestone removed');
   };
 
-  // Accept proposal/application
+  // Accept proposal/application with on-chain Soroban escrow funding
   const handleAcceptProposal = async (proposalId: string) => {
+    if (!address) {
+      toast.error('Please connect your client wallet first');
+      return;
+    }
+
+    const project = selectedProjectForApplicants;
+    const applicant = project?.applicants?.find((a) => a.id === proposalId);
+    const freelancerAddr = applicant?.freelancer_address || applicant?.stellar_address;
+
+    let onChainId = project?.project_id_onchain;
+    if (!onChainId && freelancerAddr && project) {
+      const milestoneAmounts = (project.milestones && project.milestones.length > 0)
+        ? project.milestones.map((m) => Number(m.amount))
+        : [Number(project.budget) || 100];
+
+      const tokenConfig = SUPPORTED_TOKENS[project.token || 'USDC'] || SUPPORTED_TOKENS.USDC;
+
+      try {
+        toast.info('Initializing Soroban Escrow: Please confirm signature in Freighter...');
+        const chainRes = await createProjectOnChain({
+          clientAddress: address,
+          freelancerAddress: freelancerAddr,
+          tokenAddress: project.token_address || tokenConfig.issuerOrContractAddress,
+          milestoneAmounts,
+          yieldEnabled: Boolean(project.yield_enabled),
+        });
+        onChainId = chainRes.onChainProjectId ? Number(chainRes.onChainProjectId) : 1;
+        toast.success(`Escrow project #${onChainId} locked on Stellar!`);
+      } catch (chainErr: any) {
+        toast.error(`On-chain escrow initialization failed: ${chainErr.message || chainErr}`);
+        return;
+      }
+    }
+
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const res = await fetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
@@ -221,11 +267,26 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       });
 
       if (res.ok) {
-        toast.success('Proposal accepted successfully!');
+        if (project && onChainId) {
+          await fetch(`${apiUrl}/api/projects/${project.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'in_progress',
+              freelancer_address: freelancerAddr,
+              contract_id: DEFAULT_ESCROW_CONTRACT_ID,
+              project_id_onchain: onChainId,
+            }),
+          });
+        }
+
+        toast.success('Proposal accepted & project funded on-chain!');
         setProjects((prev) =>
           prev.map((proj) => ({
             ...proj,
             status: (proj.applicants || []).some((app) => app.id === proposalId) ? 'in_progress' : proj.status,
+            project_id_onchain: (proj.applicants || []).some((app) => app.id === proposalId) ? onChainId : proj.project_id_onchain,
+            contract_id: (proj.applicants || []).some((app) => app.id === proposalId) ? DEFAULT_ESCROW_CONTRACT_ID : proj.contract_id,
             applicants: (proj.applicants || [])
               .filter((app) => app.id === proposalId)
               .map((app) => ({ ...app, status: 'accepted', granted: true })),
@@ -236,12 +297,15 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
             ? {
                 ...prev,
                 status: 'in_progress',
+                project_id_onchain: onChainId,
+                contract_id: DEFAULT_ESCROW_CONTRACT_ID,
                 applicants: (prev.applicants || [])
                   .filter((app) => app.id === proposalId)
                   .map((app) => ({ ...app, status: 'accepted', granted: true })),
               }
             : null
         );
+        await fetchBackendProjects();
       } else {
         toast.error('Failed to accept proposal');
       }
@@ -347,6 +411,34 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const clientAddr = address;
 
+      let onChainProjectId: number | undefined;
+      let contractId: string | undefined;
+
+      if (formLockImmediately) {
+        if (!formFreelancerAddress.trim()) {
+          toast.error('Please specify a designated freelancer address to lock escrow on-chain immediately');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const milestoneAmounts = formMilestones.length > 0
+          ? formMilestones.map((m) => Number(m.amount))
+          : [Number(formBudget)];
+
+        toast.info('Initializing Soroban Escrow: Please confirm signature in Freighter...');
+        const chainRes = await createProjectOnChain({
+          clientAddress: clientAddr,
+          freelancerAddress: formFreelancerAddress.trim(),
+          tokenAddress: SUPPORTED_TOKENS[formToken]?.issuerOrContractAddress,
+          milestoneAmounts,
+          yieldEnabled: formYieldEnabled,
+        });
+
+        onChainProjectId = chainRes.onChainProjectId ? Number(chainRes.onChainProjectId) : 1;
+        contractId = DEFAULT_ESCROW_CONTRACT_ID;
+        toast.success(`Escrow project #${onChainProjectId} locked on Stellar!`);
+      }
+
       const finalCategory = formCategory === 'Other' 
         ? (customCategory.trim() || 'Other')
         : (formCategory === 'Web development' ? 'Development' : formCategory);
@@ -361,6 +453,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         deadline: formDeadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         visibility: formVisibility,
         client_address: clientAddr,
+        freelancer_address: formFreelancerAddress.trim() || undefined,
+        status: onChainProjectId ? 'in_progress' : 'draft',
+        contract_id: contractId,
+        project_id_onchain: onChainProjectId,
         attachments: formAttachments,
         milestones: formMilestones,
         yield_enabled: formYieldEnabled,
@@ -409,16 +505,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   };
 
   // Grant applicant handler
-  const handleGrantApplicant = (applicant: Applicant) => {
-    toast.success(`Project granted to ${applicant.name}! Escrow initialized on-chain.`, {
-      duration: 4000
-    });
-    if (selectedProjectForApplicants) {
-      setSelectedProjectForApplicants(prev => prev ? ({
-        ...prev,
-        applicants: prev.applicants?.map(a => a.id === applicant.id ? { ...a, granted: true } : a)
-      }) : null);
-    }
+  const handleGrantApplicant = async (applicant: Applicant) => {
+    if (!applicant.id) return;
+    await handleAcceptProposal(applicant.id);
   };
 
   return (
@@ -568,7 +657,12 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                       )}
                     </div>
 
-                    <div className="self-start sm:self-center">
+                    <div className="self-start sm:self-center flex flex-col items-end gap-1.5">
+                      {proj.project_id_onchain !== undefined && proj.project_id_onchain !== null && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
+                          <span>✦</span> Soroban Escrow #{proj.project_id_onchain.toString()}
+                        </span>
+                      )}
                       {(proj.status === 'in_progress' || (proj.status as string) === 'In progress') && (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-[#052e16] text-[#22c55e] border border-[#14532d]">
                           In progress
@@ -830,6 +924,52 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     <span className="text-sm font-medium text-[#a1a1aa]">Invite-only</span>
                   </label>
                 </div>
+              </div>
+
+              {/* DIRECT FREELANCER ON-CHAIN ESCROW FUNDING TOGGLE */}
+              <div className="p-5 rounded-2xl border border-[#27272a] bg-[#1c1c20]/60 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-bold text-white">Direct Freelancer & Immediate Escrow Lock</span>
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
+                        Soroban
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#a1a1aa]">
+                      Have a designated freelancer? Assign their address and lock funds into the smart contract immediately.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormLockImmediately(!formLockImmediately)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      formLockImmediately ? 'bg-indigo-600' : 'bg-[#3f3f46]'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                        formLockImmediately ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {formLockImmediately && (
+                  <div className="pt-3 border-t border-[#27272a] space-y-2">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Designated Freelancer Stellar Address (G...)
+                    </label>
+                    <input
+                      type="text"
+                      value={formFreelancerAddress}
+                      onChange={(e) => setFormFreelancerAddress(e.target.value)}
+                      placeholder="G..."
+                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* BLEND PROTOCOL YIELD STRATEGY TOGGLE */}

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProjects, createProject, getProjectById } from './project.controller.js';
+import { getProjects, createProject, getProjectById, updateProject } from './project.controller.js';
 import { cacheMiddleware, invalidateCache } from '../../shared/middleware/cache.js';
 
 const router = Router();
@@ -20,5 +20,14 @@ router.post(
   createProject
 );
 
-export default router;
+// Invalidate cache when project status or on-chain metadata is updated
+router.patch(
+  '/:id',
+  async (req, res, next) => {
+    await invalidateCache(['cache:/api/projects*']);
+    next();
+  },
+  updateProject
+);
 
+export default router;

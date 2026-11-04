@@ -28,7 +28,12 @@ export interface Project {
   client_id?: string;
   client_address?: string;
   freelancer_id?: string;
+  freelancer_address?: string;
   arbiter_id?: string;
+  arbiter_address?: string;
+  contract_id?: string;
+  project_id_onchain?: number | string | bigint;
+  tx_hash?: string;
   created_at?: string;
   milestones?: Milestone[];
   applicants?: Applicant[];
@@ -87,4 +92,3 @@ export interface PaginationMeta {
   hasNextPage: boolean;
   hasPrevPage: boolean;
 }
-
