@@ -139,7 +139,25 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       });
     }
 
-    const { title, description, category, custom_category, budget, deadline, visibility, client_address, token, token_address, yield_enabled, estimated_yield, blend_pool_address } = validationResult.data;
+    const {
+      title,
+      description,
+      category,
+      custom_category,
+      budget,
+      deadline,
+      visibility,
+      client_address,
+      freelancer_address,
+      status,
+      contract_id,
+      project_id_onchain,
+      token,
+      token_address,
+      yield_enabled,
+      estimated_yield,
+      blend_pool_address
+    } = validationResult.data;
 
     let userId: string | null = null;
     const { data: userData } = await supabase
@@ -169,6 +187,26 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       return res.status(400).json({ error: 'Failed to resolve client user ID' });
     }
 
+    let freelancerUserId: string | null = null;
+    if (freelancer_address) {
+      const { data: fUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('stellar_address', freelancer_address)
+        .maybeSingle();
+
+      if (fUser?.id) {
+        freelancerUserId = fUser.id;
+      } else {
+        const { data: newFUser } = await supabase
+          .from('users')
+          .insert([{ stellar_address: freelancer_address, role: 'freelancer' }])
+          .select('id')
+          .single();
+        freelancerUserId = newFUser?.id || null;
+      }
+    }
+
     // 3. Insert into projects table
     const projectPayload: Record<string, any> = {
       title,
@@ -178,11 +216,14 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       deadline: deadline || null,
       visibility: visibility ? visibility.toLowerCase() : 'public',
       client_id: userId,
-      status: 'draft',
+      status: status || (project_id_onchain !== undefined ? 'in_progress' : 'draft'),
       token: token || 'USDC',
       token_address: token_address || null,
     };
 
+    if (freelancerUserId) projectPayload.freelancer_id = freelancerUserId;
+    if (contract_id) projectPayload.contract_id = contract_id;
+    if (project_id_onchain !== undefined) projectPayload.project_id_onchain = project_id_onchain;
     if (yield_enabled !== undefined) projectPayload.yield_enabled = yield_enabled;
     if (estimated_yield !== undefined && estimated_yield > 0) projectPayload.estimated_yield = estimated_yield;
     if (blend_pool_address) projectPayload.blend_pool_address = blend_pool_address;
@@ -196,12 +237,13 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
 
     if (error && (error.message?.includes('schema cache') || error.message?.includes('column') || error.details?.includes('column'))) {
       logger.warn('Supabase DB missing optional columns, falling back to basic project insert:', error.message);
-      // Remove optional yield and token columns if DB migration hasn't been run yet
       delete projectPayload.yield_enabled;
       delete projectPayload.estimated_yield;
       delete projectPayload.blend_pool_address;
       delete projectPayload.token;
       delete projectPayload.token_address;
+      delete projectPayload.contract_id;
+      delete projectPayload.project_id_onchain;
 
       const fallbackResult = await supabase
         .from('projects')
@@ -278,6 +320,8 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       message: 'Project created successfully',
       project: {
         ...newProject,
+        client_address,
+        freelancer_address: freelancer_address || null,
         milestones: createdMilestones || [],
         files: createdFiles || [],
         attachments: (createdFiles || []).map((f) => f.file_url || f.file_name)
@@ -317,9 +361,26 @@ export const getProjectById = async (req: Request, res: Response): Promise<any> 
       .select('*')
       .eq('project_id', id);
 
+    const userIds = [project.client_id, project.freelancer_id, project.arbiter_id].filter(Boolean);
+    let usersMap: Record<string, string> = {};
+    if (userIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, stellar_address')
+        .in('id', userIds);
+      if (users) {
+        for (const u of users) {
+          usersMap[u.id] = u.stellar_address;
+        }
+      }
+    }
+
     return res.json({
       project: {
         ...project,
+        client_address: project.client_id ? usersMap[project.client_id] : null,
+        freelancer_address: project.freelancer_id ? usersMap[project.freelancer_id] : null,
+        arbiter_address: project.arbiter_id ? usersMap[project.arbiter_id] : null,
         milestones: milestones || [],
         files: projectFiles || [],
         attachments: (projectFiles || []).map((f) => f.file_url || f.file_name)
@@ -327,6 +388,66 @@ export const getProjectById = async (req: Request, res: Response): Promise<any> 
     });
   } catch (err: any) {
     logger.error('Unexpected error fetching project:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const updateProject = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const { status, contract_id, project_id_onchain, freelancer_address, arbiter_address } = req.body;
+
+    const updatePayload: Record<string, any> = {};
+    if (status) updatePayload.status = status;
+    if (contract_id) updatePayload.contract_id = contract_id;
+    if (project_id_onchain !== undefined) updatePayload.project_id_onchain = project_id_onchain;
+
+    if (freelancer_address) {
+      const { data: user } = await supabase
+        .from('users')
+        .select('id')
+        .eq('stellar_address', freelancer_address)
+        .maybeSingle();
+
+      if (user?.id) {
+        updatePayload.freelancer_id = user.id;
+      } else {
+        const { data: newUser } = await supabase
+          .from('users')
+          .insert([{ stellar_address: freelancer_address, role: 'freelancer' }])
+          .select('id')
+          .single();
+        if (newUser?.id) updatePayload.freelancer_id = newUser.id;
+      }
+    }
+
+    if (arbiter_address) {
+      const { data: arbiterUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('stellar_address', arbiter_address)
+        .maybeSingle();
+
+      if (arbiterUser?.id) {
+        updatePayload.arbiter_id = arbiterUser.id;
+      }
+    }
+
+    const { data: updated, error } = await supabase
+      .from('projects')
+      .update(updatePayload)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      logger.error(`Error updating project ${id}:`, error);
+      return res.status(500).json({ error: 'Failed to update project' });
+    }
+
+    return res.json({ message: 'Project updated successfully', project: updated });
+  } catch (err: any) {
+    logger.error('Unexpected error updating project:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
