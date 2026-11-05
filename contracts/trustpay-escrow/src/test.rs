@@ -41,6 +41,8 @@ fn test_create_project() {
 
     let project = client.get_project(&project_id);
     assert_eq!(project.yield_enabled, false);
+    assert_eq!(project.total_amount, 1000);
+    assert_eq!(project.remaining_amount, 1000);
     assert_eq!(project.principal_liquid, 1000);
     assert_eq!(project.principal_blend, 0);
 }
@@ -90,6 +92,8 @@ fn test_multi_token_escrow() {
 
         // Freelancer should have received 1000 tokens of this specific token
         assert_eq!(sac_token.balance(&freelancer_addr), 1000);
+        let p_after = escrow_client.get_project(&p_id);
+        assert_eq!(p_after.remaining_amount, 1000);
     }
 }
 
@@ -168,7 +172,7 @@ fn test_yield_interest_split_on_milestone_approval() {
 
     // Simulate interest earned from Blend (100 tokens of yield minted to contract)
     token_admin_client.mint(&contract_id, &100);
-    escrow_client.accrue_yield(&p_id, &100);
+    escrow_client.accrue_yield(&arbiter_addr, &p_id, &100);
 
     // Submit and approve milestone
     escrow_client.submit_milestone(&p_id, &0);
@@ -221,7 +225,7 @@ fn test_yield_dispute_resolution_with_reserve() {
 
     // Accrue yield (50 tokens yield)
     token_admin_client.mint(&contract_id, &50);
-    escrow_client.accrue_yield(&p_id, &50);
+    escrow_client.accrue_yield(&arbiter_addr, &p_id, &50);
 
     // Resolve dispute: 400 to client, 600 to freelancer
     escrow_client.resolve_dispute(&p_id, &400, &600, &Some(platform_addr.clone()));
@@ -332,5 +336,201 @@ fn test_auto_release_before_timelock_fails() {
 
     // Must panic because 7 days have not elapsed
     escrow_client.auto_release_milestone(&p_id, &0, &None);
+}
+
+#[test]
+#[should_panic(expected = "Resolution exceeds escrowed balance")]
+fn test_resolve_dispute_exceeding_balance_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.raise_dispute(&client_addr, &p_id);
+
+    // Arbiter attempts to resolve 600 + 500 = 1100 when only 1000 is locked in escrow
+    escrow_client.resolve_dispute(&p_id, &600, &500, &None);
+}
+
+#[test]
+#[should_panic(expected = "Client amount cannot be negative")]
+fn test_resolve_dispute_negative_amounts_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.raise_dispute(&client_addr, &p_id);
+
+    // Arbiter attempts to pass negative amount
+    escrow_client.resolve_dispute(&p_id, &-100, &500, &None);
+}
+
+#[test]
+#[should_panic(expected = "Resolution exceeds escrowed balance")]
+fn test_multi_project_drain_prevention() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client1 = Address::generate(&env);
+    let freelancer1 = Address::generate(&env);
+    let arbiter1 = Address::generate(&env);
+
+    let client2 = Address::generate(&env);
+    let freelancer2 = Address::generate(&env);
+    let arbiter2 = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    // Client 1 deposits 500, Client 2 deposits 2000
+    token_admin_client.mint(&client1, &500);
+    token_admin_client.mint(&client2, &2000);
+
+    let mut amounts1 = Vec::new(&env);
+    amounts1.push_back(500);
+
+    let mut amounts2 = Vec::new(&env);
+    amounts2.push_back(2000);
+
+    let p1 = escrow_client.create_project(&client1, &freelancer1, &arbiter1, &token_contract, &amounts1, &false);
+    let _p2 = escrow_client.create_project(&client2, &freelancer2, &arbiter2, &token_contract, &amounts2, &false);
+
+    // Escrow contract balance is now 2500 total
+    escrow_client.raise_dispute(&client1, &p1);
+
+    // Arbiter 1 tries to award 1500 to client1 on Project 1 (attempting to drain Project 2's funds)
+    escrow_client.resolve_dispute(&p1, &1500, &0, &None);
+}
+
+#[test]
+#[should_panic(expected = "Caller not authorized oracle or admin")]
+fn test_accrue_yield_unauthorized_caller_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+    let random_stranger = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &true,
+    );
+
+    // Random stranger attempts to call accrue_yield
+    escrow_client.accrue_yield(&random_stranger, &p_id, &500);
+}
+
+#[test]
+fn test_accrue_yield_authorized_oracle_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    escrow_client.initialize(&admin, &Some(oracle.clone()));
+
+    assert_eq!(escrow_client.get_admin(), Some(admin));
+    assert_eq!(escrow_client.get_oracle(), Some(oracle.clone()));
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &true,
+    );
+
+    // Mint yield to contract and call accrue_yield as authorized oracle
+    token_admin_client.mint(&contract_id, &75);
+    escrow_client.accrue_yield(&oracle, &p_id, &75);
+
+    let proj = escrow_client.get_project(&p_id);
+    assert_eq!(proj.accrued_yield, 75);
 }
 

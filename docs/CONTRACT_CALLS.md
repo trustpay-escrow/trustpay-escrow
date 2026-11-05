@@ -36,6 +36,8 @@ pub enum MilestoneState {
 pub enum DataKey {
     Project(u64),
     ProjectCount,
+    Admin,
+    Oracle,
 }
 ```
 
@@ -56,6 +58,7 @@ pub struct Project {
     pub arbiter: Address,
     pub token: Address,
     pub total_amount: i128,
+    pub remaining_amount: i128,
     pub milestones: Vec<Milestone>,
     pub state: ProjectState,
     pub yield_enabled: bool,
@@ -180,5 +183,44 @@ Executed by the designated arbiter to distribute disputed funds according to ver
   )
   ```
 - **Authorization:** `project.arbiter.require_auth()`
-- **Preconditions:** `project.state == ProjectState::Disputed`.
-- **Effect:** Transfers allocated amounts to client and freelancer, resolves yield shares, and marks project `ProjectState::Completed`.
+- **Preconditions:**
+  - `project.state == ProjectState::Disputed`
+  - `client_amount >= 0` and `freelancer_amount >= 0`
+  - **Balance Invariant Guard:** `client_amount + freelancer_amount <= project.remaining_amount` (Strictly prevents rogue arbiters or input typos from draining other projects or contract reserves).
+- **Effect:**
+  - Deducts `client_amount + freelancer_amount` from `project.remaining_amount`.
+  - Transfers allocated amounts to client and freelancer.
+  - Resolves yield shares (70% Client, 30% Platform).
+  - Transitions project state to `ProjectState::Completed`.
+
+---
+
+### 6. `accrue_yield`
+Called by an authorized oracle, admin, or the project arbiter to accrue interest earned on liquidity.
+
+- **Signature:**
+  ```rust
+  pub fn accrue_yield(
+      env: Env,
+      caller: Address,
+      project_id: u64,
+      yield_amount: i128,
+  )
+  ```
+- **Authorization:** `caller.require_auth()` (Caller must be registered `Oracle`, `Admin`, or project `Arbiter`).
+- **Preconditions:**
+  - `yield_amount > 0`
+  - `project.yield_enabled == true`
+  - `project.state == ProjectState::Active` or `ProjectState::Disputed`
+- **Effect:** Increments `project.accrued_yield` by `yield_amount`.
+
+---
+
+### 7. Admin & Oracle Management
+Configures platform-level administrative and oracle contracts.
+
+- `initialize(env: Env, admin: Address, oracle: Option<Address>)`: Sets the contract administrator and initial oracle (can only be run once).
+- `set_admin(env: Env, new_admin: Address)`: Transfers administrator privileges (requires current admin authorization).
+- `set_oracle(env: Env, oracle: Address)`: Updates authorized price/yield oracle (requires admin authorization).
+- `get_admin(env: Env) -> Option<Address>`: Read-only query for current admin.
+- `get_oracle(env: Env) -> Option<Address>`: Read-only query for current oracle.
