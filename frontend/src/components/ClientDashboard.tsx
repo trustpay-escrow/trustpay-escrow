@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useWalletStore } from '@/store/walletStore';
+import { authFetch } from '@/lib/api';
 
 import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
@@ -107,7 +108,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const clientParam = address ? `&client_address=${encodeURIComponent(address)}` : '';
-      const res = await fetch(`${apiUrl}/api/projects?page=${pageToFetch}&limit=6${clientParam}`);
+      const res = await authFetch(`${apiUrl}/api/projects?page=${pageToFetch}&limit=6${clientParam}`);
       if (res.ok) {
         const data = await res.json();
         if (data.projects && Array.isArray(data.projects)) {
@@ -260,7 +261,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
+      const res = await authFetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'accepted' }),
@@ -268,7 +269,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
       if (res.ok) {
         if (project && onChainId) {
-          await fetch(`${apiUrl}/api/projects/${project.id}`, {
+          await authFetch(`${apiUrl}/api/projects/${project.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -318,7 +319,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const handleDenyProposal = async (proposalId: string) => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
+      const res = await authFetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'denied' }),
@@ -463,7 +464,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         estimated_yield: Number(calculateEstimatedYield()),
       };
 
-      const res = await fetch(`${apiUrl}/api/projects`, {
+      const res = await authFetch(`${apiUrl}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)

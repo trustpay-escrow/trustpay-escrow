@@ -9,6 +9,7 @@ import { Milestone, Project } from '@/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { ProjectDetailSkeleton } from '@/components/skeletons';
 import { useWalletStore } from '@/store/walletStore';
+import { authFetch } from '@/lib/api';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import {
   createProjectOnChain,
@@ -66,7 +67,7 @@ export default function ProjectDetailsPage() {
   const fetchProject = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl}/api/projects/${projectId}`);
+      const res = await authFetch(`${apiUrl}/api/projects/${projectId}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -177,7 +178,7 @@ export default function ProjectDetailsPage() {
 
       // Update backend metadata
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      await fetch(`${apiUrl}/api/projects/${projectId}`, {
+      await authFetch(`${apiUrl}/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -227,7 +228,7 @@ export default function ProjectDetailsPage() {
 
       // Update backend milestone status
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      await fetch(`${apiUrl}/api/milestones/${activeDeliverableModal.id}/status`, {
+      await authFetch(`${apiUrl}/api/milestones/${activeDeliverableModal.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -284,7 +285,7 @@ export default function ProjectDetailsPage() {
 
       // Update backend milestone status
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      await fetch(`${apiUrl}/api/milestones/${activeApproveModal.id}/status`, {
+      await authFetch(`${apiUrl}/api/milestones/${activeApproveModal.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -337,7 +338,7 @@ export default function ProjectDetailsPage() {
 
       // Update backend milestone status
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      await fetch(`${apiUrl}/api/milestones/${milestone.id}/status`, {
+      await authFetch(`${apiUrl}/api/milestones/${milestone.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -387,7 +388,7 @@ export default function ProjectDetailsPage() {
 
       // Update backend project status
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      await fetch(`${apiUrl}/api/projects/${projectId}`, {
+      await authFetch(`${apiUrl}/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -448,7 +449,7 @@ export default function ProjectDetailsPage() {
 
       // Update backend project status
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      await fetch(`${apiUrl}/api/projects/${projectId}`, {
+      await authFetch(`${apiUrl}/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

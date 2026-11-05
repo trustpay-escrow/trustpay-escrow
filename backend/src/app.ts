@@ -3,8 +3,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 
 import { logger, stream } from './shared/utils/logger.js';
+import authRouter from './modules/auth/auth.routes.js';
 import projectsRouter from './modules/projects/project.routes.js';
 import milestonesRouter from './modules/milestones/milestone.routes.js';
 import usersRouter from './modules/users/user.routes.js';
@@ -23,6 +25,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(cookieParser());
 app.use(morgan('combined', { stream }));
 app.use(helmet());
 
@@ -39,6 +42,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Feature Domain Module Routes
+app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
 app.use('/api/milestones', milestonesRouter);
 app.use('/api/users', usersRouter);

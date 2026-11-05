@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/api';
 
 export interface ChatMessage {
   id: string;
@@ -45,7 +46,7 @@ export function ProjectChatModal({
     if (!projectId) return;
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl}/api/projects/${projectId}/messages`);
+      const res = await authFetch(`${apiUrl}/api/projects/${projectId}/messages`);
       if (res.ok) {
         const data = await res.json();
         if (data.messages && Array.isArray(data.messages)) {
@@ -90,7 +91,7 @@ export function ProjectChatModal({
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const res = await fetch(`${apiUrl}/api/projects/${projectId}/messages`, {
+      const res = await authFetch(`${apiUrl}/api/projects/${projectId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
