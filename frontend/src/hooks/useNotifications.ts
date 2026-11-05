@@ -1,3 +1,4 @@
+import { authFetch } from '@/lib/api';
 import { useState, useEffect, useCallback } from 'react';
 import { useWalletStore } from '@/store/walletStore';
 import { NotificationItem } from '@/types/notification';
@@ -22,7 +23,7 @@ export function useNotifications() {
 
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/api/notifications/${encodeURIComponent(address)}`);
+      const res = await authFetch(`${apiUrl}/api/notifications/${encodeURIComponent(address)}`);
       
       if (!res.ok) {
         throw new Error('Failed to fetch notifications');
@@ -66,7 +67,7 @@ export function useNotifications() {
 
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/api/notifications/${id}/read`, {
+      const res = await authFetch(`${apiUrl}/api/notifications/${id}/read`, {
         method: 'PATCH',
       });
       if (!res.ok) {
@@ -89,7 +90,7 @@ export function useNotifications() {
 
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/api/notifications/read-all/${encodeURIComponent(address)}`, {
+      const res = await authFetch(`${apiUrl}/api/notifications/read-all/${encodeURIComponent(address)}`, {
         method: 'PATCH',
       });
       if (!res.ok) {
@@ -114,7 +115,7 @@ export function useNotifications() {
 
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/api/notifications/${id}`, {
+      const res = await authFetch(`${apiUrl}/api/notifications/${id}`, {
         method: 'DELETE',
       });
       if (!res.ok) {

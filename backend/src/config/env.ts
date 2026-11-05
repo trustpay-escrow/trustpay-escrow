@@ -12,6 +12,11 @@ interface Config {
   directUrl: string;
   redisUrl: string;
   redisEnabled: boolean;
+  stellarNetworkPassphrase: string;
+  stellarServerSecret: string;
+  stellarHomeDomain: string;
+  jwtSecret: string;
+  jwtExpiresIn: string;
 }
 
 export const env: Config = {
@@ -23,6 +28,11 @@ export const env: Config = {
   directUrl: process.env.DIRECT_URL || process.env.DATABASE_URL || '',
   redisUrl: process.env.REDIS_URL || '',
   redisEnabled: process.env.REDIS_ENABLED === 'true' || Boolean(process.env.REDIS_URL),
+  stellarNetworkPassphrase: process.env.STELLAR_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015',
+  stellarServerSecret: process.env.STELLAR_SERVER_SECRET || '',
+  stellarHomeDomain: process.env.STELLAR_HOME_DOMAIN || 'localhost',
+  jwtSecret: process.env.JWT_SECRET || 'trustpay_escrow_jwt_secret_dev_key_stellar_sep10',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
 };
 
 // Optionally validate required variables here

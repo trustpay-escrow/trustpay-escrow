@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { isConnected, requestAccess, getNetworkDetails, setAllowed } from "@stellar/freighter-api";
+import { isConnected, requestAccess, getNetworkDetails, setAllowed, signTransaction } from "@stellar/freighter-api";
 import { toast } from "sonner";
 import { useWalletStore } from "@/store/walletStore";
 import { useRouter } from "next/navigation";
@@ -45,6 +45,7 @@ export default function WalletConnect() {
   const [emailValue, setEmailValue] = useState("");
   const [tempAddress, setTempAddress] = useState("");
   const [tempWalletName, setTempWalletName] = useState("Freighter");
+  const [tempSignedXdr, setTempSignedXdr] = useState("");
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
@@ -60,8 +61,12 @@ export default function WalletConnect() {
     }
   }, [address, router]);
 
-  // Unified login handler for any Stellar wallet address
-  const finishWalletLogin = async (userAddress: string, selectedWallet: string) => {
+  // Unified cryptographic SEP-0010 Web Auth login handler
+  const finishWalletLogin = async (
+    userAddress: string,
+    selectedWallet: string,
+    customSigner?: (challengeXdr: string) => Promise<string>
+  ) => {
     if (!STELLAR_PUBKEY_REGEX.test(userAddress)) {
       toast.error("Invalid Stellar public key format. Must start with 'G' and be 56 characters.");
       return;
@@ -69,26 +74,62 @@ export default function WalletConnect() {
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      const apiRes = await fetch(`${apiUrl}/api/users/connect`, {
+      toast.info("Requesting SEP-0010 authentication challenge...");
+
+      // 1. Fetch challenge XDR from backend
+      const challengeRes = await fetch(`${apiUrl}/api/auth/challenge?account=${userAddress}`);
+      if (!challengeRes.ok) {
+        const errData = await challengeRes.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to retrieve authentication challenge");
+      }
+      const { transaction: challengeXdr, network } = await challengeRes.json();
+
+      let signedXdr = challengeXdr;
+
+      // 2. Prompt wallet for cryptographic signature
+      if (customSigner) {
+        toast.info(`Please sign the challenge in ${selectedWallet}...`);
+        signedXdr = await customSigner(challengeXdr);
+      } else if (selectedWallet.includes("Freighter")) {
+        toast.info("Please sign the authentication challenge in Freighter...");
+        const networkPassphrase =
+          network === "PUBLIC"
+            ? "Public Global Stellar Network ; September 2015"
+            : "Test SDF Network ; September 2015";
+        const signResult = await signTransaction(challengeXdr, { networkPassphrase });
+        if (typeof signResult === "string") {
+          signedXdr = signResult;
+        } else if (signResult && (signResult as any).signedTxXdr) {
+          signedXdr = (signResult as any).signedTxXdr;
+        } else if (signResult && (signResult as any).error) {
+          throw new Error((signResult as any).error);
+        }
+      }
+
+      // 3. Submit signed challenge to /api/auth/verify
+      toast.info("Verifying cryptographic signature on backend...");
+      const verifyRes = await fetch(`${apiUrl}/api/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stellar_address: userAddress })
+        credentials: "include",
+        body: JSON.stringify({ transaction: signedXdr }),
       });
-      const data = await apiRes.json();
+      const data = await verifyRes.json();
 
-      if (apiRes.status === 403 && data.requiresRegistration) {
+      if (verifyRes.status === 403 && data.requiresRegistration) {
         setTempAddress(userAddress);
         setTempWalletName(selectedWallet);
+        setTempSignedXdr(signedXdr);
         setShowEmailModal(true);
-      } else if (apiRes.ok) {
-        setWalletInfo(userAddress, true, true, selectedWallet);
-        toast.success(`Connected via ${selectedWallet}! Multi-role session active.`);
+      } else if (verifyRes.ok) {
+        setWalletInfo(userAddress, true, true, selectedWallet, data.token);
+        toast.success(`Cryptographically verified via SEP-0010! Connected via ${selectedWallet}.`);
         router.push("/projects");
       } else {
-        toast.error(data.error || "Failed to connect user on backend");
+        toast.error(data.error || "Failed to verify authentication signature");
       }
     } catch (e: any) {
-      toast.error(getErrorMessage(e, "Backend error"));
+      toast.error(getErrorMessage(e, "SEP-0010 Authentication Error"));
       console.error("Backend error:", e);
     }
   };
@@ -269,15 +310,16 @@ export default function WalletConnect() {
     setIsConnecting(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      const apiRes = await fetch(`${apiUrl}/api/users/connect`, {
+      const apiRes = await fetch(`${apiUrl}/api/auth/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stellar_address: tempAddress, email: emailValue })
+        credentials: "include",
+        body: JSON.stringify({ transaction: tempSignedXdr, email: emailValue }),
       });
 
       const data = await apiRes.json();
       if (apiRes.ok) {
-        setWalletInfo(tempAddress, true, true, tempWalletName);
+        setWalletInfo(tempAddress, true, true, tempWalletName, data.token);
         setShowEmailModal(false);
         toast.success(`Registration complete! Connected via ${tempWalletName}.`);
         router.push("/projects");
