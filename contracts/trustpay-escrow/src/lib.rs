@@ -38,6 +38,7 @@ pub struct Project {
     pub arbiter: Address,
     pub token: Address,
     pub total_amount: i128,
+    pub remaining_amount: i128,
     pub milestones: Vec<Milestone>,
     pub state: ProjectState,
     pub yield_enabled: bool,
@@ -50,6 +51,8 @@ pub struct Project {
 pub enum DataKey {
     Project(u64),
     ProjectCount,
+    Admin,
+    Oracle,
 }
 
 #[contract]
@@ -57,6 +60,35 @@ pub struct TrustPayEscrow;
 
 #[contractimpl]
 impl TrustPayEscrow {
+    pub fn initialize(env: Env, admin: Address, oracle: Option<Address>) {
+        assert!(!env.storage().persistent().has(&DataKey::Admin), "Already initialized");
+        admin.require_auth();
+        env.storage().persistent().set(&DataKey::Admin, &admin);
+        if let Some(o) = oracle {
+            env.storage().persistent().set(&DataKey::Oracle, &o);
+        }
+    }
+
+    pub fn set_admin(env: Env, new_admin: Address) {
+        let admin: Address = env.storage().persistent().get(&DataKey::Admin).expect("Admin not set");
+        admin.require_auth();
+        env.storage().persistent().set(&DataKey::Admin, &new_admin);
+    }
+
+    pub fn set_oracle(env: Env, oracle: Address) {
+        let admin: Address = env.storage().persistent().get(&DataKey::Admin).expect("Admin not set");
+        admin.require_auth();
+        env.storage().persistent().set(&DataKey::Oracle, &oracle);
+    }
+
+    pub fn get_admin(env: Env) -> Option<Address> {
+        env.storage().persistent().get(&DataKey::Admin)
+    }
+
+    pub fn get_oracle(env: Env) -> Option<Address> {
+        env.storage().persistent().get(&DataKey::Oracle)
+    }
+
     pub fn create_project(
         env: Env,
         client: Address,
@@ -72,13 +104,16 @@ impl TrustPayEscrow {
         let mut milestones = Vec::new(&env);
         
         for amount in milestone_amounts.iter() {
-            total_amount += amount;
+            assert!(amount > 0, "Milestone amount must be positive");
+            total_amount = total_amount.checked_add(amount).expect("Total amount overflow");
             milestones.push_back(Milestone {
                 amount,
                 state: MilestoneState::Pending,
                 submitted_at: 0,
             });
         }
+
+        assert!(total_amount > 0, "Project must have positive total amount");
 
         // Transfer total funds from client to contract
         let token_client = token::Client::new(&env, &token);
@@ -99,6 +134,7 @@ impl TrustPayEscrow {
             arbiter,
             token,
             total_amount,
+            remaining_amount: total_amount,
             milestones,
             state: ProjectState::Active,
             yield_enabled,
@@ -120,12 +156,24 @@ impl TrustPayEscrow {
         env.storage().persistent().get(&DataKey::Project(project_id)).unwrap()
     }
 
-    pub fn accrue_yield(env: Env, project_id: u64, yield_amount: i128) {
+    pub fn accrue_yield(env: Env, caller: Address, project_id: u64, yield_amount: i128) {
+        caller.require_auth();
+        assert!(yield_amount > 0, "Yield amount must be positive");
+
+        let admin_opt: Option<Address> = env.storage().persistent().get(&DataKey::Admin);
+        let oracle_opt: Option<Address> = env.storage().persistent().get(&DataKey::Oracle);
+
         let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+
+        let is_oracle = oracle_opt.map_or(false, |o| o == caller);
+        let is_admin = admin_opt.map_or(false, |a| a == caller);
+        let is_arbiter = project.arbiter == caller;
+
+        assert!(is_oracle || is_admin || is_arbiter, "Caller not authorized oracle or admin");
         assert!(project.yield_enabled, "Yield not enabled for project");
         assert!(project.state == ProjectState::Active || project.state == ProjectState::Disputed, "Project not active or disputed");
-        
-        project.accrued_yield += yield_amount;
+
+        project.accrued_yield = project.accrued_yield.checked_add(yield_amount).expect("Yield overflow");
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
     }
 
@@ -156,6 +204,10 @@ impl TrustPayEscrow {
         
         milestone.state = MilestoneState::Approved;
         project.milestones.set(milestone_index, milestone.clone());
+
+        // Invariant guard: update remaining escrowed funds
+        assert!(project.remaining_amount >= milestone.amount, "Insufficient escrow balance");
+        project.remaining_amount = project.remaining_amount.checked_sub(milestone.amount).expect("Remaining balance underflow");
 
         // Release milestone funds to freelancer
         let token_client = token::Client::new(&env, &project.token);
@@ -215,6 +267,10 @@ impl TrustPayEscrow {
         milestone.state = MilestoneState::Approved;
         project.milestones.set(milestone_index, milestone.clone());
 
+        // Invariant guard: update remaining escrowed funds
+        assert!(project.remaining_amount >= milestone.amount, "Insufficient escrow balance");
+        project.remaining_amount = project.remaining_amount.checked_sub(milestone.amount).expect("Remaining balance underflow");
+
         // Release milestone funds directly to freelancer
         let token_client = token::Client::new(&env, &project.token);
         token_client.transfer(&env.current_contract_address(), &project.freelancer, &milestone.amount);
@@ -270,7 +326,15 @@ impl TrustPayEscrow {
         
         project.arbiter.require_auth();
         assert!(project.state == ProjectState::Disputed, "Project is not disputed");
-        
+        assert!(client_amount >= 0, "Client amount cannot be negative");
+        assert!(freelancer_amount >= 0, "Freelancer amount cannot be negative");
+
+        // Balance invariant check: prevent arbitrator from exceeding remaining escrowed funds or draining pool
+        let total_resolution = client_amount.checked_add(freelancer_amount).expect("Resolution amount overflow");
+        assert!(total_resolution <= project.remaining_amount, "Resolution exceeds escrowed balance");
+
+        project.remaining_amount = project.remaining_amount.checked_sub(total_resolution).expect("Underflow");
+
         let token_client = token::Client::new(&env, &project.token);
         
         if client_amount > 0 {
