@@ -48,6 +48,9 @@ export type ProposalFormData = z.infer<typeof proposalSchema>;
 
 export const updateProposalStatusSchema = z.object({
   status: z.union([z.literal('accepted'), z.literal('denied'), z.literal('pending')]),
+  project_id_onchain: z.union([z.number(), z.string(), z.bigint()]).optional(),
+  escrow_tx_hash: z.string().optional(),
+  assign_tx_hash: z.string().optional(),
 });
 
 export type UpdateProposalStatusData = z.infer<typeof updateProposalStatusSchema>;

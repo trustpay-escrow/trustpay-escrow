@@ -34,7 +34,7 @@ pub struct Milestone {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Project {
     pub client: Address,
-    pub freelancer: Address,
+    pub freelancer: Option<Address>,
     pub arbiter: Address,
     pub token: Address,
     pub total_amount: i128,
@@ -92,7 +92,7 @@ impl TrustPayEscrow {
     pub fn create_project(
         env: Env,
         client: Address,
-        freelancer: Address,
+        freelancer: Option<Address>,
         arbiter: Address,
         token: Address,
         milestone_amounts: Vec<i128>,
@@ -152,6 +152,67 @@ impl TrustPayEscrow {
         project_id
     }
 
+    /// Atomic deposit-on-award (Option A): locks funds and binds winning freelancer in one atomic transaction.
+    pub fn lock_escrow(
+        env: Env,
+        client: Address,
+        freelancer: Address,
+        arbiter: Address,
+        token: Address,
+        milestone_amounts: Vec<i128>,
+        yield_enabled: bool,
+    ) -> u64 {
+        Self::create_project(
+            env,
+            client,
+            Some(freelancer),
+            arbiter,
+            token,
+            milestone_amounts,
+            yield_enabled,
+        )
+    }
+
+    /// Assigns the winning freelancer to an upfront-funded unassigned project (Option B).
+    pub fn assign_freelancer(
+        env: Env,
+        project_id: u64,
+        freelancer: Address,
+    ) {
+        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        project.client.require_auth();
+        assert!(project.state == ProjectState::Active, "Project is not active");
+        assert!(project.freelancer.is_none(), "Freelancer already assigned");
+
+        project.freelancer = Some(freelancer);
+        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+    }
+
+    /// Cancels an unassigned project and refunds 100% of deposited escrow funds to the client.
+    /// Only callable by the client before any freelancer has been assigned.
+    pub fn cancel_unassigned_project(env: Env, project_id: u64) {
+        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        project.client.require_auth();
+        assert!(project.state == ProjectState::Active, "Project is not active");
+        assert!(project.freelancer.is_none(), "Cannot cancel once freelancer is assigned");
+
+        let refund_amount = project.remaining_amount;
+        assert!(refund_amount > 0, "No funds to refund");
+
+        project.remaining_amount = 0;
+        project.state = ProjectState::Completed;
+
+        let token_client = token::Client::new(&env, &project.token);
+        token_client.transfer(&env.current_contract_address(), &project.client, &refund_amount);
+
+        if project.yield_enabled && project.accrued_yield > 0 {
+            token_client.transfer(&env.current_contract_address(), &project.client, &project.accrued_yield);
+            project.accrued_yield = 0;
+        }
+
+        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+    }
+
     pub fn get_project(env: Env, project_id: u64) -> Project {
         env.storage().persistent().get(&DataKey::Project(project_id)).unwrap()
     }
@@ -180,7 +241,8 @@ impl TrustPayEscrow {
     pub fn submit_milestone(env: Env, project_id: u64, milestone_index: u32) {
         let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
         
-        project.freelancer.require_auth();
+        let freelancer = project.freelancer.as_ref().expect("Freelancer not assigned yet");
+        freelancer.require_auth();
         assert!(project.state == ProjectState::Active, "Project is not active");
         
         let mut milestone = project.milestones.get(milestone_index).unwrap();
@@ -210,8 +272,9 @@ impl TrustPayEscrow {
         project.remaining_amount = project.remaining_amount.checked_sub(milestone.amount).expect("Remaining balance underflow");
 
         // Release milestone funds to freelancer
+        let freelancer = project.freelancer.as_ref().expect("Freelancer not assigned yet");
         let token_client = token::Client::new(&env, &project.token);
-        token_client.transfer(&env.current_contract_address(), &project.freelancer, &milestone.amount);
+        token_client.transfer(&env.current_contract_address(), freelancer, &milestone.amount);
         
         // Check if all completed
         let mut all_completed = true;
@@ -272,8 +335,9 @@ impl TrustPayEscrow {
         project.remaining_amount = project.remaining_amount.checked_sub(milestone.amount).expect("Remaining balance underflow");
 
         // Release milestone funds directly to freelancer
+        let freelancer = project.freelancer.as_ref().expect("Freelancer not assigned yet");
         let token_client = token::Client::new(&env, &project.token);
-        token_client.transfer(&env.current_contract_address(), &project.freelancer, &milestone.amount);
+        token_client.transfer(&env.current_contract_address(), freelancer, &milestone.amount);
 
         // Check if all milestones completed and handle final project settlement & yield
         let mut all_completed = true;
@@ -308,7 +372,9 @@ impl TrustPayEscrow {
         caller.require_auth();
         let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
         
-        assert!(caller == project.client || caller == project.freelancer, "Not authorized");
+        let is_client = caller == project.client;
+        let is_freelancer = project.freelancer.as_ref().map_or(false, |f| *f == caller);
+        assert!(is_client || is_freelancer, "Not authorized");
         assert!(project.state == ProjectState::Active, "Project is not active");
         
         project.state = ProjectState::Disputed;
@@ -341,7 +407,8 @@ impl TrustPayEscrow {
             token_client.transfer(&env.current_contract_address(), &project.client, &client_amount);
         }
         if freelancer_amount > 0 {
-            token_client.transfer(&env.current_contract_address(), &project.freelancer, &freelancer_amount);
+            let freelancer = project.freelancer.as_ref().expect("Freelancer not assigned yet");
+            token_client.transfer(&env.current_contract_address(), freelancer, &freelancer_amount);
         }
 
         // If yield was enabled, distribute yield shares (70% client, 30% platform) upon dispute resolution

@@ -54,7 +54,7 @@ pub struct Milestone {
 #[contracttype]
 pub struct Project {
     pub client: Address,
-    pub freelancer: Address,
+    pub freelancer: Option<Address>,
     pub arbiter: Address,
     pub token: Address,
     pub total_amount: i128,
@@ -73,11 +73,34 @@ pub struct Project {
 ## Contract Method Invocations
 
 ### 1. `create_project`
-Initializes a new milestone escrow project and locks the total funds into the contract.
+Initializes a new milestone escrow project and locks the total funds into the contract. Supports both assigned escrows and unassigned open job postings (Option B).
 
 - **Signature:**
   ```rust
   pub fn create_project(
+      env: Env,
+      client: Address,
+      freelancer: Option<Address>,
+      arbiter: Address,
+      token: Address,
+      milestone_amounts: Vec<i128>,
+      yield_enabled: bool,
+  ) -> u64
+  ```
+- **Authorization:** `client.require_auth()`
+- **Freelancer Parameter:** Pass `Some(freelancer)` when known upfront, or `None` to fund an open marketplace job posting before proposals arrive.
+- **Token Transfer:** Calls `token_client.transfer(&client, &contract_address, &total_amount)`.
+- **Yield Split:** If `yield_enabled == true`, splits principal into 70% Blend yield allocation and 30% liquid reserve.
+- **Returns:** Unique `project_id: u64`.
+
+---
+
+### 1b. `lock_escrow` (Option A: Deposit on Award)
+Atomic deposit-on-award helper: client drafts job posting off-chain, then locks milestone funds and binds the winning freelancer on-chain in one atomic transaction upon accepting proposal.
+
+- **Signature:**
+  ```rust
+  pub fn lock_escrow(
       env: Env,
       client: Address,
       freelancer: Address,
@@ -88,9 +111,34 @@ Initializes a new milestone escrow project and locks the total funds into the co
   ) -> u64
   ```
 - **Authorization:** `client.require_auth()`
-- **Token Transfer:** Calls `token_client.transfer(&client, &contract_address, &total_amount)`.
-- **Yield Split:** If `yield_enabled == true`, splits principal into 70% Blend yield allocation and 30% liquid reserve.
-- **Returns:** Unique `project_id: u64`.
+
+---
+
+### 1c. `assign_freelancer` (Option B: Upfront Funded Marketplace)
+Binds the winning freelancer to an unassigned escrow project previously funded upfront by the client.
+
+- **Signature:**
+  ```rust
+  pub fn assign_freelancer(
+      env: Env,
+      project_id: u64,
+      freelancer: Address,
+  )
+  ```
+- **Authorization:** `project.client.require_auth()`
+- **Preconditions:** `project.state == ProjectState::Active`, `project.freelancer.is_none()`.
+
+---
+
+### 1d. `cancel_unassigned_project` (Option B: Cancellation & Refund)
+Cancels an unassigned escrow project and returns 100% of deposited escrow funds to the client.
+
+- **Signature:**
+  ```rust
+  pub fn cancel_unassigned_project(env: Env, project_id: u64)
+  ```
+- **Authorization:** `project.client.require_auth()`
+- **Preconditions:** `project.state == ProjectState::Active`, `project.freelancer.is_none()`.
 
 ---
 
