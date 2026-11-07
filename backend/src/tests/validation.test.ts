@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { projectSchema, milestoneSchema, proposalSchema, updateProposalStatusSchema } from '../shared/utils/validators.js';
+import {
+  projectSchema,
+  milestoneSchema,
+  proposalSchema,
+  updateProposalStatusSchema,
+  updateMilestoneStatusSchema,
+  requestRevisionSchema,
+} from '../shared/utils/validators.js';
 
 describe('Zod Validation Schemas', () => {
   describe('projectSchema', () => {
@@ -107,6 +114,56 @@ describe('Zod Validation Schemas', () => {
 
     it('rejects invalid statuses', () => {
       expect(updateProposalStatusSchema.safeParse({ status: 'unknown_status' }).success).toBe(false);
+    });
+  });
+
+  describe('updateMilestoneStatusSchema', () => {
+    it('accepts submitted status with cryptographic deliverable hash and metadata', () => {
+      const payload = {
+        status: 'submitted',
+        deliverable_hash: 'bafybeicg2gg345xyzipfsdeliverablehash',
+        deliverable_url: 'https://ipfs.io/ipfs/bafybeicg2gg345xyzipfsdeliverablehash',
+        deliverable_notes: 'All smart contract tests passing.',
+      };
+      const res = updateMilestoneStatusSchema.safeParse(payload);
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.status).toBe('submitted');
+        expect(res.data.deliverable_hash).toBe('bafybeicg2gg345xyzipfsdeliverablehash');
+      }
+    });
+
+    it('accepts in_revision status with revision note', () => {
+      const payload = {
+        status: 'in_revision',
+        revision_note: 'Please add docstrings to the new endpoints.',
+      };
+      const res = updateMilestoneStatusSchema.safeParse(payload);
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.status).toBe('in_revision');
+        expect(res.data.revision_note).toBe('Please add docstrings to the new endpoints.');
+      }
+    });
+
+    it('rejects invalid milestone statuses', () => {
+      expect(updateMilestoneStatusSchema.safeParse({ status: 'cancelled' }).success).toBe(false);
+    });
+  });
+
+  describe('requestRevisionSchema', () => {
+    it('accepts valid revision request with note', () => {
+      const res = requestRevisionSchema.safeParse({
+        revision_note: 'Fix formatting and address unit test failures',
+      });
+      expect(res.success).toBe(true);
+    });
+
+    it('rejects revision request with empty or very short note', () => {
+      const res = requestRevisionSchema.safeParse({
+        revision_note: 'no',
+      });
+      expect(res.success).toBe(false);
     });
   });
 });

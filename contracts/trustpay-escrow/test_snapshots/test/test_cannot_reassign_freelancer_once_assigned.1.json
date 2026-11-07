@@ -280,6 +280,20 @@
                               },
                               {
                                 "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": "void"
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
+                                }
+                              },
+                              {
+                                "key": {
                                   "symbol": "state"
                                 },
                                 "val": {

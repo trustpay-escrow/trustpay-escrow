@@ -29,6 +29,7 @@ pub enum ProjectState {
 pub enum MilestoneState {
     Pending,
     Submitted,
+    InRevision,
     Approved,
 }
 
@@ -49,6 +50,8 @@ pub struct Milestone {
     pub amount: i128,
     pub state: MilestoneState,
     pub submitted_at: u64,
+    pub deliverable_hash: Option<String>,
+    pub revisions_remaining: u32,
 }
 
 #[contracttype]
@@ -143,17 +146,61 @@ Cancels an unassigned escrow project and returns 100% of deposited escrow funds 
 ---
 
 ### 2. `submit_milestone`
-Called by the freelancer upon completing deliverables for a specific milestone.
+Called by the freelancer upon completing deliverables for a specific milestone. Stores cryptographic proof of work (IPFS CID or SHA-256 hash).
 
 - **Signature:**
   ```rust
-  pub fn submit_milestone(env: Env, project_id: u64, milestone_index: u32)
+  pub fn submit_milestone(
+      env: Env,
+      project_id: u64,
+      milestone_index: u32,
+      deliverable_hash: String,
+  )
   ```
 - **Authorization:** `project.freelancer.require_auth()`
 - **Preconditions:**
   - `project.state == ProjectState::Active`
-  - Milestone must be in `MilestoneState::Pending`
-- **Effect:** Milestone state transitions to `MilestoneState::Submitted`, and `milestone.submitted_at = env.ledger().timestamp()` starts the 7-day review timelock.
+  - Milestone must be in `MilestoneState::Pending` or `MilestoneState::InRevision`
+  - `deliverable_hash.len() > 0`
+- **Effect:**
+  - Milestone state transitions to `MilestoneState::Submitted`.
+  - Records `milestone.deliverable_hash = Some(deliverable_hash)`.
+  - Sets `milestone.submitted_at = env.ledger().timestamp()`, starting the 7-day client review timelock.
+
+---
+
+### 2b. `request_revision`
+Called by the client when submitted work requires revisions. Decrements remaining revisions and resets the timelock.
+
+- **Signature:**
+  ```rust
+  pub fn request_revision(env: Env, project_id: u64, milestone_index: u32)
+  ```
+- **Authorization:** `project.client.require_auth()`
+- **Preconditions:**
+  - `project.state == ProjectState::Active`
+  - `milestone.state == MilestoneState::Submitted`
+  - `milestone.revisions_remaining > 0`
+- **Effect:**
+  - Decrements `milestone.revisions_remaining -= 1`.
+  - Transitions milestone to `MilestoneState::InRevision`.
+  - Resets `milestone.submitted_at = 0`, freezing the 7-day auto-release timer until the freelancer resubmits updated work.
+
+---
+
+### 2c. `set_milestone_revision_limit`
+Allows the client to adjust the maximum revision allowance for a milestone prior to submission.
+
+- **Signature:**
+  ```rust
+  pub fn set_milestone_revision_limit(
+      env: Env,
+      project_id: u64,
+      milestone_index: u32,
+      revision_limit: u32,
+  )
+  ```
+- **Authorization:** `project.client.require_auth()`
 
 ---
 

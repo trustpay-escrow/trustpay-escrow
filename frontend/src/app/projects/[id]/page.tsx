@@ -16,6 +16,7 @@ import {
   submitMilestoneOnChain,
   approveMilestoneOnChain,
   autoReleaseMilestoneOnChain,
+  requestRevisionOnChain,
   raiseDisputeOnChain,
   resolveDisputeOnChain,
   getStellarExplorerUrl,
@@ -51,7 +52,11 @@ export default function ProjectDetailsPage() {
   // Modal states for milestone actions
   const [activeDeliverableModal, setActiveDeliverableModal] = useState<Milestone | null>(null);
   const [deliverableUrl, setDeliverableUrl] = useState('');
+  const [deliverableHash, setDeliverableHash] = useState('');
   const [deliverableNotes, setDeliverableNotes] = useState('');
+
+  const [activeRevisionModal, setActiveRevisionModal] = useState<Milestone | null>(null);
+  const [revisionNote, setRevisionNote] = useState('');
 
   const [activeApproveModal, setActiveApproveModal] = useState<Milestone | null>(null);
   const [activeDisputeModal, setActiveDisputeModal] = useState(false);
@@ -63,6 +68,28 @@ export default function ProjectDetailsPage() {
 
   const [showFundEscrowModal, setShowFundEscrowModal] = useState(false);
   const [fundFreelancerAddress, setFundFreelancerAddress] = useState('');
+
+  const computeDeliverableHash = async (input: string): Promise<string> => {
+    const trimmed = input.trim();
+    if (trimmed) {
+      if (
+        trimmed.startsWith('Qm') ||
+        trimmed.startsWith('bafy') ||
+        (trimmed.length === 64 && /^[0-9a-fA-F]+$/.test(trimmed))
+      ) {
+        return trimmed;
+      }
+    }
+    const dataToHash = trimmed || `deliverable-${Date.now()}`;
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(dataToHash);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+    return 'sha256-' + Date.now().toString(16);
+  };
 
   const fetchProject = async () => {
     try {
@@ -208,10 +235,18 @@ export default function ProjectDetailsPage() {
 
     const onChainId = project.project_id_onchain ?? 1;
 
+    // Determine cryptographic deliverable hash (IPFS CID or SHA-256)
+    const sourceForHash =
+      deliverableHash.trim() ||
+      deliverableUrl.trim() ||
+      deliverableNotes.trim() ||
+      `milestone-${activeDeliverableModal.id}-${Date.now()}`;
+    const finalHash = await computeDeliverableHash(sourceForHash);
+
     setTxState({
       isOpen: true,
       stage: 'preparing',
-      message: `Submitting deliverables for milestone #${activeDeliverableModal.milestone_index + 1}...`,
+      message: `Submitting deliverable (hash: ${finalHash.slice(0, 12)}...) for milestone #${activeDeliverableModal.milestone_index + 1}...`,
     });
 
     try {
@@ -219,12 +254,18 @@ export default function ProjectDetailsPage() {
         freelancerAddress: address,
         projectIdOnChain: onChainId,
         milestoneIndex: activeDeliverableModal.milestone_index,
+        deliverableHash: finalHash,
         onStatusUpdate: (stage, message) => {
           setTxState((prev) => ({ ...prev, stage, message }));
         },
       });
 
-      setTxState((prev) => ({ ...prev, stage: 'success', txHash: res.txHash, message: 'Milestone submitted on Stellar ledger!' }));
+      setTxState((prev) => ({
+        ...prev,
+        stage: 'success',
+        txHash: res.txHash,
+        message: 'Milestone deliverable submitted on Stellar ledger!',
+      }));
 
       // Update backend milestone status
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -234,19 +275,79 @@ export default function ProjectDetailsPage() {
         body: JSON.stringify({
           status: 'submitted',
           actor_address: address,
+          deliverable_hash: finalHash,
           deliverable_url: deliverableUrl,
           deliverable_notes: deliverableNotes,
         }),
       });
 
-      toast.success('Deliverable submitted on-chain! Timelock countdown activated.');
+      toast.success('Deliverable submitted on-chain with cryptographic hash! Timelock countdown activated.');
       setActiveDeliverableModal(null);
       setDeliverableUrl('');
+      setDeliverableHash('');
       setDeliverableNotes('');
       await fetchProject();
     } catch (err: any) {
       setTxState((prev) => ({ ...prev, stage: 'error', error: err.message || String(err) }));
       toast.error(`Milestone submission failed: ${err.message || err}`);
+    }
+  };
+
+  // 2b. Client Action: Request Milestone Revision on-chain
+  const handleRequestRevision = async () => {
+    if (!activeRevisionModal) return;
+    if (!address) {
+      toast.error('Please connect your client wallet first.');
+      return;
+    }
+    if (!revisionNote.trim()) {
+      toast.error('Please provide specific revision instructions or feedback.');
+      return;
+    }
+
+    const onChainId = project.project_id_onchain ?? 1;
+
+    setTxState({
+      isOpen: true,
+      stage: 'preparing',
+      message: `Requesting revision on-chain for milestone #${activeRevisionModal.milestone_index + 1}...`,
+    });
+
+    try {
+      const res = await requestRevisionOnChain({
+        clientAddress: address,
+        projectIdOnChain: onChainId,
+        milestoneIndex: activeRevisionModal.milestone_index,
+        onStatusUpdate: (stage, message) => {
+          setTxState((prev) => ({ ...prev, stage, message }));
+        },
+      });
+
+      setTxState((prev) => ({
+        ...prev,
+        stage: 'success',
+        txHash: res.txHash,
+        message: 'Milestone revision requested on Stellar ledger! Timelock reset.',
+      }));
+
+      // Update backend milestone status
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await authFetch(`${apiUrl}/api/milestones/${activeRevisionModal.id}/request-revision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          revision_note: revisionNote.trim(),
+          actor_address: address,
+        }),
+      });
+
+      toast.success('Revision requested on-chain! Timelock paused while freelancer works on updates.');
+      setActiveRevisionModal(null);
+      setRevisionNote('');
+      await fetchProject();
+    } catch (err: any) {
+      setTxState((prev) => ({ ...prev, stage: 'error', error: err.message || String(err) }));
+      toast.error(`Revision request failed: ${err.message || err}`);
     }
   };
 
@@ -720,12 +821,14 @@ export default function ProjectDetailsPage() {
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                               : m.status === 'submitted'
                               ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                              : m.status === 'in_revision'
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                               : m.status === 'disputed'
                               ? 'bg-red-500/10 text-red-400 border-red-500/20'
                               : 'bg-slate-800 text-slate-400 border-slate-700'
                           }`}
                         >
-                          {m.status}
+                          {m.status === 'in_revision' ? 'In Revision' : m.status}
                         </span>
 
                         {m.status === 'submitted' && (
@@ -734,9 +837,55 @@ export default function ProjectDetailsPage() {
                             <span>Review Period Active (7-Day Auto-Release)</span>
                           </span>
                         )}
+
+                        {m.status === 'in_revision' && (
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                            <span>🔄</span>
+                            <span>Revision In Progress (Timelock Paused)</span>
+                          </span>
+                        )}
+
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                          {m.revisions_remaining ?? m.revision_limit ?? 2} revisions remaining
+                        </span>
                       </div>
 
                       {m.description && <p className="text-sm text-slate-400 pl-10">{m.description}</p>}
+
+                      {m.deliverable_hash && (
+                        <div className="pl-10 pt-1 text-xs text-indigo-300 flex items-center gap-2 flex-wrap font-mono">
+                          <span className="text-slate-500 font-sans font-medium">Deliverable Hash:</span>
+                          <span
+                            className="bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 truncate max-w-sm text-[11px]"
+                            title={m.deliverable_hash}
+                          >
+                            🔒 {m.deliverable_hash}
+                          </span>
+                        </div>
+                      )}
+
+                      {m.deliverable_url && (
+                        <div className="pl-10 pt-0.5 text-xs text-indigo-400 flex items-center gap-2">
+                          <span className="text-slate-500 font-medium">Deliverable Link:</span>
+                          <a
+                            href={m.deliverable_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:text-indigo-300 truncate max-w-xs font-mono text-[11px]"
+                          >
+                            {m.deliverable_url}
+                          </a>
+                        </div>
+                      )}
+
+                      {m.revision_note && m.status === 'in_revision' && (
+                        <div className="pl-10 pt-2 text-xs text-amber-300/90 bg-amber-950/30 p-3 rounded-xl border border-amber-500/30">
+                          <strong className="text-amber-400 block mb-0.5 flex items-center gap-1">
+                            <span>📝</span> Revision Feedback:
+                          </strong>
+                          <span>{m.revision_note}</span>
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap gap-4 pl-10 pt-1 text-xs text-slate-500 font-medium">
                         {m.deliverable_type && (
@@ -767,26 +916,41 @@ export default function ProjectDetailsPage() {
                       </div>
 
                       {/* On-Chain Action Controls */}
-                      <div className="flex items-center gap-2">
-                        {/* Freelancer Submit Button */}
-                        {m.status === 'pending' && (
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {/* Freelancer Submit / Resubmit Button */}
+                        {(m.status === 'pending' || m.status === 'in_revision') && (
                           <Button
                             onClick={() => setActiveDeliverableModal(m)}
                             className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold px-4 py-2"
                           >
-                            Submit Work 🚀
+                            {m.status === 'in_revision' ? 'Submit Revised Work 🚀' : 'Submit Work 🚀'}
                           </Button>
                         )}
 
-                        {/* Client Approve & Release Button */}
+                        {/* Client Review & Approval Controls */}
                         {m.status === 'submitted' && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
                             <Button
                               onClick={() => setActiveApproveModal(m)}
                               className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold px-4 py-2 shadow-lg shadow-emerald-600/20"
                             >
                               Approve & Release 💰
                             </Button>
+
+                            {(m.revisions_remaining ?? m.revision_limit ?? 2) > 0 ? (
+                              <Button
+                                onClick={() => setActiveRevisionModal(m)}
+                                variant="outline"
+                                className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 rounded-xl text-xs font-semibold px-3 py-2"
+                              >
+                                Request Revision 🔄
+                              </Button>
+                            ) : (
+                              <span className="text-[11px] text-slate-500 italic px-2">
+                                0 revisions left
+                              </span>
+                            )}
+
                             {(() => {
                               const isTimelockExpired = m.submitted_at
                                 ? Date.now() >= new Date(m.submitted_at).getTime() + 7 * 24 * 60 * 60 * 1000
@@ -836,12 +1000,37 @@ export default function ProjectDetailsPage() {
 
             <div className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1.5">Deliverable URL / Repository PR / IPFS Hash</label>
+                <label className="block text-slate-300 font-semibold mb-1.5 flex justify-between items-center">
+                  <span>Cryptographic Deliverable Hash (IPFS CID or SHA-256)</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const h = await computeDeliverableHash(
+                        deliverableUrl || deliverableNotes || `milestone-${activeDeliverableModal.id}`
+                      );
+                      setDeliverableHash(h);
+                    }}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 underline font-normal"
+                  >
+                    Auto-calculate SHA-256
+                  </button>
+                </label>
+                <input
+                  type="text"
+                  value={deliverableHash}
+                  onChange={(e) => setDeliverableHash(e.target.value)}
+                  placeholder="bafybeic... or sha256 hex (auto-generated if left blank)"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1.5">Deliverable URL / Repository PR / IPFS Gateway</label>
                 <input
                   type="text"
                   value={deliverableUrl}
                   onChange={(e) => setDeliverableUrl(e.target.value)}
-                  placeholder="https://github.com/organization/repo/pull/1 or ipfs://..."
+                  placeholder="https://github.com/organization/repo/pull/1 or https://ipfs.io/ipfs/..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -861,7 +1050,12 @@ export default function ProjectDetailsPage() {
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
               <Button
                 variant="outline"
-                onClick={() => setActiveDeliverableModal(null)}
+                onClick={() => {
+                  setActiveDeliverableModal(null);
+                  setDeliverableHash('');
+                  setDeliverableUrl('');
+                  setDeliverableNotes('');
+                }}
                 className="border-slate-800 text-slate-300 hover:bg-slate-800 rounded-xl text-xs"
               >
                 Cancel
@@ -871,6 +1065,59 @@ export default function ProjectDetailsPage() {
                 className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold px-5"
               >
                 Sign & Submit via Freighter ↗
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1b: Client Request Revision Modal */}
+      {activeRevisionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                Formal Revision Request
+              </span>
+              <h3 className="text-xl font-bold text-white mt-1">{activeRevisionModal.title}</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Invoking <code className="text-amber-300">request_revision</code> on Soroban resets the 7-day auto-release timelock, transitions the status to <code className="text-amber-300">In Revision</code>, and decrements remaining revisions (
+                <strong>
+                  {Math.max(0, (activeRevisionModal.revisions_remaining ?? activeRevisionModal.revision_limit ?? 2) - 1)}
+                </strong>{' '}
+                revisions will remain).
+              </p>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1.5">Revision Feedback & Required Adjustments *</label>
+                <textarea
+                  rows={4}
+                  value={revisionNote}
+                  onChange={(e) => setRevisionNote(e.target.value)}
+                  placeholder="Detail specifically what changes, bug fixes, or missing requirements are needed before approval..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setActiveRevisionModal(null);
+                  setRevisionNote('');
+                }}
+                className="border-slate-800 text-slate-300 hover:bg-slate-800 rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRequestRevision}
+                className="bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold px-5"
+              >
+                Sign & Request Revision 🔄
               </Button>
             </div>
           </div>
