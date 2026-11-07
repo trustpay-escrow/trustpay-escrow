@@ -146,7 +146,7 @@ export const updateProposalStatus = async (req: Request, res: Response): Promise
       return res.status(400).json({ error: 'Invalid status value. Must be accepted, denied, or pending' });
     }
 
-    const { status } = validationResult.data;
+    const { status, project_id_onchain } = validationResult.data;
 
     const { data: updated, error } = await supabase
       .from('proposals')
@@ -192,12 +192,17 @@ export const updateProposalStatus = async (req: Request, res: Response): Promise
         }
 
         if (freelancerUserId) {
+          const projectUpdatePayload: Record<string, any> = {
+            freelancer_id: freelancerUserId,
+            status: 'in_progress',
+          };
+          if (project_id_onchain !== undefined) {
+            projectUpdatePayload.project_id_onchain = project_id_onchain;
+          }
+
           await supabase
             .from('projects')
-            .update({
-              freelancer_id: freelancerUserId,
-              status: 'in_progress',
-            })
+            .update(projectUpdatePayload)
             .eq('id', updated.project_id);
         }
       }

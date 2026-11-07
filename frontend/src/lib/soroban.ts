@@ -220,7 +220,7 @@ export async function invokeSorobanMethod(options: {
  */
 export async function createProjectOnChain(params: {
   clientAddress: string;
-  freelancerAddress: string;
+  freelancerAddress?: string;
   arbiterAddress?: string;
   tokenAddress?: string;
   milestoneAmounts: number[];
@@ -244,9 +244,13 @@ export async function createProjectOnChain(params: {
     nativeToScVal(BigInt(Math.round(amt * 10_000_000)), { type: 'i128' })
   );
 
+  const freelancerScVal = freelancerAddress
+    ? Address.fromString(freelancerAddress).toScVal()
+    : xdr.ScVal.scvVoid();
+
   const args: xdr.ScVal[] = [
     Address.fromString(clientAddress).toScVal(),
-    Address.fromString(freelancerAddress).toScVal(),
+    freelancerScVal,
     Address.fromString(arbiterAddress).toScVal(),
     Address.fromString(tokenAddress).toScVal(),
     xdr.ScVal.scvVec(milestoneScVals),
@@ -268,6 +272,78 @@ export async function createProjectOnChain(params: {
     txHash: result.txHash,
     onChainProjectId,
   };
+}
+
+/**
+ * Option A (Deposit on Award): Client locks milestone escrow and binds winning freelancer in one atomic transaction.
+ */
+export async function lockEscrowOnChain(params: {
+  clientAddress: string;
+  freelancerAddress: string;
+  arbiterAddress?: string;
+  tokenAddress?: string;
+  milestoneAmounts: number[];
+  yieldEnabled?: boolean;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<{ success: boolean; txHash: string; onChainProjectId: number | bigint }> {
+  return createProjectOnChain(params);
+}
+
+/**
+ * Option B (Unassigned Escrow Contract): Binds a winning freelancer to an upfront-funded escrow project.
+ */
+export async function assignFreelancerOnChain(params: {
+  clientAddress: string;
+  projectIdOnChain: number | bigint | string;
+  freelancerAddress: string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const {
+    clientAddress,
+    projectIdOnChain,
+    freelancerAddress,
+    contractAddress,
+    onStatusUpdate,
+  } = params;
+
+  const args: xdr.ScVal[] = [
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    Address.fromString(freelancerAddress).toScVal(),
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress: clientAddress,
+    contractAddress,
+    functionName: 'assign_freelancer',
+    args,
+    onStatusUpdate,
+  });
+}
+
+/**
+ * Option B: Cancels an unassigned project and refunds 100% of deposited escrow funds to the client.
+ */
+export async function cancelUnassignedProjectOnChain(params: {
+  clientAddress: string;
+  projectIdOnChain: number | bigint | string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const { clientAddress, projectIdOnChain, contractAddress, onStatusUpdate } = params;
+
+  const args: xdr.ScVal[] = [
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress: clientAddress,
+    contractAddress,
+    functionName: 'cancel_unassigned_project',
+    args,
+    onStatusUpdate,
+  });
 }
 
 /**

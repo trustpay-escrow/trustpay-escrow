@@ -30,7 +30,7 @@ fn test_create_project() {
 
     let project_id = client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -40,6 +40,7 @@ fn test_create_project() {
     assert_eq!(project_id, 1);
 
     let project = client.get_project(&project_id);
+    assert_eq!(project.freelancer, Some(freelancer_addr));
     assert_eq!(project.yield_enabled, false);
     assert_eq!(project.total_amount, 1000);
     assert_eq!(project.remaining_amount, 1000);
@@ -77,7 +78,7 @@ fn test_multi_token_escrow() {
 
         let p_id = escrow_client.create_project(
             &client_addr,
-            &freelancer_addr,
+            &Some(freelancer_addr.clone()),
             &arbiter_addr,
             &token_contract,
             &amounts,
@@ -122,7 +123,7 @@ fn test_yield_enabled_principal_split() {
     // Create project with Yield Toggle ON
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -163,7 +164,7 @@ fn test_yield_interest_split_on_milestone_approval() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -213,7 +214,7 @@ fn test_yield_dispute_resolution_with_reserve() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -268,7 +269,7 @@ fn test_auto_release_milestone_timelock() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -322,7 +323,7 @@ fn test_auto_release_before_timelock_fails() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -362,7 +363,7 @@ fn test_resolve_dispute_exceeding_balance_fails() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -399,7 +400,7 @@ fn test_resolve_dispute_negative_amounts_fails() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -443,8 +444,8 @@ fn test_multi_project_drain_prevention() {
     let mut amounts2 = Vec::new(&env);
     amounts2.push_back(2000);
 
-    let p1 = escrow_client.create_project(&client1, &freelancer1, &arbiter1, &token_contract, &amounts1, &false);
-    let _p2 = escrow_client.create_project(&client2, &freelancer2, &arbiter2, &token_contract, &amounts2, &false);
+    let p1 = escrow_client.create_project(&client1, &Some(freelancer1), &arbiter1, &token_contract, &amounts1, &false);
+    let _p2 = escrow_client.create_project(&client2, &Some(freelancer2), &arbiter2, &token_contract, &amounts2, &false);
 
     // Escrow contract balance is now 2500 total
     escrow_client.raise_dispute(&client1, &p1);
@@ -478,7 +479,7 @@ fn test_accrue_yield_unauthorized_caller_fails() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -519,7 +520,7 @@ fn test_accrue_yield_authorized_oracle_succeeds() {
 
     let p_id = escrow_client.create_project(
         &client_addr,
-        &freelancer_addr,
+        &Some(freelancer_addr.clone()),
         &arbiter_addr,
         &token_contract,
         &amounts,
@@ -532,5 +533,205 @@ fn test_accrue_yield_authorized_oracle_succeeds() {
 
     let proj = escrow_client.get_project(&p_id);
     assert_eq!(proj.accrued_yield, 75);
+}
+
+#[test]
+fn test_unassigned_escrow_and_assign_freelancer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    // Option B: Client posts open job and funds escrow upfront without a freelancer assigned
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &None,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    let proj_init = escrow_client.get_project(&p_id);
+    assert_eq!(proj_init.freelancer, None);
+    assert_eq!(proj_init.remaining_amount, 1000);
+    assert_eq!(token_client.balance(&contract_id), 1000);
+
+    // Client accepts winning freelancer proposal and binds them on-chain
+    escrow_client.assign_freelancer(&p_id, &freelancer_addr);
+
+    let proj_assigned = escrow_client.get_project(&p_id);
+    assert_eq!(proj_assigned.freelancer, Some(freelancer_addr.clone()));
+
+    // Assigned freelancer submits and gets approved
+    escrow_client.submit_milestone(&p_id, &0);
+    escrow_client.approve_milestone(&p_id, &0, &None);
+
+    assert_eq!(token_client.balance(&freelancer_addr), 1000);
+}
+
+#[test]
+#[should_panic(expected = "Freelancer not assigned yet")]
+fn test_cannot_submit_milestone_if_freelancer_unassigned() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &None,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    // Should panic because freelancer is not assigned yet
+    escrow_client.submit_milestone(&p_id, &0);
+}
+
+#[test]
+#[should_panic(expected = "Freelancer already assigned")]
+fn test_cannot_reassign_freelancer_once_assigned() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer1 = Address::generate(&env);
+    let freelancer2 = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &Some(freelancer1),
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    // Attempting to overwrite assigned freelancer must panic
+    escrow_client.assign_freelancer(&p_id, &freelancer2);
+}
+
+#[test]
+fn test_cancel_unassigned_project_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.create_project(
+        &client_addr,
+        &None,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    assert_eq!(token_client.balance(&client_addr), 0);
+    assert_eq!(token_client.balance(&contract_id), 1000);
+
+    // Client cancels the unassigned project and gets a 100% refund
+    escrow_client.cancel_unassigned_project(&p_id);
+
+    assert_eq!(token_client.balance(&client_addr), 1000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+
+    let proj = escrow_client.get_project(&p_id);
+    assert_eq!(proj.remaining_amount, 0);
+    assert_eq!(proj.state, ProjectState::Completed);
+}
+
+#[test]
+fn test_lock_escrow_atomic_award() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    // Option A: Client signs lock_escrow on award
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    let proj = escrow_client.get_project(&p_id);
+    assert_eq!(proj.freelancer, Some(freelancer_addr));
+    assert_eq!(proj.remaining_amount, 1000);
 }
 

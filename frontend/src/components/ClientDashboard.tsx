@@ -14,6 +14,8 @@ import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import {
   createProjectOnChain,
+  lockEscrowOnChain,
+  assignFreelancerOnChain,
   getStellarExplorerUrl,
   DEFAULT_ESCROW_CONTRACT_ID,
 } from '@/lib/soroban';
@@ -223,7 +225,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     toast.info('Milestone removed');
   };
 
-  // Accept proposal/application with on-chain Soroban escrow funding
+  // Accept proposal/application with on-chain Soroban escrow funding (Option A & Option B)
   const handleAcceptProposal = async (proposalId: string) => {
     if (!address) {
       toast.error('Please connect your client wallet first');
@@ -235,7 +237,26 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     const freelancerAddr = applicant?.freelancer_address || applicant?.stellar_address;
 
     let onChainId = project?.project_id_onchain;
-    if (!onChainId && freelancerAddr && project) {
+
+    // Option B: Upfront escrow was funded on-chain without an assigned freelancer.
+    // Bind winning freelancer to the existing on-chain escrow project.
+    if (project && onChainId && freelancerAddr && (!project.freelancer_id || !project.freelancer_address)) {
+      try {
+        toast.info(`Binding winning freelancer to on-chain escrow #${onChainId} in Freighter...`);
+        await assignFreelancerOnChain({
+          clientAddress: address,
+          projectIdOnChain: onChainId,
+          freelancerAddress: freelancerAddr,
+        });
+        toast.success(`Freelancer assigned to on-chain escrow #${onChainId}!`);
+      } catch (assignErr: any) {
+        toast.error(`Freelancer on-chain assignment failed: ${assignErr.message || assignErr}`);
+        return;
+      }
+    }
+    // Option A: Deposit on Award. The job was created as draft/open off-chain.
+    // Client atomically locks escrow funds and binds the freelancer on-chain in one transaction.
+    else if (!onChainId && freelancerAddr && project) {
       const milestoneAmounts = (project.milestones && project.milestones.length > 0)
         ? project.milestones.map((m) => Number(m.amount))
         : [Number(project.budget) || 100];
@@ -243,8 +264,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       const tokenConfig = SUPPORTED_TOKENS[project.token || 'USDC'] || SUPPORTED_TOKENS.USDC;
 
       try {
-        toast.info('Initializing Soroban Escrow: Please confirm signature in Freighter...');
-        const chainRes = await createProjectOnChain({
+        toast.info('Locking Escrow on Award: Please confirm transaction in Freighter...');
+        const chainRes = await lockEscrowOnChain({
           clientAddress: address,
           freelancerAddress: freelancerAddr,
           tokenAddress: project.token_address || tokenConfig.issuerOrContractAddress,
@@ -264,7 +285,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       const res = await authFetch(`${apiUrl}/api/proposals/${proposalId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'accepted' }),
+        body: JSON.stringify({
+          status: 'accepted',
+          project_id_onchain: onChainId,
+        }),
       });
 
       if (res.ok) {
