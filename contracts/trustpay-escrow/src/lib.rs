@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, Env, Vec,
+    contract, contractimpl, contracttype, token, Address, Env, String, Vec,
 };
 
 #[cfg(test)]
@@ -19,6 +19,7 @@ pub enum ProjectState {
 pub enum MilestoneState {
     Pending,
     Submitted,
+    InRevision,
     Approved,
 }
 
@@ -28,6 +29,8 @@ pub struct Milestone {
     pub amount: i128,
     pub state: MilestoneState,
     pub submitted_at: u64,
+    pub deliverable_hash: Option<String>,
+    pub revisions_remaining: u32,
 }
 
 #[contracttype]
@@ -110,6 +113,8 @@ impl TrustPayEscrow {
                 amount,
                 state: MilestoneState::Pending,
                 submitted_at: 0,
+                deliverable_hash: None,
+                revisions_remaining: 2,
             });
         }
 
@@ -238,18 +243,66 @@ impl TrustPayEscrow {
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
     }
 
-    pub fn submit_milestone(env: Env, project_id: u64, milestone_index: u32) {
+    pub fn set_milestone_revision_limit(
+        env: Env,
+        project_id: u64,
+        milestone_index: u32,
+        revision_limit: u32,
+    ) {
+        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        project.client.require_auth();
+        assert!(project.state == ProjectState::Active, "Project is not active");
+        let mut milestone = project.milestones.get(milestone_index).unwrap();
+        assert!(milestone.state == MilestoneState::Pending, "Milestone must be pending");
+        milestone.revisions_remaining = revision_limit;
+        project.milestones.set(milestone_index, milestone);
+        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+    }
+
+    pub fn submit_milestone(
+        env: Env,
+        project_id: u64,
+        milestone_index: u32,
+        deliverable_hash: String,
+    ) {
         let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
         
         let freelancer = project.freelancer.as_ref().expect("Freelancer not assigned yet");
         freelancer.require_auth();
         assert!(project.state == ProjectState::Active, "Project is not active");
+        assert!(deliverable_hash.len() > 0, "Deliverable hash cannot be empty");
         
         let mut milestone = project.milestones.get(milestone_index).unwrap();
-        assert!(milestone.state == MilestoneState::Pending, "Milestone not pending");
+        assert!(
+            milestone.state == MilestoneState::Pending || milestone.state == MilestoneState::InRevision,
+            "Milestone not in pending or in-revision state"
+        );
         
         milestone.state = MilestoneState::Submitted;
         milestone.submitted_at = env.ledger().timestamp();
+        milestone.deliverable_hash = Some(deliverable_hash);
+        project.milestones.set(milestone_index, milestone);
+        
+        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+    }
+
+    pub fn request_revision(
+        env: Env,
+        project_id: u64,
+        milestone_index: u32,
+    ) {
+        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        
+        project.client.require_auth();
+        assert!(project.state == ProjectState::Active, "Project is not active");
+        
+        let mut milestone = project.milestones.get(milestone_index).unwrap();
+        assert!(milestone.state == MilestoneState::Submitted, "Milestone not submitted");
+        assert!(milestone.revisions_remaining > 0, "No revisions remaining for milestone");
+        
+        milestone.revisions_remaining -= 1;
+        milestone.state = MilestoneState::InRevision;
+        milestone.submitted_at = 0; // Resets 7-day auto-release timelock
         project.milestones.set(milestone_index, milestone);
         
         env.storage().persistent().set(&DataKey::Project(project_id), &project);

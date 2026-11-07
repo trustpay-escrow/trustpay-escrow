@@ -347,16 +347,44 @@ export async function cancelUnassignedProjectOnChain(params: {
 }
 
 /**
- * Submits deliverables for a milestone on-chain by the freelancer.
+ * Submits deliverables for a milestone on-chain by the freelancer with an immutable IPFS/SHA-256 deliverable hash.
  */
 export async function submitMilestoneOnChain(params: {
   freelancerAddress: string;
   projectIdOnChain: number | bigint | string;
   milestoneIndex: number;
+  deliverableHash: string;
   contractAddress?: string;
   onStatusUpdate?: TxStatusCallback;
 }): Promise<SorobanTxResult> {
-  const { freelancerAddress, projectIdOnChain, milestoneIndex, contractAddress, onStatusUpdate } = params;
+  const { freelancerAddress, projectIdOnChain, milestoneIndex, deliverableHash, contractAddress, onStatusUpdate } = params;
+
+  const args: xdr.ScVal[] = [
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    nativeToScVal(Number(milestoneIndex), { type: 'u32' }),
+    nativeToScVal(deliverableHash || 'ipfs://QmProofOfWorkHash', { type: 'string' }),
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress: freelancerAddress,
+    contractAddress,
+    functionName: 'submit_milestone',
+    args,
+    onStatusUpdate,
+  });
+}
+
+/**
+ * Requests milestone revision on-chain by the client, decrementing remaining revisions and resetting timelock.
+ */
+export async function requestRevisionOnChain(params: {
+  clientAddress: string;
+  projectIdOnChain: number | bigint | string;
+  milestoneIndex: number;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const { clientAddress, projectIdOnChain, milestoneIndex, contractAddress, onStatusUpdate } = params;
 
   const args: xdr.ScVal[] = [
     nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
@@ -364,9 +392,9 @@ export async function submitMilestoneOnChain(params: {
   ];
 
   return invokeSorobanMethod({
-    callerAddress: freelancerAddress,
+    callerAddress: clientAddress,
     contractAddress,
-    functionName: 'submit_milestone',
+    functionName: 'request_revision',
     args,
     onStatusUpdate,
   });

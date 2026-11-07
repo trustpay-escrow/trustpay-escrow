@@ -151,6 +151,9 @@
                 },
                 {
                   "u32": 0
+                },
+                {
+                  "string": "ipfs://QmAutoReleaseMilestoneCID"
                 }
               ]
             }
@@ -344,6 +347,22 @@
                                     "hi": 0,
                                     "lo": 1000
                                   }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": {
+                                  "string": "ipfs://QmAutoReleaseMilestoneCID"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
                                 }
                               },
                               {

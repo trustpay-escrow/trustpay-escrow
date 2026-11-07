@@ -54,3 +54,27 @@ export const updateProposalStatusSchema = z.object({
 });
 
 export type UpdateProposalStatusData = z.infer<typeof updateProposalStatusSchema>;
+
+export const updateMilestoneStatusSchema = z.object({
+  status: z.union([
+    z.literal('pending'),
+    z.literal('submitted'),
+    z.literal('in_revision'),
+    z.literal('approved'),
+    z.literal('disputed'),
+  ]),
+  actor_address: z.string().optional(),
+  deliverable_hash: z.string().optional(),
+  deliverable_url: z.string().optional(),
+  deliverable_notes: z.string().optional(),
+  revision_note: z.string().optional(),
+});
+
+export type UpdateMilestoneStatusData = z.infer<typeof updateMilestoneStatusSchema>;
+
+export const requestRevisionSchema = z.object({
+  revision_note: z.string().min(3, 'Revision note must be at least 3 characters'),
+  actor_address: z.string().optional(),
+});
+
+export type RequestRevisionData = z.infer<typeof requestRevisionSchema>;

@@ -5,11 +5,16 @@ export interface Milestone {
   title: string;
   description?: string;
   amount: number;
-  status: 'pending' | 'submitted' | 'approved' | 'disputed';
+  status: 'pending' | 'submitted' | 'in_revision' | 'approved' | 'disputed';
   due_date?: string;
   submitted_at?: string;
   auto_release_at?: string;
   revision_limit?: number;
+  revisions_remaining?: number;
+  revision_note?: string;
+  deliverable_hash?: string;
+  deliverable_url?: string;
+  deliverable_notes?: string;
   deliverable_type?: string;
 }
 

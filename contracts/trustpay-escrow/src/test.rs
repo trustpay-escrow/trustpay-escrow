@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env, Vec};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env, String, Vec};
 use soroban_sdk::token;
 
 #[test]
@@ -88,7 +88,8 @@ fn test_multi_token_escrow() {
         assert_eq!(p_id, (idx as u64) + 1);
 
         // Submit and approve first milestone
-        escrow_client.submit_milestone(&p_id, &0);
+        let deliverable = String::from_str(&env, "ipfs://QmMultiTokenEscrowMilestoneCID");
+        escrow_client.submit_milestone(&p_id, &0, &deliverable);
         escrow_client.approve_milestone(&p_id, &0, &None);
 
         // Freelancer should have received 1000 tokens of this specific token
@@ -176,7 +177,8 @@ fn test_yield_interest_split_on_milestone_approval() {
     escrow_client.accrue_yield(&arbiter_addr, &p_id, &100);
 
     // Submit and approve milestone
-    escrow_client.submit_milestone(&p_id, &0);
+    let deliverable = String::from_str(&env, "ipfs://QmYieldMilestoneCID");
+    escrow_client.submit_milestone(&p_id, &0, &deliverable);
     escrow_client.approve_milestone(&p_id, &0, &Some(platform_addr.clone()));
 
     // Freelancer receives exact milestone amount (1000 tokens) - 0% yield share
@@ -277,7 +279,8 @@ fn test_auto_release_milestone_timelock() {
     );
 
     // Freelancer submits milestone 0 at timestamp 1_000_000
-    escrow_client.submit_milestone(&p_id, &0);
+    let deliverable = String::from_str(&env, "ipfs://QmAutoReleaseMilestoneCID");
+    escrow_client.submit_milestone(&p_id, &0, &deliverable);
     let proj_after_sub = escrow_client.get_project(&p_id);
     let m0 = proj_after_sub.milestones.get(0).unwrap();
     assert_eq!(m0.state, MilestoneState::Submitted);
@@ -330,7 +333,8 @@ fn test_auto_release_before_timelock_fails() {
         &false,
     );
 
-    escrow_client.submit_milestone(&p_id, &0);
+    let deliverable = String::from_str(&env, "ipfs://QmAutoReleaseMilestoneCID");
+    escrow_client.submit_milestone(&p_id, &0, &deliverable);
 
     // Advance only 6 days (518_400 seconds)
     env.ledger().set_timestamp(1_000_000 + 518_400);
@@ -579,7 +583,8 @@ fn test_unassigned_escrow_and_assign_freelancer() {
     assert_eq!(proj_assigned.freelancer, Some(freelancer_addr.clone()));
 
     // Assigned freelancer submits and gets approved
-    escrow_client.submit_milestone(&p_id, &0);
+    let deliverable = String::from_str(&env, "ipfs://QmAutoReleaseMilestoneCID");
+    escrow_client.submit_milestone(&p_id, &0, &deliverable);
     escrow_client.approve_milestone(&p_id, &0, &None);
 
     assert_eq!(token_client.balance(&freelancer_addr), 1000);
@@ -616,7 +621,8 @@ fn test_cannot_submit_milestone_if_freelancer_unassigned() {
     );
 
     // Should panic because freelancer is not assigned yet
-    escrow_client.submit_milestone(&p_id, &0);
+    let deliverable = String::from_str(&env, "ipfs://QmAutoReleaseMilestoneCID");
+    escrow_client.submit_milestone(&p_id, &0, &deliverable);
 }
 
 #[test]
@@ -733,5 +739,235 @@ fn test_lock_escrow_atomic_award() {
     let proj = escrow_client.get_project(&p_id);
     assert_eq!(proj.freelancer, Some(freelancer_addr));
     assert_eq!(proj.remaining_amount, 1000);
+}
+
+#[test]
+fn test_submit_milestone_stores_deliverable_hash() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    let ipfs_hash = String::from_str(&env, "bafybeicysadkjfhw98yfhewiufh98wehf");
+    escrow_client.submit_milestone(&p_id, &0, &ipfs_hash);
+
+    let proj = escrow_client.get_project(&p_id);
+    let m = proj.milestones.get(0).unwrap();
+    assert_eq!(m.state, MilestoneState::Submitted);
+    assert_eq!(m.deliverable_hash, Some(ipfs_hash));
+    assert_eq!(m.revisions_remaining, 2);
+}
+
+#[test]
+#[should_panic(expected = "Deliverable hash cannot be empty")]
+fn test_submit_milestone_empty_hash_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    let empty_hash = String::from_str(&env, "");
+    escrow_client.submit_milestone(&p_id, &0, &empty_hash);
+}
+
+#[test]
+fn test_request_revision_cycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    // Initial deliverable submission
+    let initial_hash = String::from_str(&env, "ipfs://QmFirstDraftHash123");
+    escrow_client.submit_milestone(&p_id, &0, &initial_hash);
+
+    let proj_sub = escrow_client.get_project(&p_id);
+    let m_sub = proj_sub.milestones.get(0).unwrap();
+    assert_eq!(m_sub.state, MilestoneState::Submitted);
+    assert_eq!(m_sub.revisions_remaining, 2);
+
+    // Client requests revision
+    escrow_client.request_revision(&p_id, &0);
+
+    let proj_rev = escrow_client.get_project(&p_id);
+    let m_rev = proj_rev.milestones.get(0).unwrap();
+    assert_eq!(m_rev.state, MilestoneState::InRevision);
+    assert_eq!(m_rev.revisions_remaining, 1);
+    assert_eq!(m_rev.submitted_at, 0); // Timelock reset
+
+    // Freelancer resubmits revised work with new proof
+    let revised_hash = String::from_str(&env, "ipfs://QmRevisedDeliverableHash456");
+    escrow_client.submit_milestone(&p_id, &0, &revised_hash);
+
+    let proj_resub = escrow_client.get_project(&p_id);
+    let m_resub = proj_resub.milestones.get(0).unwrap();
+    assert_eq!(m_resub.state, MilestoneState::Submitted);
+    assert_eq!(m_resub.deliverable_hash, Some(revised_hash));
+    assert_eq!(m_resub.revisions_remaining, 1);
+
+    // Client approves revised milestone
+    escrow_client.approve_milestone(&p_id, &0, &None);
+
+    let proj_final = escrow_client.get_project(&p_id);
+    let m_final = proj_final.milestones.get(0).unwrap();
+    assert_eq!(m_final.state, MilestoneState::Approved);
+    assert_eq!(token_client.balance(&freelancer_addr), 1000);
+}
+
+#[test]
+#[should_panic(expected = "No revisions remaining for milestone")]
+fn test_request_revision_limit_exhausted_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    // Set revision limit to exactly 1
+    escrow_client.set_milestone_revision_limit(&p_id, &0, &1);
+
+    let hash1 = String::from_str(&env, "ipfs://QmDraft1");
+    escrow_client.submit_milestone(&p_id, &0, &hash1);
+
+    // First revision request succeeds (revisions_remaining -> 0)
+    escrow_client.request_revision(&p_id, &0);
+
+    let hash2 = String::from_str(&env, "ipfs://QmDraft2");
+    escrow_client.submit_milestone(&p_id, &0, &hash2);
+
+    // Second revision request must panic as revisions are exhausted
+    escrow_client.request_revision(&p_id, &0);
+}
+
+#[test]
+#[should_panic(expected = "Milestone not submitted")]
+fn test_auto_release_fails_while_in_revision() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    let hash = String::from_str(&env, "ipfs://QmDraft");
+    escrow_client.submit_milestone(&p_id, &0, &hash);
+    escrow_client.request_revision(&p_id, &0);
+
+    // Even if time passes, auto_release cannot execute while InRevision
+    env.ledger().set_timestamp(env.ledger().timestamp() + 10 * 24 * 60 * 60);
+    escrow_client.auto_release_milestone(&p_id, &0, &None);
 }
 

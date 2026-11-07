@@ -134,6 +134,9 @@
                 },
                 {
                   "u32": 0
+                },
+                {
+                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
                 }
               ]
             }
@@ -296,6 +299,9 @@
                 },
                 {
                   "u32": 0
+                },
+                {
+                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
                 }
               ]
             }
@@ -458,6 +464,9 @@
                 },
                 {
                   "u32": 0
+                },
+                {
+                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
                 }
               ]
             }
@@ -620,6 +629,9 @@
                 },
                 {
                   "u32": 0
+                },
+                {
+                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
                 }
               ]
             }
@@ -1001,6 +1013,22 @@
                               },
                               {
                                 "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": {
+                                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
+                                }
+                              },
+                              {
+                                "key": {
                                   "symbol": "state"
                                 },
                                 "val": {
@@ -1032,6 +1060,20 @@
                                     "hi": 0,
                                     "lo": 1000
                                   }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": "void"
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
                                 }
                               },
                               {
@@ -1233,6 +1275,22 @@
                               },
                               {
                                 "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": {
+                                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
+                                }
+                              },
+                              {
+                                "key": {
                                   "symbol": "state"
                                 },
                                 "val": {
@@ -1264,6 +1322,20 @@
                                     "hi": 0,
                                     "lo": 1000
                                   }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": "void"
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
                                 }
                               },
                               {
@@ -1465,6 +1537,22 @@
                               },
                               {
                                 "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": {
+                                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
+                                }
+                              },
+                              {
+                                "key": {
                                   "symbol": "state"
                                 },
                                 "val": {
@@ -1496,6 +1584,20 @@
                                     "hi": 0,
                                     "lo": 1000
                                   }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": "void"
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
                                 }
                               },
                               {
@@ -1697,6 +1799,22 @@
                               },
                               {
                                 "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": {
+                                  "string": "ipfs://QmMultiTokenEscrowMilestoneCID"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
+                                }
+                              },
+                              {
+                                "key": {
                                   "symbol": "state"
                                 },
                                 "val": {
@@ -1728,6 +1846,20 @@
                                     "hi": 0,
                                     "lo": 1000
                                   }
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "deliverable_hash"
+                                },
+                                "val": "void"
+                              },
+                              {
+                                "key": {
+                                  "symbol": "revisions_remaining"
+                                },
+                                "val": {
+                                  "u32": 2
                                 }
                               },
                               {
