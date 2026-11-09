@@ -223,6 +223,23 @@ describe('Soroban RPC Event Indexer & Ledger-to-Database Sync', () => {
       expect(success).toBe(true);
       expect(supabase.from).toHaveBeenCalledWith('users');
     });
+
+    it('processes dispute.timeout event and completes project', async () => {
+      const event = {
+        id: 'evt-timeout-1',
+        type: 'contract',
+        ledger: 105,
+        contractId: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+        txHash: '0xmocktxtimeout',
+        topics: ['dispute', 'timeout'],
+        topicString: 'dispute.timeout',
+        data: [1, 500, 500],
+      };
+
+      const success = await syncEventToDatabase(event);
+      expect(success).toBe(true);
+      expect(supabase.from).toHaveBeenCalledWith('projects');
+    });
   });
 
   describe('SorobanIndexerService Lifecycle', () => {
