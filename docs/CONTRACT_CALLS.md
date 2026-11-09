@@ -319,3 +319,31 @@ Configures platform-level administrative and oracle contracts.
 - `set_oracle(env: Env, oracle: Address)`: Updates authorized price/yield oracle (requires admin authorization).
 - `get_admin(env: Env) -> Option<Address>`: Read-only query for current admin.
 - `get_oracle(env: Env) -> Option<Address>`: Read-only query for current oracle.
+
+---
+
+## Contract Events Index (Ledger-to-Database Sync) 📡
+
+To guarantee complete data integrity and prevent frontend desynchronization, the contract emits structured Soroban events across all state-changing operations via `env.events().publish(...)`.
+
+The backend event indexer service (`backend/src/services/indexer.service.ts`) subscribes to these events via `SorobanRpc.Server.getEvents()` and idempotently synchronizes the platform database (`projects`, `milestones`, `notifications`, `indexer_state`).
+
+### Event Topics and Data Payloads
+
+| Event Topic | Topics Tuple | Data Payload | Trigger Condition |
+| :--- | :--- | :--- | :--- |
+| `project.created` | `(symbol_short!("project"), symbol_short!("created"))` | `(project_id: u64, client: Address, total_amount: i128)` | Client initializes escrow contract and locks funds |
+| `project.assigned` | `(symbol_short!("project"), symbol_short!("assigned"))` | `(project_id: u64, freelancer: Address)` | Client accepts a proposal and binds freelancer |
+| `project.cancelled` | `(symbol_short!("project"), symbol_short!("cancelled"))` | `(project_id: u64, refund_amount: i128)` | Client cancels unassigned job posting and receives refund |
+| `project.disputed` | `(symbol_short!("project"), symbol_short!("disputed"))` | `(project_id: u64, caller: Address)` | Client or freelancer freezes contract and raises dispute |
+| `project.resolved` | `(symbol_short!("project"), symbol_short!("resolved"))` | `(project_id: u64, client_amount: i128, freelancer_amount: i128)` | Arbiter executes split resolution under balance invariant guard |
+| `milestone.submitted` | `(symbol_short!("milestone"), symbol_short!("submitted"))` | `(project_id: u64, milestone_index: u32, submitted_at: u64)` | Freelancer submits milestone deliverable hash |
+| `milestone.revision` | `(symbol_short!("milestone"), symbol_short!("revision"))` | `(project_id: u64, milestone_index: u32, revisions_remaining: u32)` | Client requests formal revision (decrements revision limit, resets timelock) |
+| `milestone.approved` | `(symbol_short!("milestone"), symbol_short!("approved"))` | `(project_id: u64, milestone_index: u32)` | Client approves milestone and releases payment |
+| `milestone.auto_rel` | `(symbol_short!("milestone"), symbol_short!("auto_rel"))` | `(project_id: u64, milestone_index: u32)` | 7-day timelock expires without dispute, milestone auto-releases on-chain |
+| `yield.accrued` | `(symbol_short!("yield"), symbol_short!("accrued"))` | `(project_id: u64, yield_amount: i128)` | Oracle/admin registers earned liquidity yield |
+
+### Indexer Architecture & Deduplication
+- **Deduplication:** Events are hashed by `(eventId, txHash)` and tracked in PostgreSQL (`processed_events` table) and in an in-memory LRU cache.
+- **Starting Ledger Cursor:** Persisted in `indexer_state` table to ensure zero missed events across backend restarts or re-deployments.
+- **Cache Invalidation:** Triggers Redis/in-memory cache purges (`/api/projects*`, `/api/milestones*`) so users and dashboards receive real-time updates.

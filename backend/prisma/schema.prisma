@@ -200,3 +200,34 @@ model Message {
   @@index([projectId, createdAt(sort: Asc)], map: "idx_messages_project_id")
   @@map("messages")
 }
+
+// ==============================================================================
+// 9. Processed Events Model (Soroban RPC Event Indexer & Idempotency Guard)
+// ==============================================================================
+model ProcessedEvent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId        String    @unique @map("event_id")
+  txHash         String?   @map("tx_hash")
+  contractId     String    @map("contract_id")
+  topic          String
+  ledger         BigInt    @map("ledger")
+  ledgerClosedAt DateTime? @map("ledger_closed_at") @db.Timestamptz
+  dataJson       String?   @map("data_json")
+  status         String?   @default("processed")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([txHash], map: "idx_processed_events_tx_hash")
+  @@index([ledger], map: "idx_processed_events_ledger")
+  @@map("processed_events")
+}
+
+// ==============================================================================
+// 10. Indexer Cursor State Model (Ledger Progress Tracking)
+// ==============================================================================
+model IndexerState {
+  id         String    @id @default("soroban_escrow_indexer")
+  lastLedger BigInt    @default(0) @map("last_ledger")
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("indexer_state")
+}

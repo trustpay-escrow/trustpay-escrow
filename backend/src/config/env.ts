@@ -17,6 +17,10 @@ interface Config {
   stellarHomeDomain: string;
   jwtSecret: string;
   jwtExpiresIn: string;
+  sorobanRpcUrl: string;
+  escrowContractId: string;
+  indexerPollIntervalMs: number;
+  indexerEnabled: boolean;
 }
 
 export const env: Config = {
@@ -33,6 +37,10 @@ export const env: Config = {
   stellarHomeDomain: process.env.STELLAR_HOME_DOMAIN || 'localhost',
   jwtSecret: process.env.JWT_SECRET || 'trustpay_escrow_jwt_secret_dev_key_stellar_sep10',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  sorobanRpcUrl: process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org',
+  escrowContractId: process.env.ESCROW_CONTRACT_ID || 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+  indexerPollIntervalMs: parseInt(process.env.INDEXER_POLL_INTERVAL_MS || '5000', 10),
+  indexerEnabled: process.env.INDEXER_ENABLED !== 'false',
 };
 
 // Optionally validate required variables here

@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Address, Env, String, Vec};
+use soroban_sdk::{
+    testutils::Address as _, testutils::Events as _, testutils::Ledger as _, Address, Env, String,
+    Vec,
+};
 use soroban_sdk::token;
 
 #[test]
@@ -969,5 +972,42 @@ fn test_auto_release_fails_while_in_revision() {
     // Even if time passes, auto_release cannot execute while InRevision
     env.ledger().set_timestamp(env.ledger().timestamp() + 10 * 24 * 60 * 60);
     escrow_client.auto_release_milestone(&p_id, &0, &None);
+}
+
+#[test]
+fn test_contract_emits_structured_events() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    let hash = String::from_str(&env, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+    escrow_client.submit_milestone(&p_id, &0, &hash);
+    escrow_client.approve_milestone(&p_id, &0, &None);
+
+    let events = env.events().all();
+    assert!(!events.is_empty(), "Expected structured contract events emitted");
 }
 

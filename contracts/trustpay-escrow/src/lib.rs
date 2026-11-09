@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, Env, String, Vec,
+    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String, Vec,
 };
 
 #[cfg(test)]
@@ -134,7 +134,7 @@ impl TrustPayEscrow {
         };
 
         let project = Project {
-            client,
+            client: client.clone(),
             freelancer,
             arbiter,
             token,
@@ -153,6 +153,11 @@ impl TrustPayEscrow {
         
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
         env.storage().persistent().set(&DataKey::ProjectCount, &project_id);
+
+        env.events().publish(
+            (symbol_short!("project"), symbol_short!("created")),
+            (project_id, client, total_amount),
+        );
         
         project_id
     }
@@ -189,8 +194,13 @@ impl TrustPayEscrow {
         assert!(project.state == ProjectState::Active, "Project is not active");
         assert!(project.freelancer.is_none(), "Freelancer already assigned");
 
-        project.freelancer = Some(freelancer);
+        project.freelancer = Some(freelancer.clone());
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("project"), symbol_short!("assigned")),
+            (project_id, freelancer),
+        );
     }
 
     /// Cancels an unassigned project and refunds 100% of deposited escrow funds to the client.
@@ -216,6 +226,11 @@ impl TrustPayEscrow {
         }
 
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("project"), symbol_short!("cancelled")),
+            (project_id, refund_amount),
+        );
     }
 
     pub fn get_project(env: Env, project_id: u64) -> Project {
@@ -241,6 +256,11 @@ impl TrustPayEscrow {
 
         project.accrued_yield = project.accrued_yield.checked_add(yield_amount).expect("Yield overflow");
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("yield"), symbol_short!("accrued")),
+            (project_id, yield_amount),
+        );
     }
 
     pub fn set_milestone_revision_limit(
@@ -284,6 +304,11 @@ impl TrustPayEscrow {
         project.milestones.set(milestone_index, milestone);
         
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("milestone"), symbol_short!("submitted")),
+            (project_id, milestone_index, env.ledger().timestamp()),
+        );
     }
 
     pub fn request_revision(
@@ -303,9 +328,14 @@ impl TrustPayEscrow {
         milestone.revisions_remaining -= 1;
         milestone.state = MilestoneState::InRevision;
         milestone.submitted_at = 0; // Resets 7-day auto-release timelock
-        project.milestones.set(milestone_index, milestone);
+        project.milestones.set(milestone_index, milestone.clone());
         
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("milestone"), symbol_short!("revision")),
+            (project_id, milestone_index, milestone.revisions_remaining),
+        );
     }
 
     pub fn approve_milestone(env: Env, project_id: u64, milestone_index: u32, platform: Option<Address>) {
@@ -357,6 +387,11 @@ impl TrustPayEscrow {
         }
 
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("milestone"), symbol_short!("approved")),
+            (project_id, milestone_index),
+        );
     }
 
     /// Automatically releases milestone escrow funds to the freelancer once the 7-day review timelock expires.
@@ -419,6 +454,11 @@ impl TrustPayEscrow {
         }
 
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("milestone"), symbol_short!("auto_rel")),
+            (project_id, milestone_index),
+        );
     }
 
     pub fn raise_dispute(env: Env, caller: Address, project_id: u64) {
@@ -432,6 +472,11 @@ impl TrustPayEscrow {
         
         project.state = ProjectState::Disputed;
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("project"), symbol_short!("disputed")),
+            (project_id, caller),
+        );
     }
 
     pub fn resolve_dispute(
@@ -481,5 +526,10 @@ impl TrustPayEscrow {
         
         project.state = ProjectState::Completed;
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+        env.events().publish(
+            (symbol_short!("project"), symbol_short!("resolved")),
+            (project_id, client_amount, freelancer_amount),
+        );
     }
 }
