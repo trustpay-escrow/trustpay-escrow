@@ -1011,3 +1011,373 @@ fn test_contract_emits_structured_events() {
     assert!(!events.is_empty(), "Expected structured contract events emitted");
 }
 
+#[test]
+fn test_approved_arbiters_registry() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    escrow_client.initialize(&admin, &None);
+
+    let arbiter1 = Address::generate(&env);
+    let arbiter2 = Address::generate(&env);
+    let arbiter3 = Address::generate(&env);
+
+    let mut arbiters = Vec::new(&env);
+    arbiters.push_back(arbiter1.clone());
+    arbiters.push_back(arbiter2.clone());
+
+    escrow_client.set_approved_arbiters(&arbiters);
+    let list = escrow_client.get_approved_arbiters();
+    assert_eq!(list.len(), 2);
+
+    escrow_client.add_approved_arbiter(&arbiter3);
+    let list2 = escrow_client.get_approved_arbiters();
+    assert_eq!(list2.len(), 3);
+
+    escrow_client.remove_approved_arbiter(&arbiter1);
+    let list3 = escrow_client.get_approved_arbiters();
+    assert_eq!(list3.len(), 2);
+}
+
+#[test]
+fn test_multisig_dispute_resolution_2_of_3() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter1 = Address::generate(&env);
+    let arbiter2 = Address::generate(&env);
+    let arbiter3 = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let mut arbiters = Vec::new(&env);
+    arbiters.push_back(arbiter1.clone());
+    arbiters.push_back(arbiter2.clone());
+    arbiters.push_back(arbiter3.clone());
+
+    let p_id = escrow_client.create_project_multisig(
+        &client_addr,
+        &Some(freelancer_addr.clone()),
+        &arbiters,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    let proj = escrow_client.get_project(&p_id);
+    assert_eq!(proj.arbiters.len(), 3);
+
+    // Client raises dispute
+    escrow_client.raise_dispute(&client_addr, &p_id);
+
+    // Arbiter 1 and Arbiter 2 reach 2-of-3 threshold consensus to split 400 client / 600 freelancer
+    escrow_client.resolve_dispute_multisig(&p_id, &arbiter1, &arbiter2, &400, &600, &None);
+
+    assert_eq!(token_client.balance(&client_addr), 400);
+    assert_eq!(token_client.balance(&freelancer_addr), 600);
+    assert_eq!(token_client.balance(&contract_id), 0);
+
+    let proj_after = escrow_client.get_project(&p_id);
+    assert_eq!(proj_after.state, ProjectState::Completed);
+    assert_eq!(proj_after.remaining_amount, 0);
+}
+
+#[test]
+#[should_panic(expected = "Multisig threshold enabled for project")]
+fn test_single_arbiter_cannot_resolve_multisig_project() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter1 = Address::generate(&env);
+    let arbiter2 = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let mut arbiters = Vec::new(&env);
+    arbiters.push_back(arbiter1);
+    arbiters.push_back(arbiter2);
+
+    let p_id = escrow_client.create_project_multisig(
+        &client_addr,
+        &Some(freelancer_addr),
+        &arbiters,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.raise_dispute(&client_addr, &p_id);
+
+    // Single arbiter calling legacy resolve_dispute must fail
+    escrow_client.resolve_dispute(&p_id, &500, &500, &None);
+}
+
+#[test]
+#[should_panic(expected = "Arbiters must be distinct")]
+fn test_multisig_dispute_same_arbiter_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter1 = Address::generate(&env);
+    let arbiter2 = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let mut arbiters = Vec::new(&env);
+    arbiters.push_back(arbiter1.clone());
+    arbiters.push_back(arbiter2);
+
+    let p_id = escrow_client.create_project_multisig(
+        &client_addr,
+        &Some(freelancer_addr),
+        &arbiters,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.raise_dispute(&client_addr, &p_id);
+
+    // Passing the same arbiter twice must panic
+    escrow_client.resolve_dispute_multisig(&p_id, &arbiter1, &arbiter1, &500, &500, &None);
+}
+
+#[test]
+fn test_asynchronous_dispute_ruling_voting() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter1 = Address::generate(&env);
+    let arbiter2 = Address::generate(&env);
+    let arbiter3 = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let mut arbiters = Vec::new(&env);
+    arbiters.push_back(arbiter1.clone());
+    arbiters.push_back(arbiter2.clone());
+    arbiters.push_back(arbiter3);
+
+    let p_id = escrow_client.create_project_multisig(
+        &client_addr,
+        &Some(freelancer_addr.clone()),
+        &arbiters,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.raise_dispute(&freelancer_addr, &p_id);
+
+    // Arbiter 1 votes (300 to client, 700 to freelancer)
+    let resolved_first = escrow_client.submit_dispute_ruling(&arbiter1, &p_id, &300, &700, &None);
+    assert_eq!(resolved_first, false);
+
+    let proposal = escrow_client.get_dispute_proposal(&p_id).unwrap();
+    assert_eq!(proposal.client_amount, 300);
+    assert_eq!(proposal.freelancer_amount, 700);
+    assert_eq!(proposal.votes.len(), 1);
+
+    // Arbiter 2 votes for the same ruling -> threshold 2 reached, dispute resolved!
+    let resolved_second = escrow_client.submit_dispute_ruling(&arbiter2, &p_id, &300, &700, &None);
+    assert_eq!(resolved_second, true);
+
+    assert_eq!(token_client.balance(&client_addr), 300);
+    assert_eq!(token_client.balance(&freelancer_addr), 700);
+
+    let proj = escrow_client.get_project(&p_id);
+    assert_eq!(proj.state, ProjectState::Completed);
+}
+
+#[test]
+fn test_dispute_14_day_timeout_refund_50_50() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    env.ledger().set_timestamp(1_000_000);
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    // Raise dispute at timestamp 1_000_000
+    escrow_client.raise_dispute(&client_addr, &p_id);
+
+    // Advance 14 days + 1 second (14 * 86_400 = 1_209_600s)
+    env.ledger().set_timestamp(1_000_000 + 1_209_601);
+
+    // Arbiter was inactive: claim 50/50 refund split
+    escrow_client.resolve_dispute_timeout(&p_id, &true, &None);
+
+    assert_eq!(token_client.balance(&client_addr), 500);
+    assert_eq!(token_client.balance(&freelancer_addr), 500);
+    assert_eq!(token_client.balance(&contract_id), 0);
+
+    let proj = escrow_client.get_project(&p_id);
+    assert_eq!(proj.state, ProjectState::Completed);
+    assert_eq!(proj.remaining_amount, 0);
+}
+
+#[test]
+fn test_dispute_14_day_timeout_default_client_refund() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    env.ledger().set_timestamp(1_000_000);
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    let token_client = token::Client::new(&env, &token_contract);
+
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.raise_dispute(&freelancer_addr, &p_id);
+
+    // Advance 14 days + 10 seconds
+    env.ledger().set_timestamp(1_000_000 + 1_209_610);
+
+    // Arbiter was inactive: default to 100% client refund
+    escrow_client.resolve_dispute_timeout(&p_id, &false, &None);
+
+    assert_eq!(token_client.balance(&client_addr), 1000);
+    assert_eq!(token_client.balance(&freelancer_addr), 0);
+
+    let proj = escrow_client.get_project(&p_id);
+    assert_eq!(proj.state, ProjectState::Completed);
+}
+
+#[test]
+#[should_panic(expected = "14-day arbiter inactivity window has not elapsed")]
+fn test_dispute_timeout_before_14_days_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    env.ledger().set_timestamp(1_000_000);
+
+    let contract_id = env.register_contract(None, TrustPayEscrow);
+    let escrow_client = TrustPayEscrowClient::new(&env, &contract_id);
+
+    let client_addr = Address::generate(&env);
+    let freelancer_addr = Address::generate(&env);
+    let arbiter_addr = Address::generate(&env);
+
+    let token_admin = Address::generate(&env);
+    let token_contract = env.register_stellar_asset_contract(token_admin);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_contract);
+    token_admin_client.mint(&client_addr, &1000);
+
+    let mut amounts = Vec::new(&env);
+    amounts.push_back(1000);
+
+    let p_id = escrow_client.lock_escrow(
+        &client_addr,
+        &freelancer_addr,
+        &arbiter_addr,
+        &token_contract,
+        &amounts,
+        &false,
+    );
+
+    escrow_client.raise_dispute(&client_addr, &p_id);
+
+    // Advance only 10 days (10 * 86_400 = 864_000s)
+    env.ledger().set_timestamp(1_000_000 + 864_000);
+
+    // Must panic because 14 days have not elapsed
+    escrow_client.resolve_dispute_timeout(&p_id, &true, &None);
+}
+

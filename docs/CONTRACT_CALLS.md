@@ -264,9 +264,12 @@ Transitions an active project into arbitration if expectations or deliverables a
 
 ---
 
-### 5. `resolve_dispute`
-Executed by the designated arbiter to distribute disputed funds according to verdict.
+### 5. Dispute Resolution & Multi-Signature Arbitration ⚖️
 
+Disputes freeze milestone claim operations and can be resolved via three pathways: single arbiter (legacy projects), 2-of-N multi-signature threshold, or self-executing 14-day inactivity timeout.
+
+#### A. Single-Arbiter Resolution (`resolve_dispute`)
+For projects with a single assigned arbiter:
 - **Signature:**
   ```rust
   pub fn resolve_dispute(
@@ -278,15 +281,59 @@ Executed by the designated arbiter to distribute disputed funds according to ver
   )
   ```
 - **Authorization:** `project.arbiter.require_auth()`
+- **Guard:** If `project.arbiters.len() > 1`, panics to require multisig threshold resolution.
+
+#### B. Multi-Signature Arbiter Threshold (`resolve_dispute_multisig`)
+Requires cryptographic authorization from 2 distinct approved arbiters:
+- **Signature:**
+  ```rust
+  pub fn resolve_dispute_multisig(
+      env: Env,
+      project_id: u64,
+      arbiter1: Address,
+      arbiter2: Address,
+      client_amount: i128,
+      freelancer_amount: i128,
+      platform: Option<Address>,
+  )
+  ```
+- **Authorization:** `arbiter1.require_auth()` and `arbiter2.require_auth()`
 - **Preconditions:**
-  - `project.state == ProjectState::Disputed`
-  - `client_amount >= 0` and `freelancer_amount >= 0`
-  - **Balance Invariant Guard:** `client_amount + freelancer_amount <= project.remaining_amount` (Strictly prevents rogue arbiters or input typos from draining other projects or contract reserves).
-- **Effect:**
-  - Deducts `client_amount + freelancer_amount` from `project.remaining_amount`.
-  - Transfers allocated amounts to client and freelancer.
-  - Resolves yield shares (70% Client, 30% Platform).
-  - Transitions project state to `ProjectState::Completed`.
+  - `arbiter1 != arbiter2` (Distinct addresses enforced before auth verification)
+  - `is_authorized_arbiter(arbiter1)` and `is_authorized_arbiter(arbiter2)`
+  - `client_amount + freelancer_amount <= project.remaining_amount` (Balance invariant guard)
+
+#### C. Asynchronous Consensus Voting (`submit_dispute_ruling`)
+Allows arbiters to vote independently in separate transactions:
+- **Signature:**
+  ```rust
+  pub fn submit_dispute_ruling(
+      env: Env,
+      arbiter: Address,
+      project_id: u64,
+      client_amount: i128,
+      freelancer_amount: i128,
+      platform: Option<Address>,
+  ) -> bool
+  ```
+- **Threshold Execution:** When 2 distinct arbiters vote for the exact same split, the contract executes the payout automatically and transitions project state to `Completed`.
+
+#### D. 14-Day Arbiter Inactivity Timeout (`resolve_dispute_timeout`)
+Prevents permanent fund lockup if arbiters lose keys, go offline, or stall:
+- **Signature:**
+  ```rust
+  pub fn resolve_dispute_timeout(
+      env: Env,
+      project_id: u64,
+      split_50_50: bool,
+      platform: Option<Address>,
+  )
+  ```
+- **Authorization:** Permissionless (Callable by client, freelancer, or any caller after timelock expires)
+- **Timelock:** Enforces `env.ledger().timestamp() >= project.dispute_raised_at + 14 * 24 * 60 * 60` (1,209,600 seconds)
+- **Outcome:**
+  - `split_50_50 == true`: Safely refunds 50% of remaining funds to client and 50% to freelancer.
+  - `split_50_50 == false`: Defaults to a 100% refund of remaining escrow to client.
 
 ---
 

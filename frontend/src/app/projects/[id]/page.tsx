@@ -19,6 +19,7 @@ import {
   requestRevisionOnChain,
   raiseDisputeOnChain,
   resolveDisputeOnChain,
+  resolveDisputeTimeoutOnChain,
   getStellarExplorerUrl,
   DEFAULT_ESCROW_CONTRACT_ID,
   DEFAULT_ARBITER_ADDRESS,
@@ -567,6 +568,58 @@ export default function ProjectDetailsPage() {
     }
   };
 
+  const handleDisputeTimeout = async (split5050: boolean) => {
+    if (!address) {
+      toast.error('Please connect your wallet first.');
+      return;
+    }
+    if (!project) return;
+    const onChainId = project.project_id_onchain ?? 1;
+
+    setTxState({
+      isOpen: true,
+      stage: 'preparing',
+      message: split5050
+        ? 'Claiming 14-day inactivity timeout refund (50/50 split)...'
+        : 'Claiming 14-day inactivity timeout refund (100% Client refund)...',
+    });
+
+    try {
+      const res = await resolveDisputeTimeoutOnChain({
+        callerAddress: address,
+        projectIdOnChain: onChainId,
+        split5050,
+        onStatusUpdate: (stage, message) => {
+          setTxState((prev) => ({ ...prev, stage, message }));
+        },
+      });
+
+      setTxState((prev) => ({
+        ...prev,
+        stage: 'success',
+        txHash: res.txHash,
+        message: '14-Day inactivity refund executed successfully on Stellar!',
+      }));
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await authFetch(`${apiUrl}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      });
+
+      toast.success('Dispute timeout refund finalized on-chain!');
+      fetchProject();
+    } catch (err: any) {
+      setTxState((prev) => ({
+        ...prev,
+        stage: 'error',
+        error: err.message || 'Dispute timeout resolution failed',
+      }));
+      toast.error(err.message || 'Timeout claim failed');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white pb-24">
       {/* Top Banner Gradient */}
@@ -707,21 +760,32 @@ export default function ProjectDetailsPage() {
             <div className="mt-6 p-5 rounded-2xl bg-red-950/50 border border-red-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <h4 className="text-sm font-bold text-red-300 flex items-center gap-2">
-                  <span>🚨</span> Project Funds Frozen in Dispute Arbitration
+                  <span>🚨</span> Project Funds Frozen in Dispute Arbitration (2-of-3 Arbiter Threshold)
                 </h4>
                 <p className="text-xs text-red-200/80 mt-1">
-                  Remaining escrow funds cannot be released until the designated arbiter submits an on-chain settlement ruling.
+                  Remaining escrow funds require consensus from approved arbiters. If arbiters remain inactive for 14 days, participants can claim a self-executing timeout refund.
                 </p>
               </div>
 
-              {isArbiter && (
-                <Button
-                  onClick={() => setActiveResolveModal(true)}
-                  className="bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold px-4 py-2 shrink-0 shadow-lg"
-                >
-                  Submit Dispute Ruling
-                </Button>
-              )}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {isArbiter && (
+                  <Button
+                    onClick={() => setActiveResolveModal(true)}
+                    className="bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold px-4 py-2 shadow-lg"
+                  >
+                    Submit Dispute Ruling
+                  </Button>
+                )}
+                {(isClient || isFreelancer) && (
+                  <Button
+                    onClick={() => handleDisputeTimeout(true)}
+                    className="bg-amber-600/80 hover:bg-amber-500 text-white rounded-xl text-xs font-bold px-3 py-2 border border-amber-400/30 shadow-lg"
+                    title="If arbiters have been inactive for > 14 days, execute a 50/50 mutual split"
+                  >
+                    ⏰ Claim 14-Day Timeout Refund (50/50)
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 

@@ -423,6 +423,20 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
       return true;
     }
 
+    // 9. Dispute Inactivity Timeout Resolved (14-day auto-refund)
+    if (topicString === 'dispute.timeout') {
+      const [rawProjectId] = Array.isArray(data) ? data : [data];
+      const projectIdOnChain = Number(rawProjectId);
+
+      await supabase
+        .from('projects')
+        .update({ status: 'completed' })
+        .eq('project_id_onchain', projectIdOnChain);
+
+      await invalidateCache(['cache:/api/projects*']);
+      return true;
+    }
+
     return true;
   } catch (err: any) {
     logger.error(`Error syncing event '${topicString}' to database:`, err);

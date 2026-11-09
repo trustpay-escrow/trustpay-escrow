@@ -35,6 +35,14 @@ pub struct Milestone {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeRulingProposal {
+    pub client_amount: i128,
+    pub freelancer_amount: i128,
+    pub votes: Vec<Address>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Project {
     pub client: Address,
     pub freelancer: Option<Address>,
@@ -48,6 +56,8 @@ pub struct Project {
     pub principal_liquid: i128,
     pub principal_blend: i128,
     pub accrued_yield: i128,
+    pub arbiters: Vec<Address>,
+    pub dispute_raised_at: u64,
 }
 
 #[contracttype]
@@ -56,6 +66,8 @@ pub enum DataKey {
     ProjectCount,
     Admin,
     Oracle,
+    ApprovedArbiters,
+    DisputeProposal(u64),
 }
 
 #[contract]
@@ -90,6 +102,87 @@ impl TrustPayEscrow {
 
     pub fn get_oracle(env: Env) -> Option<Address> {
         env.storage().persistent().get(&DataKey::Oracle)
+    }
+
+    pub fn set_approved_arbiters(env: Env, arbiters: Vec<Address>) {
+        let admin: Address = env.storage().persistent().get(&DataKey::Admin).expect("Admin not set");
+        admin.require_auth();
+        assert!(arbiters.len() > 0, "Approved arbiters list cannot be empty");
+        env.storage().persistent().set(&DataKey::ApprovedArbiters, &arbiters);
+    }
+
+    pub fn get_approved_arbiters(env: Env) -> Vec<Address> {
+        env.storage().persistent().get(&DataKey::ApprovedArbiters).unwrap_or_else(|| Vec::new(&env))
+    }
+
+    pub fn add_approved_arbiter(env: Env, arbiter: Address) {
+        let admin: Address = env.storage().persistent().get(&DataKey::Admin).expect("Admin not set");
+        admin.require_auth();
+        let mut list: Vec<Address> = env.storage().persistent().get(&DataKey::ApprovedArbiters).unwrap_or_else(|| Vec::new(&env));
+        for existing in list.iter() {
+            if existing == arbiter {
+                return;
+            }
+        }
+        list.push_back(arbiter);
+        env.storage().persistent().set(&DataKey::ApprovedArbiters, &list);
+    }
+
+    pub fn remove_approved_arbiter(env: Env, arbiter: Address) {
+        let admin: Address = env.storage().persistent().get(&DataKey::Admin).expect("Admin not set");
+        admin.require_auth();
+        let list: Vec<Address> = env.storage().persistent().get(&DataKey::ApprovedArbiters).unwrap_or_else(|| Vec::new(&env));
+        let mut new_list = Vec::new(&env);
+        for existing in list.iter() {
+            if existing != arbiter {
+                new_list.push_back(existing);
+            }
+        }
+        env.storage().persistent().set(&DataKey::ApprovedArbiters, &new_list);
+    }
+
+    pub fn set_project_arbiters(env: Env, project_id: u64, arbiters: Vec<Address>) {
+        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        project.client.require_auth();
+        assert!(arbiters.len() >= 2, "Must specify at least 2 arbiters for multisig panel");
+        assert!(project.state == ProjectState::Active, "Project is not active");
+
+        project.arbiters = arbiters.clone();
+        if let Some(first) = arbiters.get(0) {
+            project.arbiter = first;
+        }
+        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+    }
+
+    pub fn is_authorized_arbiter(env: Env, project_id: u64, arbiter: Address) -> bool {
+        let project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        check_authorized_arbiter(&env, &project, &arbiter)
+    }
+
+    pub fn create_project_multisig(
+        env: Env,
+        client: Address,
+        freelancer: Option<Address>,
+        arbiters: Vec<Address>,
+        token: Address,
+        milestone_amounts: Vec<i128>,
+        yield_enabled: bool,
+    ) -> u64 {
+        assert!(arbiters.len() >= 2, "Must specify at least 2 arbiters for multisig panel");
+        let primary_arbiter = arbiters.get(0).unwrap();
+        let project_id = Self::create_project(
+            env.clone(),
+            client,
+            freelancer,
+            primary_arbiter,
+            token,
+            milestone_amounts,
+            yield_enabled,
+        );
+        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        project.arbiters = arbiters;
+        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+        project_id
     }
 
     pub fn create_project(
@@ -133,6 +226,9 @@ impl TrustPayEscrow {
             (0, total_amount)
         };
 
+        let mut arbiters = Vec::new(&env);
+        arbiters.push_back(arbiter.clone());
+
         let project = Project {
             client: client.clone(),
             freelancer,
@@ -146,6 +242,8 @@ impl TrustPayEscrow {
             principal_liquid,
             principal_blend,
             accrued_yield: 0,
+            arbiters,
+            dispute_raised_at: 0,
         };
 
         let count: u64 = env.storage().persistent().get(&DataKey::ProjectCount).unwrap_or(0);
@@ -248,7 +346,7 @@ impl TrustPayEscrow {
 
         let is_oracle = oracle_opt.map_or(false, |o| o == caller);
         let is_admin = admin_opt.map_or(false, |a| a == caller);
-        let is_arbiter = project.arbiter == caller;
+        let is_arbiter = project.arbiter == caller || project.arbiters.iter().any(|a| a == caller);
 
         assert!(is_oracle || is_admin || is_arbiter, "Caller not authorized oracle or admin");
         assert!(project.yield_enabled, "Yield not enabled for project");
@@ -471,6 +569,7 @@ impl TrustPayEscrow {
         assert!(project.state == ProjectState::Active, "Project is not active");
         
         project.state = ProjectState::Disputed;
+        project.dispute_raised_at = env.ledger().timestamp();
         env.storage().persistent().set(&DataKey::Project(project_id), &project);
 
         env.events().publish(
@@ -486,50 +585,231 @@ impl TrustPayEscrow {
         freelancer_amount: i128,
         platform: Option<Address>,
     ) {
-        let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        let project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
         
+        if project.arbiters.len() > 1 {
+            panic!("Multisig threshold enabled for project: use resolve_dispute_multisig or submit_dispute_ruling");
+        }
+
         project.arbiter.require_auth();
+        execute_dispute_settlement(
+            &env,
+            project_id,
+            client_amount,
+            freelancer_amount,
+            platform,
+        );
+    }
+
+    /// Multi-signature dispute resolution: requires authorization from 2 distinct approved arbiters
+    pub fn resolve_dispute_multisig(
+        env: Env,
+        project_id: u64,
+        arbiter1: Address,
+        arbiter2: Address,
+        client_amount: i128,
+        freelancer_amount: i128,
+        platform: Option<Address>,
+    ) {
+        assert!(arbiter1 != arbiter2, "Arbiters must be distinct");
+        arbiter1.require_auth();
+        arbiter2.require_auth();
+
+        let project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        assert!(check_authorized_arbiter(&env, &project, &arbiter1), "Arbiter 1 is not authorized");
+        assert!(check_authorized_arbiter(&env, &project, &arbiter2), "Arbiter 2 is not authorized");
+
+        execute_dispute_settlement(
+            &env,
+            project_id,
+            client_amount,
+            freelancer_amount,
+            platform,
+        );
+    }
+
+    /// Asynchronous multi-arbiter voting: arbiters submit their vote on the settlement split.
+    /// When 2 distinct arbiters vote for the exact same split, the dispute is automatically resolved.
+    pub fn submit_dispute_ruling(
+        env: Env,
+        arbiter: Address,
+        project_id: u64,
+        client_amount: i128,
+        freelancer_amount: i128,
+        platform: Option<Address>,
+    ) -> bool {
+        arbiter.require_auth();
+
+        let project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
         assert!(project.state == ProjectState::Disputed, "Project is not disputed");
-        assert!(client_amount >= 0, "Client amount cannot be negative");
-        assert!(freelancer_amount >= 0, "Freelancer amount cannot be negative");
+        assert!(check_authorized_arbiter(&env, &project, &arbiter), "Caller is not an authorized arbiter");
 
-        // Balance invariant check: prevent arbitrator from exceeding remaining escrowed funds or draining pool
-        let total_resolution = client_amount.checked_add(freelancer_amount).expect("Resolution amount overflow");
-        assert!(total_resolution <= project.remaining_amount, "Resolution exceeds escrowed balance");
+        let existing_proposal_opt: Option<DisputeRulingProposal> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DisputeProposal(project_id));
 
-        project.remaining_amount = project.remaining_amount.checked_sub(total_resolution).expect("Underflow");
+        if let Some(mut proposal) = existing_proposal_opt {
+            if proposal.client_amount == client_amount && proposal.freelancer_amount == freelancer_amount {
+                for voter in proposal.votes.iter() {
+                    assert!(voter != arbiter, "Arbiter has already voted on this ruling");
+                }
+                proposal.votes.push_back(arbiter);
 
-        let token_client = token::Client::new(&env, &project.token);
-        
-        if client_amount > 0 {
-            token_client.transfer(&env.current_contract_address(), &project.client, &client_amount);
-        }
-        if freelancer_amount > 0 {
-            let freelancer = project.freelancer.as_ref().expect("Freelancer not assigned yet");
-            token_client.transfer(&env.current_contract_address(), freelancer, &freelancer_amount);
-        }
-
-        // If yield was enabled, distribute yield shares (70% client, 30% platform) upon dispute resolution
-        if project.yield_enabled && project.accrued_yield > 0 {
-            let client_yield = (project.accrued_yield * 70) / 100;
-            let platform_yield = project.accrued_yield - client_yield;
-
-            if client_yield > 0 {
-                token_client.transfer(&env.current_contract_address(), &project.client, &client_yield);
+                if proposal.votes.len() >= 2 {
+                    execute_dispute_settlement(
+                        &env,
+                        project_id,
+                        client_amount,
+                        freelancer_amount,
+                        platform,
+                    );
+                    return true;
+                } else {
+                    env.storage().persistent().set(&DataKey::DisputeProposal(project_id), &proposal);
+                    return false;
+                }
+            } else {
+                let mut votes = Vec::new(&env);
+                votes.push_back(arbiter);
+                let new_proposal = DisputeRulingProposal {
+                    client_amount,
+                    freelancer_amount,
+                    votes,
+                };
+                env.storage().persistent().set(&DataKey::DisputeProposal(project_id), &new_proposal);
+                return false;
             }
-            if platform_yield > 0 {
-                let platform_recipient = platform.unwrap_or_else(|| project.arbiter.clone());
-                token_client.transfer(&env.current_contract_address(), &platform_recipient, &platform_yield);
-            }
-            project.accrued_yield = 0;
+        } else {
+            let mut votes = Vec::new(&env);
+            votes.push_back(arbiter);
+            let new_proposal = DisputeRulingProposal {
+                client_amount,
+                freelancer_amount,
+                votes,
+            };
+            env.storage().persistent().set(&DataKey::DisputeProposal(project_id), &new_proposal);
+            return false;
         }
-        
-        project.state = ProjectState::Completed;
-        env.storage().persistent().set(&DataKey::Project(project_id), &project);
+    }
+
+    pub fn get_dispute_proposal(env: Env, project_id: u64) -> Option<DisputeRulingProposal> {
+        env.storage().persistent().get(&DataKey::DisputeProposal(project_id))
+    }
+
+    /// 14-day inactivity timeout: if arbiters fail to rule within 14 days of raise_dispute,
+    /// allows any party (client, freelancer, or relayer) to resolve the dispute by safely refunding
+    /// 50/50 or defaulting to a 100% client refund.
+    pub fn resolve_dispute_timeout(
+        env: Env,
+        project_id: u64,
+        split_50_50: bool,
+        platform: Option<Address>,
+    ) {
+        let project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+        assert!(project.state == ProjectState::Disputed, "Project is not disputed");
+        assert!(project.dispute_raised_at > 0, "Dispute timestamp not set");
+
+        let now = env.ledger().timestamp();
+        let timeout_delay: u64 = 14 * 24 * 60 * 60; // 14 days in seconds (1,209,600s)
+        assert!(
+            now >= project.dispute_raised_at + timeout_delay,
+            "14-day arbiter inactivity window has not elapsed"
+        );
+
+        let (client_amount, freelancer_amount) = if split_50_50 {
+            let client_share = project.remaining_amount / 2;
+            let freelancer_share = project.remaining_amount - client_share;
+            (client_share, freelancer_share)
+        } else {
+            (project.remaining_amount, 0)
+        };
+
+        execute_dispute_settlement(
+            &env,
+            project_id,
+            client_amount,
+            freelancer_amount,
+            platform,
+        );
 
         env.events().publish(
-            (symbol_short!("project"), symbol_short!("resolved")),
+            (symbol_short!("dispute"), symbol_short!("timeout")),
             (project_id, client_amount, freelancer_amount),
         );
     }
+}
+
+fn check_authorized_arbiter(env: &Env, project: &Project, arbiter: &Address) -> bool {
+    if project.arbiter == *arbiter {
+        return true;
+    }
+    for a in project.arbiters.iter() {
+        if a == *arbiter {
+            return true;
+        }
+    }
+    if let Some(approved) = env.storage().persistent().get::<DataKey, Vec<Address>>(&DataKey::ApprovedArbiters) {
+        for a in approved.iter() {
+            if a == *arbiter {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn execute_dispute_settlement(
+    env: &Env,
+    project_id: u64,
+    client_amount: i128,
+    freelancer_amount: i128,
+    platform: Option<Address>,
+) {
+    let mut project: Project = env.storage().persistent().get(&DataKey::Project(project_id)).unwrap();
+    assert!(project.state == ProjectState::Disputed, "Project is not disputed");
+    assert!(client_amount >= 0, "Client amount cannot be negative");
+    assert!(freelancer_amount >= 0, "Freelancer amount cannot be negative");
+
+    // Balance invariant check: prevent arbitrator from exceeding remaining escrowed funds or draining pool
+    let total_resolution = client_amount.checked_add(freelancer_amount).expect("Resolution amount overflow");
+    assert!(total_resolution <= project.remaining_amount, "Resolution exceeds escrowed balance");
+
+    project.remaining_amount = project.remaining_amount.checked_sub(total_resolution).expect("Underflow");
+
+    let token_client = token::Client::new(env, &project.token);
+    
+    if client_amount > 0 {
+        token_client.transfer(&env.current_contract_address(), &project.client, &client_amount);
+    }
+    if freelancer_amount > 0 {
+        let freelancer = project.freelancer.as_ref().expect("Freelancer not assigned yet");
+        token_client.transfer(&env.current_contract_address(), freelancer, &freelancer_amount);
+    }
+
+    // If yield was enabled, distribute yield shares (70% client, 30% platform) upon dispute resolution
+    if project.yield_enabled && project.accrued_yield > 0 {
+        let client_yield = (project.accrued_yield * 70) / 100;
+        let platform_yield = project.accrued_yield - client_yield;
+
+        if client_yield > 0 {
+            token_client.transfer(&env.current_contract_address(), &project.client, &client_yield);
+        }
+        if platform_yield > 0 {
+            let platform_recipient = platform.unwrap_or_else(|| project.arbiter.clone());
+            token_client.transfer(&env.current_contract_address(), &platform_recipient, &platform_yield);
+        }
+        project.accrued_yield = 0;
+    }
+    
+    project.state = ProjectState::Completed;
+    env.storage().persistent().set(&DataKey::Project(project_id), &project);
+
+    // Remove any pending proposal
+    env.storage().persistent().remove(&DataKey::DisputeProposal(project_id));
+
+    env.events().publish(
+        (symbol_short!("project"), symbol_short!("resolved")),
+        (project_id, client_amount, freelancer_amount),
+    );
 }

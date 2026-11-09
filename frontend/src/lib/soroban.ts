@@ -501,6 +501,135 @@ export async function resolveDisputeOnChain(params: {
 }
 
 /**
+ * Executes a 2-of-N multi-signature dispute resolution on-chain with two distinct arbiter signatures.
+ */
+export async function resolveDisputeMultisigOnChain(params: {
+  arbiter1Address: string;
+  arbiter2Address: string;
+  projectIdOnChain: number | bigint | string;
+  clientAmount: number;
+  freelancerAmount: number;
+  platformAddress?: string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const {
+    arbiter1Address,
+    arbiter2Address,
+    projectIdOnChain,
+    clientAmount,
+    freelancerAmount,
+    platformAddress,
+    contractAddress,
+    onStatusUpdate,
+  } = params;
+
+  const platformScVal = platformAddress
+    ? Address.fromString(platformAddress).toScVal()
+    : xdr.ScVal.scvVoid();
+
+  const args: xdr.ScVal[] = [
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    Address.fromString(arbiter1Address).toScVal(),
+    Address.fromString(arbiter2Address).toScVal(),
+    nativeToScVal(BigInt(Math.round(clientAmount * 10_000_000)), { type: 'i128' }),
+    nativeToScVal(BigInt(Math.round(freelancerAmount * 10_000_000)), { type: 'i128' }),
+    platformScVal,
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress: arbiter1Address,
+    contractAddress,
+    functionName: 'resolve_dispute_multisig',
+    args,
+    onStatusUpdate,
+  });
+}
+
+/**
+ * Submits an individual arbiter's ruling vote towards the 2-of-3 multisig threshold.
+ */
+export async function submitDisputeRulingOnChain(params: {
+  arbiterAddress: string;
+  projectIdOnChain: number | bigint | string;
+  clientAmount: number;
+  freelancerAmount: number;
+  platformAddress?: string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const {
+    arbiterAddress,
+    projectIdOnChain,
+    clientAmount,
+    freelancerAmount,
+    platformAddress,
+    contractAddress,
+    onStatusUpdate,
+  } = params;
+
+  const platformScVal = platformAddress
+    ? Address.fromString(platformAddress).toScVal()
+    : xdr.ScVal.scvVoid();
+
+  const args: xdr.ScVal[] = [
+    Address.fromString(arbiterAddress).toScVal(),
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    nativeToScVal(BigInt(Math.round(clientAmount * 10_000_000)), { type: 'i128' }),
+    nativeToScVal(BigInt(Math.round(freelancerAmount * 10_000_000)), { type: 'i128' }),
+    platformScVal,
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress: arbiterAddress,
+    contractAddress,
+    functionName: 'submit_dispute_ruling',
+    args,
+    onStatusUpdate,
+  });
+}
+
+/**
+ * Resolves a disputed escrow when arbiters have been inactive for > 14 days following raise_dispute.
+ * Allows safe 50/50 refund split or default 100% client refund.
+ */
+export async function resolveDisputeTimeoutOnChain(params: {
+  callerAddress: string;
+  projectIdOnChain: number | bigint | string;
+  split5050: boolean;
+  platformAddress?: string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const {
+    callerAddress,
+    projectIdOnChain,
+    split5050,
+    platformAddress,
+    contractAddress,
+    onStatusUpdate,
+  } = params;
+
+  const platformScVal = platformAddress
+    ? Address.fromString(platformAddress).toScVal()
+    : xdr.ScVal.scvVoid();
+
+  const args: xdr.ScVal[] = [
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    nativeToScVal(split5050, { type: 'bool' }),
+    platformScVal,
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress,
+    contractAddress,
+    functionName: 'resolve_dispute_timeout',
+    args,
+    onStatusUpdate,
+  });
+}
+
+/**
  * Executes the on-chain auto_release_milestone invocation once the 7-day review timelock has elapsed.
  * Can be called by the freelancer, a platform relayer, or any caller without requiring client authorization.
  */
