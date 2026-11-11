@@ -354,7 +354,7 @@ describe('🛡️ Participant Authorization & Real-Time Push Gateway (SSE)', () 
       const writes: string[] = [];
       const headers: Record<string, string> = {};
 
-      const res: any = {
+      const res = {
         writeHead: vi.fn((statusCode: number, head: Record<string, string>) => {
           Object.assign(headers, head);
         }),
@@ -365,11 +365,11 @@ describe('🛡️ Participant Authorization & Real-Time Push Gateway (SSE)', () 
         flushHeaders: vi.fn(),
         on: vi.fn((event: string, handler: any) => emitter.on(event, handler)),
         emitClose: () => emitter.emit('close'),
-        getWrites: () => writes,
-        getHeaders: () => headers,
+        getWrites: (): string[] => writes,
+        getHeaders: (): Record<string, string> => headers,
       };
 
-      return res;
+      return res as any;
     }
 
     it('registers user SSE stream, sends standard SSE headers, and delivers real-time notifications', () => {
@@ -395,7 +395,7 @@ describe('🛡️ Participant Authorization & Real-Time Push Gateway (SSE)', () 
       const deliveredCount = realtimeService.broadcastToUser(CLIENT_ADDRESS, 'notification', notificationData);
 
       expect(deliveredCount).toBe(1);
-      expect(mockRes.getWrites().some((w) => w.includes('event: notification') && w.includes('Payment Released'))).toBe(true);
+      expect(mockRes.getWrites().some((w: string) => w.includes('event: notification') && w.includes('Payment Released'))).toBe(true);
 
       // Verify connection count stats
       const stats = realtimeService.getStats();
@@ -420,14 +420,14 @@ describe('🛡️ Participant Authorization & Real-Time Push Gateway (SSE)', () 
       const delivered = realtimeService.broadcastToProject(PROJECT_ID, 'message', chatData);
 
       expect(delivered).toBe(2);
-      expect(mockRes1.getWrites().some((w) => w.includes('event: message') && w.includes('Escrow funded!'))).toBe(true);
-      expect(mockRes2.getWrites().some((w) => w.includes('event: message') && w.includes('Escrow funded!'))).toBe(true);
+      expect(mockRes1.getWrites().some((w: string) => w.includes('event: message') && w.includes('Escrow funded!'))).toBe(true);
+      expect(mockRes2.getWrites().some((w: string) => w.includes('event: message') && w.includes('Escrow funded!'))).toBe(true);
 
       // Broadcast on-chain event
       const onchainData = { topic: 'milestone.approved', milestoneIndex: 0, status: 'approved', ledger: 500 };
       realtimeService.broadcastToProject(PROJECT_ID, 'onchain_event', onchainData);
 
-      expect(mockRes1.getWrites().some((w) => w.includes('event: onchain_event') && w.includes('milestone.approved'))).toBe(true);
+      expect(mockRes1.getWrites().some((w: string) => w.includes('event: onchain_event') && w.includes('milestone.approved'))).toBe(true);
 
       // Close one client
       mockRes1.emitClose();

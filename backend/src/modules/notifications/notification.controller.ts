@@ -12,7 +12,8 @@ import { realtimeService } from '../../services/realtime.service.js';
 export const getNotificationsHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
     const userAddress = req.user?.stellar_address;
-    const address = req.params.address as string;
+    const rawAddress = req.params.address;
+    const address = (Array.isArray(rawAddress) ? rawAddress[0] : rawAddress) as string;
 
     if (!userAddress) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -47,7 +48,8 @@ export const streamNotificationsHandler = async (req: AuthenticatedRequest, res:
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const requestedAddress = req.params.address || userAddress;
+    const rawAddress = req.params.address;
+    const requestedAddress: string = (Array.isArray(rawAddress) ? rawAddress[0] : rawAddress) || userAddress;
     if (userAddress.toUpperCase() !== requestedAddress.toUpperCase()) {
       return res.status(403).json({ error: 'Forbidden: You can only subscribe to your own notification stream' });
     }
@@ -62,7 +64,8 @@ export const streamNotificationsHandler = async (req: AuthenticatedRequest, res:
 export const markAsReadHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
     const userAddress = req.user?.stellar_address;
-    const id = req.params.id as string;
+    const rawId = req.params.id;
+    const id = (Array.isArray(rawId) ? rawId[0] : rawId) as string;
 
     if (!userAddress) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -89,7 +92,8 @@ export const markAsReadHandler = async (req: AuthenticatedRequest, res: Response
 export const markAllAsReadHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
     const userAddress = req.user?.stellar_address;
-    const address = req.params.address as string;
+    const rawAddress = req.params.address;
+    const address = (Array.isArray(rawAddress) ? rawAddress[0] : rawAddress) as string;
 
     if (!userAddress) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -113,7 +117,8 @@ export const markAllAsReadHandler = async (req: AuthenticatedRequest, res: Respo
 export const deleteNotificationHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
     const userAddress = req.user?.stellar_address;
-    const id = req.params.id as string;
+    const rawId = req.params.id;
+    const id = (Array.isArray(rawId) ? rawId[0] : rawId) as string;
 
     if (!userAddress) {
       return res.status(401).json({ error: 'Authentication required' });
