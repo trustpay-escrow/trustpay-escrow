@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import {
   getUserNotifications,
   markAsRead,
@@ -6,12 +6,24 @@ import {
   deleteNotification,
 } from './notification.service.js';
 import { logger } from '../../shared/utils/logger.js';
+import { AuthenticatedRequest } from '../../shared/middleware/auth.js';
+import { realtimeService } from '../../services/realtime.service.js';
 
-export const getNotificationsHandler = async (req: Request, res: Response): Promise<any> => {
+export const getNotificationsHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
+    const userAddress = req.user?.stellar_address;
     const address = req.params.address as string;
+
+    if (!userAddress) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     if (!address) {
       return res.status(400).json({ error: 'Recipient address is required' });
+    }
+
+    // Participant Authorization: caller cannot inspect another user's notifications
+    if (userAddress.toUpperCase() !== address.toUpperCase()) {
+      return res.status(403).json({ error: 'Forbidden: You can only view your own notifications' });
     }
 
     const limit = parseInt(req.query.limit as string) || 50;
@@ -24,26 +36,70 @@ export const getNotificationsHandler = async (req: Request, res: Response): Prom
   }
 };
 
-export const markAsReadHandler = async (req: Request, res: Response): Promise<any> => {
+/**
+ * GET /api/notifications/stream and GET /api/notifications/stream/:address
+ * Real-time SSE stream pushing new notifications to the authenticated user.
+ */
+export const streamNotificationsHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
+    const userAddress = req.user?.stellar_address;
+    if (!userAddress) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const requestedAddress = req.params.address || userAddress;
+    if (userAddress.toUpperCase() !== requestedAddress.toUpperCase()) {
+      return res.status(403).json({ error: 'Forbidden: You can only subscribe to your own notification stream' });
+    }
+
+    realtimeService.registerUserStream(requestedAddress, res);
+  } catch (err: any) {
+    logger.error('Error in streamNotificationsHandler:', err);
+    return res.status(500).json({ error: 'Failed to establish notifications realtime stream' });
+  }
+};
+
+export const markAsReadHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
+  try {
+    const userAddress = req.user?.stellar_address;
     const id = req.params.id as string;
+
+    if (!userAddress) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     if (!id) {
       return res.status(400).json({ error: 'Notification ID is required' });
     }
 
-    const notification = await markAsRead(id);
+    const notification = await markAsRead(id, userAddress);
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
     return res.json({ message: 'Notification marked as read', notification });
   } catch (err: any) {
+    if (err.status === 403) {
+      return res.status(403).json({ error: err.message });
+    }
     logger.error('Error in markAsReadHandler:', err);
     return res.status(500).json({ error: 'Failed to mark notification as read' });
   }
 };
 
-export const markAllAsReadHandler = async (req: Request, res: Response): Promise<any> => {
+export const markAllAsReadHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
+    const userAddress = req.user?.stellar_address;
     const address = req.params.address as string;
+
+    if (!userAddress) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     if (!address) {
       return res.status(400).json({ error: 'Recipient address is required' });
+    }
+
+    if (userAddress.toUpperCase() !== address.toUpperCase()) {
+      return res.status(403).json({ error: 'Forbidden: You can only mark your own notifications as read' });
     }
 
     const updated = await markAllAsRead(address);
@@ -54,16 +110,28 @@ export const markAllAsReadHandler = async (req: Request, res: Response): Promise
   }
 };
 
-export const deleteNotificationHandler = async (req: Request, res: Response): Promise<any> => {
+export const deleteNotificationHandler = async (req: AuthenticatedRequest, res: Response): Promise<any> => {
   try {
+    const userAddress = req.user?.stellar_address;
     const id = req.params.id as string;
+
+    if (!userAddress) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
     if (!id) {
       return res.status(400).json({ error: 'Notification ID is required' });
     }
 
-    await deleteNotification(id);
+    const deleted = await deleteNotification(id, userAddress);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
     return res.json({ message: 'Notification deleted successfully' });
   } catch (err: any) {
+    if (err.status === 403) {
+      return res.status(403).json({ error: err.message });
+    }
     logger.error('Error in deleteNotificationHandler:', err);
     return res.status(500).json({ error: 'Failed to delete notification' });
   }

@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { logger } from '../shared/utils/logger.js';
 import { invalidateCache } from '../shared/middleware/cache.js';
 import { createNotification } from '../modules/notifications/notification.service.js';
+import { realtimeService } from './realtime.service.js';
 
 export interface ParsedEvent {
   id: string;
@@ -232,6 +233,19 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
         // Cache invalidation & notification
         await invalidateCache(['cache:/api/projects*']);
 
+        // Real-time broadcast to project SSE stream
+        try {
+          realtimeService.broadcastToProject(project.id, 'onchain_event', {
+            topic: topicString,
+            milestoneIndex,
+            status: 'approved',
+            allApproved: !!allApproved,
+            ledger: event.ledger,
+          });
+        } catch (rtErr) {
+          logger.warn(`Failed to broadcast onchain event to project ${project.id}:`, rtErr);
+        }
+
         if (updatedMilestone && project.freelancer_id) {
           const { data: freelancer } = await supabase
             .from('users')
@@ -281,6 +295,18 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
           .eq('milestone_index', milestoneIndex);
 
         await invalidateCache(['cache:/api/projects*']);
+
+        try {
+          realtimeService.broadcastToProject(project.id, 'onchain_event', {
+            topic: topicString,
+            milestoneIndex,
+            status: 'submitted',
+            autoReleaseAt: autoReleaseDate.toISOString(),
+            ledger: event.ledger,
+          });
+        } catch (rtErr) {
+          logger.warn(`Failed to broadcast onchain event to project ${project.id}:`, rtErr);
+        }
       }
       return true;
     }
@@ -313,6 +339,18 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
           .eq('milestone_index', milestoneIndex);
 
         await invalidateCache(['cache:/api/projects*']);
+
+        try {
+          realtimeService.broadcastToProject(project.id, 'onchain_event', {
+            topic: topicString,
+            milestoneIndex,
+            status: 'in_revision',
+            revisionsRemaining,
+            ledger: event.ledger,
+          });
+        } catch (rtErr) {
+          logger.warn(`Failed to broadcast onchain event to project ${project.id}:`, rtErr);
+        }
       }
       return true;
     }
@@ -350,6 +388,17 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
               .eq('id', matchedProject.id);
 
             await invalidateCache(['cache:/api/projects*']);
+
+            try {
+              realtimeService.broadcastToProject(matchedProject.id, 'onchain_event', {
+                topic: topicString,
+                projectIdOnChain,
+                status: 'in_progress',
+                ledger: event.ledger,
+              });
+            } catch (rtErr) {
+              logger.warn(`Failed to broadcast onchain event to project ${matchedProject.id}:`, rtErr);
+            }
           }
         }
       }
@@ -368,15 +417,30 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
         .maybeSingle();
 
       if (freelancer) {
-        await supabase
+        const { data: updatedProject } = await supabase
           .from('projects')
           .update({
             freelancer_id: freelancer.id,
             status: 'in_progress',
           })
-          .eq('project_id_onchain', projectIdOnChain);
+          .eq('project_id_onchain', projectIdOnChain)
+          .select('id')
+          .maybeSingle();
 
         await invalidateCache(['cache:/api/projects*']);
+
+        if (updatedProject) {
+          try {
+            realtimeService.broadcastToProject(updatedProject.id, 'onchain_event', {
+              topic: topicString,
+              freelancerAddress,
+              status: 'in_progress',
+              ledger: event.ledger,
+            });
+          } catch (rtErr) {
+            logger.warn(`Failed to broadcast onchain event to project ${updatedProject.id}:`, rtErr);
+          }
+        }
       }
       return true;
     }
@@ -386,12 +450,26 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
       const [rawProjectId] = Array.isArray(data) ? data : [data];
       const projectIdOnChain = Number(rawProjectId);
 
-      await supabase
+      const { data: updatedProject } = await supabase
         .from('projects')
         .update({ status: 'completed' })
-        .eq('project_id_onchain', projectIdOnChain);
+        .eq('project_id_onchain', projectIdOnChain)
+        .select('id')
+        .maybeSingle();
 
       await invalidateCache(['cache:/api/projects*']);
+
+      if (updatedProject) {
+        try {
+          realtimeService.broadcastToProject(updatedProject.id, 'onchain_event', {
+            topic: topicString,
+            status: 'completed',
+            ledger: event.ledger,
+          });
+        } catch (rtErr) {
+          logger.warn(`Failed to broadcast onchain event to project ${updatedProject.id}:`, rtErr);
+        }
+      }
       return true;
     }
 
@@ -400,12 +478,26 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
       const [rawProjectId] = Array.isArray(data) ? data : [data];
       const projectIdOnChain = Number(rawProjectId);
 
-      await supabase
+      const { data: updatedProject } = await supabase
         .from('projects')
         .update({ status: 'disputed' })
-        .eq('project_id_onchain', projectIdOnChain);
+        .eq('project_id_onchain', projectIdOnChain)
+        .select('id')
+        .maybeSingle();
 
       await invalidateCache(['cache:/api/projects*']);
+
+      if (updatedProject) {
+        try {
+          realtimeService.broadcastToProject(updatedProject.id, 'onchain_event', {
+            topic: topicString,
+            status: 'disputed',
+            ledger: event.ledger,
+          });
+        } catch (rtErr) {
+          logger.warn(`Failed to broadcast onchain event to project ${updatedProject.id}:`, rtErr);
+        }
+      }
       return true;
     }
 
@@ -414,12 +506,26 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
       const [rawProjectId] = Array.isArray(data) ? data : [data];
       const projectIdOnChain = Number(rawProjectId);
 
-      await supabase
+      const { data: updatedProject } = await supabase
         .from('projects')
         .update({ status: 'completed' })
-        .eq('project_id_onchain', projectIdOnChain);
+        .eq('project_id_onchain', projectIdOnChain)
+        .select('id')
+        .maybeSingle();
 
       await invalidateCache(['cache:/api/projects*']);
+
+      if (updatedProject) {
+        try {
+          realtimeService.broadcastToProject(updatedProject.id, 'onchain_event', {
+            topic: topicString,
+            status: 'completed',
+            ledger: event.ledger,
+          });
+        } catch (rtErr) {
+          logger.warn(`Failed to broadcast onchain event to project ${updatedProject.id}:`, rtErr);
+        }
+      }
       return true;
     }
 
@@ -428,12 +534,26 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
       const [rawProjectId] = Array.isArray(data) ? data : [data];
       const projectIdOnChain = Number(rawProjectId);
 
-      await supabase
+      const { data: updatedProject } = await supabase
         .from('projects')
         .update({ status: 'completed' })
-        .eq('project_id_onchain', projectIdOnChain);
+        .eq('project_id_onchain', projectIdOnChain)
+        .select('id')
+        .maybeSingle();
 
       await invalidateCache(['cache:/api/projects*']);
+
+      if (updatedProject) {
+        try {
+          realtimeService.broadcastToProject(updatedProject.id, 'onchain_event', {
+            topic: topicString,
+            status: 'completed',
+            ledger: event.ledger,
+          });
+        } catch (rtErr) {
+          logger.warn(`Failed to broadcast onchain event to project ${updatedProject.id}:`, rtErr);
+        }
+      }
       return true;
     }
 

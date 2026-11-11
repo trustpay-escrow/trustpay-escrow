@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export function useNotifications() {
-  const { address } = useWalletStore();
+  const { address, token } = useWalletStore();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
@@ -41,19 +41,70 @@ export function useNotifications() {
     }
   }, [address]);
 
-  // Initial fetch and periodic polling
+  // Initial fetch, SSE real-time stream subscription, and relaxed background heartbeat sync
   useEffect(() => {
     fetchNotifications();
 
     if (!address) return;
 
-    // Poll every 12 seconds for new notifications
+    // Connect to Server-Sent Events (SSE) Push Gateway
+    let eventSource: EventSource | null = null;
+    try {
+      const apiUrl = getApiUrl();
+      const queryToken = token ? `?token=${encodeURIComponent(token)}` : '';
+      const streamUrl = `${apiUrl}/api/notifications/stream/${encodeURIComponent(address)}${queryToken}`;
+
+      eventSource = new EventSource(streamUrl, { withCredentials: true });
+
+      // Handle real-time pushed notification
+      eventSource.addEventListener('notification', (e) => {
+        try {
+          const newNotification: NotificationItem = JSON.parse(e.data);
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === newNotification.id)) return prev;
+            return [newNotification, ...prev];
+          });
+          setUnreadCount((prev) => prev + 1);
+
+          toast.info(newNotification.title || 'New Notification', {
+            description: newNotification.message,
+          });
+        } catch (err) {
+          console.error('Error parsing real-time notification payload:', err);
+        }
+      });
+
+      // Handle real-time unread count sync
+      eventSource.addEventListener('unread_count', (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (typeof payload.count === 'number') {
+            setUnreadCount(payload.count);
+          }
+        } catch (err) {
+          console.error('Error parsing unread count payload:', err);
+        }
+      });
+
+      eventSource.onerror = () => {
+        // Browser EventSource automatically attempts reconnection
+      };
+    } catch (err) {
+      console.warn('Real-time SSE notification stream could not be established:', err);
+    }
+
+    // Relaxed background polling every 60s as a resilient fallback
     const interval = setInterval(() => {
       fetchNotifications(true);
-    }, 12000);
+    }, 60000);
 
-    return () => clearInterval(interval);
-  }, [address, fetchNotifications]);
+    return () => {
+      clearInterval(interval);
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [address, token, fetchNotifications]);
 
   // Mark single notification as read
   const markAsRead = async (id: string) => {

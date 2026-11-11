@@ -25,6 +25,11 @@ export const authenticate = (req: AuthenticatedRequest, res: Response, next: Nex
       }
     }
 
+    // Support query parameter token (especially useful for EventSource SSE connections)
+    if (!token && req.query?.token) {
+      token = String(req.query.token).trim();
+    }
+
     if (!token) {
       return res.status(401).json({
         error: 'Authentication required. Please authenticate via Stellar SEP-0010 Web Auth.',
@@ -58,6 +63,11 @@ export const optionalAuthenticate = (req: AuthenticatedRequest, res: Response, n
       if (authHeader.startsWith('Bearer ')) {
         token = authHeader.substring(7).trim();
       }
+    }
+
+    // Support query parameter token (especially useful for EventSource SSE connections)
+    if (!token && req.query?.token) {
+      token = String(req.query.token).trim();
     }
 
     if (token) {
