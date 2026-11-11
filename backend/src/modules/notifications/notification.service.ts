@@ -1,5 +1,6 @@
 import { supabase } from '../../config/supabase.js';
 import { logger } from '../../shared/utils/logger.js';
+import { realtimeService } from '../../services/realtime.service.js';
 
 export interface CreateNotificationInput {
   recipient_address: string;
@@ -41,6 +42,14 @@ export async function createNotification(input: CreateNotificationInput) {
     }
 
     logger.info(`Notification created successfully for recipient ${input.recipient_address}: ${input.title}`);
+
+    // Push notification in real time to connected SSE clients for this user
+    try {
+      realtimeService.broadcastToUser(input.recipient_address, 'notification', data);
+    } catch (sseErr) {
+      logger.warn('Failed to broadcast notification via SSE:', sseErr);
+    }
+
     return data;
   } catch (err) {
     logger.error('Unexpected error creating notification:', err);
@@ -74,8 +83,26 @@ export async function getUserNotifications(recipientAddress: string, limit = 50)
   }
 }
 
-export async function markAsRead(id: string) {
+export async function markAsRead(id: string, userAddress?: string) {
   try {
+    if (userAddress) {
+      // Check notification ownership before updating
+      const { data: existing, error: fetchErr } = await supabase
+        .from('notifications')
+        .select('recipient_address')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+      if (!existing) return null;
+
+      if (existing.recipient_address.toUpperCase() !== userAddress.toUpperCase()) {
+        const error: any = new Error('Forbidden: You can only update your own notifications');
+        error.status = 403;
+        throw error;
+      }
+    }
+
     const { data, error } = await supabase
       .from('notifications')
       .update({ is_read: true })
@@ -116,8 +143,26 @@ export async function markAllAsRead(recipientAddress: string) {
   }
 }
 
-export async function deleteNotification(id: string) {
+export async function deleteNotification(id: string, userAddress?: string) {
   try {
+    if (userAddress) {
+      // Check notification ownership before deleting
+      const { data: existing, error: fetchErr } = await supabase
+        .from('notifications')
+        .select('recipient_address')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+      if (!existing) return false;
+
+      if (existing.recipient_address.toUpperCase() !== userAddress.toUpperCase()) {
+        const error: any = new Error('Forbidden: You can only delete your own notifications');
+        error.status = 403;
+        throw error;
+      }
+    }
+
     const { error } = await supabase
       .from('notifications')
       .delete()

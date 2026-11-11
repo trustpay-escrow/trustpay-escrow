@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
+import { useWalletStore } from '@/store/walletStore';
 
 export interface ChatMessage {
   id: string;
@@ -61,13 +62,59 @@ export function ProjectChatModal({
   };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !projectId) return;
 
     fetchMessages();
 
-    // Auto poll every 3 seconds while chat modal is open
-    const interval = setInterval(fetchMessages, 3000);
-    return () => clearInterval(interval);
+    // Subscribe to real-time SSE stream for project messages and on-chain ledger events
+    let eventSource: EventSource | null = null;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const token = useWalletStore.getState().token;
+      const queryToken = token ? `?token=${encodeURIComponent(token)}` : '';
+      const streamUrl = `${apiUrl}/api/projects/${projectId}/messages/stream${queryToken}`;
+
+      eventSource = new EventSource(streamUrl, { withCredentials: true });
+
+      eventSource.addEventListener('message', (event) => {
+        try {
+          const newMsg: ChatMessage = JSON.parse(event.data);
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+        } catch (err) {
+          console.error('Error parsing live message event:', err);
+        }
+      });
+
+      eventSource.addEventListener('onchain_event', (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          toast.info(`Smart Contract Event: ${payload.topic}`, {
+            description: `On-chain status updated: ${payload.status || 'processed'}`,
+          });
+        } catch (err) {
+          // ignore
+        }
+      });
+
+      eventSource.onerror = () => {
+        // Automatic reconnection by browser EventSource
+      };
+    } catch (err) {
+      console.warn('Real-time project SSE stream failed to connect:', err);
+    }
+
+    // Relaxed background polling every 30 seconds as fallback
+    const interval = setInterval(fetchMessages, 30000);
+
+    return () => {
+      clearInterval(interval);
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, [isOpen, projectId]);
 
   useEffect(() => {
