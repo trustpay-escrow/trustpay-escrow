@@ -8,8 +8,7 @@ import { toast } from 'sonner';
 import { Milestone, Project } from '@/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { ProjectDetailSkeleton } from '@/components/skeletons';
-import { ProjectAuditLog } from '@/components/ProjectAuditLog';
-import { CalendarExportButton } from '@/components/CalendarExportButton';
+import { TimelockCountdownBanner } from '@/components/TimelockCountdownBanner';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
@@ -864,6 +863,22 @@ export default function ProjectDetailsPage() {
               </Button>
             )}
           </div>
+
+          {/* Active Timelock Countdown Banners for Submitted Milestones */}
+          {project.milestones
+            ?.filter((m) => m.status === 'submitted')
+            .map((submittedM) => (
+              <TimelockCountdownBanner
+                key={`timelock-${submittedM.id}`}
+                milestone={submittedM}
+                project={project}
+                onApprove={(m) => setActiveApproveModal(m)}
+                onRequestRevision={(m) => {
+                  setActiveRevisionModal(m);
+                  setRevisionNote('');
+                }}
+              />
+            ))}
 
           {!project.milestones || project.milestones.length === 0 ? (
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-10 text-center flex flex-col items-center justify-center">

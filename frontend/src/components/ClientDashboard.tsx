@@ -10,13 +10,10 @@ import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
 import { ApplicantCard } from './ApplicantCard';
 import { ProjectChatModal } from './ProjectChatModal';
+import { MilestoneBuilderCanvas } from './MilestoneBuilderCanvas';
 import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
-import { useTokenBalance, getBalanceShortfall } from '@/hooks/useCreateProjectForm';
-import { BalanceWarningBadge } from '@/components/BalanceWarningBadge';
-import { ProjectAuditLog } from '@/components/ProjectAuditLog';
-import { CalendarExportButton } from '@/components/CalendarExportButton';
-import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
+import { useOfflineSync, OfflineStatusPill } from '@/hooks/useOfflineSync';
 import {
   createProjectOnChain,
   lockEscrowOnChain,
@@ -112,6 +109,75 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [newMilestoneDeliverableType, setNewMilestoneDeliverableType] = useState('GitHub Repository');
   const [showAddMilestoneModal, setShowAddMilestoneModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { isOnline, persistDraft, loadDraft, removeDraft, queueSubmission } = useOfflineSync({
+    draftKey: 'client-dashboard-project-draft',
+    draftType: 'project',
+  });
+
+  // Restore draft from IndexedDB on initial mount
+  useEffect(() => {
+    let isMounted = true;
+    async function restoreLocalDraft() {
+      const saved = await loadDraft<any>('client-dashboard-project-draft');
+      if (saved && isMounted && (saved.formTitle || saved.formBudget)) {
+        if (saved.formTitle) setFormTitle(saved.formTitle);
+        if (saved.formDescription) setFormDescription(saved.formDescription);
+        if (saved.formCategory) setFormCategory(saved.formCategory);
+        if (saved.customCategory) setCustomCategory(saved.customCategory);
+        if (saved.formProjectType) setFormProjectType(saved.formProjectType);
+        if (saved.formBudget) setFormBudget(saved.formBudget);
+        if (saved.formToken) setFormToken(saved.formToken);
+        if (saved.formDeadline) setFormDeadline(saved.formDeadline);
+        if (saved.formVisibility) setFormVisibility(saved.formVisibility);
+        if (saved.formYieldEnabled !== undefined) setFormYieldEnabled(saved.formYieldEnabled);
+        if (saved.formFreelancerAddress) setFormFreelancerAddress(saved.formFreelancerAddress);
+        if (saved.formMilestones && saved.formMilestones.length > 0) setFormMilestones(saved.formMilestones);
+        toast.info('Restored project draft from local IndexedDB storage');
+      }
+    }
+    restoreLocalDraft();
+    return () => {
+      isMounted = false;
+    };
+  }, [loadDraft]);
+
+  // Auto-save draft every 5 seconds to IndexedDB
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (formTitle || formDescription || (formBudget !== '' && Number(formBudget) > 0)) {
+        persistDraft({
+          formTitle,
+          formDescription,
+          formCategory,
+          customCategory,
+          formProjectType,
+          formBudget,
+          formToken,
+          formDeadline,
+          formVisibility,
+          formYieldEnabled,
+          formFreelancerAddress,
+          formMilestones,
+        });
+      }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [
+    formTitle,
+    formDescription,
+    formCategory,
+    customCategory,
+    formProjectType,
+    formBudget,
+    formToken,
+    formDeadline,
+    formVisibility,
+    formYieldEnabled,
+    formFreelancerAddress,
+    formMilestones,
+    persistDraft,
+  ]);
 
   // Function to fetch real projects from backend
   const fetchBackendProjects = async (pageToFetch = currentPage) => {
@@ -440,11 +506,16 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       return;
     }
 
-    if (hasInsufficientBalance) {
-      toast.error(
-        `Insufficient ${formToken} balance. Fund your wallet with at least ${balanceShortfall.toLocaleString()} more ${formToken} before creating this escrow.`
-      );
-      return;
+    if (formMilestones.length > 0 && formBudget && Number(formBudget) > 0) {
+      const msSum = formMilestones.reduce((acc, m) => acc + (Number(m.amount) || 0), 0);
+      const budgetNum = Number(formBudget);
+      const diff = Math.abs(msSum - budgetNum);
+      if (diff > 0.05 * budgetNum && diff > 1) {
+        toast.error(
+          `Cannot submit: Milestone allocations (${msSum.toFixed(2)} ${formToken}) must equal 100% of project budget (${budgetNum} ${formToken}). Please auto-balance.`
+        );
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -504,6 +575,27 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         estimated_yield: Number(calculateEstimatedYield()),
       };
 
+      if (!isOnline) {
+        await queueSubmission({
+          url: `${apiUrl}/api/projects`,
+          method: 'POST',
+          body,
+          description: `Create project: ${formTitle}`,
+        });
+        await removeDraft('client-dashboard-project-draft');
+        toast.warning(
+          'Offline: Project creation queued locally. Will automatically sync to server when connection returns!',
+          { duration: 6000 }
+        );
+        setFormTitle('');
+        setFormDescription('');
+        setFormBudget('');
+        setFormMilestones([]);
+        setIsSubmitting(false);
+        setActiveTab('projects');
+        return;
+      }
+
       const res = await authFetch(`${apiUrl}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -529,6 +621,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       }
 
       toast.success('Project saved successfully!');
+      await removeDraft('client-dashboard-project-draft');
       setFormTitle('');
       setFormDescription('');
       setFormBudget('');
@@ -570,6 +663,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               {activeTab === 'create' && 'create project'}
               {activeTab === 'applicants' && 'applicants'}
             </span>
+            <OfflineStatusPill className="ml-2" />
           </div>
 
           <div className="flex items-center space-x-1 bg-[#18181b] p-1 rounded-xl border border-[#27272a]">
@@ -714,6 +808,11 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                       {proj.project_id_onchain !== undefined && proj.project_id_onchain !== null && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
                           <span>✦</span> Soroban Escrow #{proj.project_id_onchain.toString()}
+                        </span>
+                      )}
+                      {proj.milestones?.some((m) => m.status === 'submitted') && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse">
+                          <span>⏳</span> Timelock Active
                         </span>
                       )}
                       {(proj.status === 'in_progress' || (proj.status as string) === 'In progress') && (
@@ -1231,79 +1330,14 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 )}
               </div>
 
-              {/* Milestones Builder Section */}
+              {/* Milestones Builder Canvas Section */}
               <div className="pt-4 border-t border-[#27272a] space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm sm:text-base font-bold text-white">
-                    Milestones ({formMilestones.length})
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddMilestoneModal(true)}
-                    className="inline-flex items-center space-x-1 px-3 py-1.5 bg-transparent hover:bg-[#27272a] text-white font-semibold text-xs rounded-lg border border-[#3f3f46] transition-all"
-                  >
-                    <span>+ Add milestone</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2.5">
-                  {formMilestones.length === 0 ? (
-                    <div className="text-center py-6 bg-[#1c1c20]/50 border border-dashed border-[#333338] rounded-xl">
-                      <p className="text-xs text-[#a1a1aa]">No milestones added yet. Click &quot;+ Add milestone&quot; to define project milestones.</p>
-                    </div>
-                  ) : (
-                    formMilestones.map((m, idx) => (
-                      <div
-                        key={m.id}
-                        className="bg-[#1c1c20] border border-[#27272a] rounded-xl p-4 space-y-2 group transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                              #{idx + 1}
-                            </span>
-                            <span className="text-sm font-bold text-white">
-                              {m.title}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <span className="text-sm font-extrabold text-[#22c55e]">
-                              {m.amount} {selectedProjectForApplicants?.token || 'USDC'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMilestone(m.id)}
-                              className="text-[#71717a] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                              title="Remove milestone"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-
-                        {m.description && (
-                          <p className="text-xs text-[#a1a1aa] line-clamp-2">
-                            {m.description}
-                          </p>
-                        )}
-
-                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-[#71717a]">
-                          {m.deliverable_type && (
-                            <span className="bg-[#232326] px-2 py-0.5 rounded border border-[#333338] text-[#e4e4e7]">
-                              📦 {m.deliverable_type}
-                            </span>
-                          )}
-                          <span>• Revisions: {m.revision_limit ?? 0}</span>
-                          {m.due_date && (
-                            <span>• Due: {new Date(m.due_date).toLocaleDateString()}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <MilestoneBuilderCanvas
+                  milestones={formMilestones as any}
+                  totalBudget={Number(formBudget) || 0}
+                  currency={formToken}
+                  onChange={(updated) => setFormMilestones(updated as any)}
+                />
               </div>
 
               {/* Save Project Button */}
