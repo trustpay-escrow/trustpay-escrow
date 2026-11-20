@@ -1051,6 +1051,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <span className="text-sm font-bold text-white">Earn Yield with Blend Protocol</span>
+                      <TooltipHelper termKey="blend-yield" />
                       <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         ~4.5% APY
                       </span>

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
+import { TruncatedText } from './TruncatedText';
 
 export interface ApplicantCardData {
   id: string;
@@ -112,9 +113,9 @@ export function ApplicantCard({ applicant, onAccept, onDeny, onOpenChat, isProce
         <h4 className="text-xs font-bold text-[#e4e4e7] uppercase tracking-wider">
           Cover Note
         </h4>
-        <p className="text-xs sm:text-sm text-[#a1a1aa] leading-relaxed whitespace-pre-line bg-[#18181b] p-3.5 rounded-xl border border-[#27272a]">
-          &quot;{coverText}&quot;
-        </p>
+        <div className="bg-[#18181b] p-3.5 rounded-xl border border-[#27272a]">
+          <TruncatedText text={coverText} lines={3} />
+        </div>
       </div>
 
       {/* Portfolio Link Section */}
