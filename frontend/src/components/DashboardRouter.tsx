@@ -4,12 +4,14 @@ import React from 'react';
 import { useWalletStore } from '@/store/walletStore';
 import { ClientDashboard } from './ClientDashboard';
 import { FreelancerDashboard } from './FreelancerDashboard';
+import { ArbiterDashboard } from './ArbiterDashboard';
+import { RoleSwitcher } from './RoleSwitcher';
 import WalletConnect from './WalletConnect';
 import NotificationBell from './NotificationBell';
 import { CryptoId } from '@/components/ui/CryptoId';
 
 export function DashboardRouter() {
-  const { address, activeRole, setActiveRole, disconnect } = useWalletStore();
+  const { address, activeRole, disconnect } = useWalletStore();
 
   // AUTH GUARD: If user has not connected wallet, block dashboard and require wallet connect
   if (!address) {
@@ -69,34 +71,15 @@ export function DashboardRouter() {
 
           <div className="flex items-center space-x-2">
             <span className="text-[#a1a1aa] font-medium text-xs">Viewing as:</span>
-            <div className="flex items-center space-x-1 bg-[#232326] p-1 rounded-xl border border-[#333338]">
-              <button
-                onClick={() => setActiveRole('client')}
-                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center space-x-1 ${
-                  activeRole === 'client'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]'
-                }`}
-              >
-                <span>👤 Client</span>
-              </button>
-              <button
-                onClick={() => setActiveRole('freelancer')}
-                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center space-x-1 ${
-                  activeRole === 'freelancer'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]'
-                }`}
-              >
-                <span>💼 Freelancer</span>
-              </button>
-            </div>
+            <RoleSwitcher />
           </div>
         </div>
       </div>
 
       {/* Render Active View matching Capability */}
-      {activeRole === 'client' ? <ClientDashboard /> : <FreelancerDashboard />}
+      {activeRole === 'client' && <ClientDashboard />}
+      {activeRole === 'freelancer' && <FreelancerDashboard />}
+      {activeRole === 'arbiter' && <ArbiterDashboard />}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { submitMilestoneOnChain, type TxStage } from '@/lib/soroban';
 import {
   deliverableSubmissionSchema,
@@ -97,14 +98,9 @@ export function MilestoneSubmitModal({
     objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !submitting) onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onClose, submitting]);
+  useEscapeKey(() => {
+    if (!submitting) onClose();
+  }, isOpen);
 
   if (!isOpen) return null;
 

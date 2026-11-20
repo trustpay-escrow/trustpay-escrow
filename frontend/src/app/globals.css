@@ -123,3 +123,13 @@ button {
 .animate-skeleton-pulse {
   animation: skeleton-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Card hover border gradient effect */
+.card-hover-border {
+  border-color: var(--card-border);
+  transition: border-color 200ms ease-out;
+}
+
+.card-hover-border:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+}

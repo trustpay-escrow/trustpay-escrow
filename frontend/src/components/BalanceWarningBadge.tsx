@@ -10,11 +10,13 @@ export interface BalanceWarningBadgeProps {
   token: string;
   address?: string | null;
   isLoading?: boolean;
+  loading?: boolean;
   error?: string | null;
   className?: string;
   showSufficientState?: boolean;
   faucetUrl?: string;
   isTestnet?: boolean;
+  onRefresh?: () => void;
 }
 
 function formatAmount(value: number): string {
@@ -44,18 +46,21 @@ export function BalanceWarningBadge({
   token,
   address,
   isLoading = false,
+  loading,
   error = null,
   className = '',
   showSufficientState = true,
   faucetUrl,
   isTestnet,
+  onRefresh,
 }: BalanceWarningBadgeProps) {
+  const isCurrentlyLoading = isLoading || Boolean(loading);
   const shortfall = getShortfall(balance, budget);
   const hasBudget = Number(budget) > 0;
   const testnet = isTestnet ?? isTestnetNetwork();
   const friendbotUrl = faucetUrl || (address ? getFriendbotUrl(address) : '');
 
-  if (isLoading) {
+  if (isCurrentlyLoading) {
     return (
       <div
         data-testid="balance-check-loading"

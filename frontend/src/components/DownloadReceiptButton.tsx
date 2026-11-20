@@ -9,6 +9,7 @@ import {
   calculateReceiptTotals,
 } from '@/lib/receipt-generator';
 import { getStellarExplorerUrl } from '@/lib/soroban';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 export interface DownloadReceiptButtonProps {
   project: Project;
@@ -32,6 +33,8 @@ export function DownloadReceiptButton({
   const [businessName, setBusinessName] = useState('TrustPay Escrow');
   const [notes, setNotes] = useState('');
   const [vatRate, setVatRate] = useState('0');
+
+  useEscapeKey(() => setIsOpen(false), isOpen);
 
   const resolvedMilestone =
     milestone || project.milestones?.find((item) => item.status === 'approved') || project.milestones?.[0];
