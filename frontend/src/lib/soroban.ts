@@ -669,3 +669,157 @@ export async function autoReleaseMilestoneOnChain(params: {
   });
 }
 
+/**
+ * Prepares an unsigned Soroban transaction for off-band (SEP-0007) signing.
+ * Unlike invokeSorobanMethod this does NOT require the Freighter extension —
+ * the returned XDR is meant to be scanned by a mobile wallet via QR code.
+ */
+export async function prepareSep07Transaction(options: {
+  callerAddress: string;
+  contractAddress?: string;
+  functionName: string;
+  args: xdr.ScVal[];
+}): Promise<{ txXdr: string; sourceAccount: string; contractAddress: string; functionName: string }> {
+  const { callerAddress, functionName, args } = options;
+  const targetContract = options.contractAddress || DEFAULT_ESCROW_CONTRACT_ID;
+
+  await ensureAccountExists(callerAddress);
+
+  const server = getSorobanRpcServer();
+  const sourceAccount = await server.getAccount(callerAddress);
+
+  const baseTx = new TransactionBuilder(sourceAccount, {
+    fee: '100000',
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: targetContract,
+        function: functionName,
+        args,
+      })
+    )
+    .setTimeout(180)
+    .build();
+
+  const preparedTx = await server.prepareTransaction(baseTx);
+
+  return {
+    txXdr: preparedTx.toXDR(),
+    sourceAccount: callerAddress,
+    contractAddress: targetContract,
+    functionName,
+  };
+}
+
+/**
+ * Builds a SEP-0007 `web+stellar:tx` URI for a prepared transaction XDR.
+ * Compatible with Lobstr, Solar, and StellarX mobile wallets.
+ */
+export function buildSep07Uri(txXdr: string, options?: { callbackUrl?: string; memo?: string }): string {
+  const params = new URLSearchParams();
+  params.set('xdr', txXdr);
+  params.set('network_passphrase', STELLAR_NETWORK_PASSPHRASE);
+  params.set('replace', 'web+stellar:tx');
+  if (options?.callbackUrl) params.set('callback', options.callbackUrl);
+  if (options?.memo) params.set('memo', options.memo);
+  return `web+stellar:tx?${params.toString()}`;
+}
+
+/**
+ * Polls Horizon for a transaction submitted by `sourceAccount` after `startedAt`.
+ * Mobile wallets sign and broadcast the SEP-0007 transaction themselves, so we
+ * detect submission by watching the account's recent ledger transactions.
+ * Times out after `timeoutMs` (default 60s).
+ */
+export async function pollSep07Submission(
+  sourceAccount: string,
+  startedAt: Date,
+  timeoutMs = 60_000
+): Promise<{ txHash: string; createdAt: string }> {
+  const deadline = Date.now() + timeoutMs;
+  const startedIso = startedAt.toISOString();
+
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(
+        `${HORIZON_URL}/transactions?account=${encodeURIComponent(sourceAccount)}&order=desc&limit=10`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const records: any[] = Array.isArray(data?._embedded?.records) ? data._embedded.records : [];
+        const match = records.find((r) => r.created_at && r.created_at >= startedIso);
+        if (match?.hash) {
+          return { txHash: match.hash, createdAt: match.created_at };
+        }
+      }
+    } catch {
+      // Transient network errors — keep polling until deadline
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+
+  throw new Error('Timed out waiting for mobile wallet signature (60s). Please try again.');
+}
+
+/**
+ * Confirms a transaction reached SUCCESS on the Soroban RPC ledger.
+ */
+export async function confirmSorobanTransaction(txHash: string, maxAttempts = 20): Promise<boolean> {
+  const server = getSorobanRpcServer();
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const tx = await server.getTransaction(txHash);
+      if (tx.status === 'SUCCESS') return true;
+      if (tx.status === 'FAILED') return false;
+    } catch {
+      // Not yet ingested — keep polling
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+/**
+ * Claims accumulated arbitration reward fees for an approved arbiter.
+ */
+export async function claimArbiterFeesOnChain(params: {
+  arbiterAddress: string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const { arbiterAddress, contractAddress, onStatusUpdate } = params;
+
+  const args: xdr.ScVal[] = [Address.fromString(arbiterAddress).toScVal()];
+
+  return invokeSorobanMethod({
+    callerAddress: arbiterAddress,
+    contractAddress,
+    functionName: 'claim_arbiter_fees',
+    args,
+    onStatusUpdate,
+  });
+}
+
+/**
+ * Fetches recent Soroban contract events for diagnostic inspection.
+ */
+export async function fetchContractEvents(options: {
+  contractId?: string;
+  ledgerWindow?: number;
+}): Promise<any[]> {
+  const server = getSorobanRpcServer();
+  const latest = await server.getLatestLedger();
+  const ledgerWindow = options.ledgerWindow ?? 500;
+
+  const request: any = {
+    startLedger: Math.max(1, latest.sequence - ledgerWindow),
+    filters: options.contractId
+      ? [{ type: 'contract', contractId: options.contractId }]
+      : undefined,
+  };
+
+  const res: any = await server.getEvents(request);
+  return Array.isArray(res?.events) ? res.events : [];
+}
+
