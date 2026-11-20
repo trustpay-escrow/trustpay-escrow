@@ -25,6 +25,20 @@ describe('ApplicantCard Component', () => {
     expect(screen.getByText('Pending Review')).toBeInTheDocument();
   });
 
+  it('renders the stellar address in the shared monospace style', () => {
+    render(
+      <ApplicantCard
+        applicant={mockApplicant}
+        onAccept={vi.fn()}
+        onDeny={vi.fn()}
+      />
+    );
+
+    const address = screen.getByText('GAUBK6P5Z7I7ZXZZ6D7XQWJ7M2U3H7T5W7O6X7Y8Z9A1B2C3D4E5F6G7');
+    expect(address).toHaveAttribute('data-crypto-id');
+    expect(address).toHaveClass('font-mono', 'tracking-tight', 'text-xs', 'sm:text-sm');
+  });
+
   it('calls onAccept with applicant ID when Accept button is clicked', async () => {
     const onAcceptMock = vi.fn();
     render(

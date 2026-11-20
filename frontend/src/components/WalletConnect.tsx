@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { isConnected, requestAccess, getNetworkDetails, setAllowed, signTransaction } from "@stellar/freighter-api";
 import { toast } from "sonner";
 import { useWalletStore } from "@/store/walletStore";
+import { CryptoId } from "@/components/ui/CryptoId";
 import { useRouter } from "next/navigation";
 
 const getErrorMessage = (err: any, prefix = ""): string => {
@@ -520,9 +521,7 @@ export default function WalletConnect() {
           </div>
 
           <div className="flex items-center gap-2 bg-[#18181b] px-3.5 py-2 rounded-xl border border-[#3f3f46] w-full justify-between">
-            <span className="font-mono text-xs text-white tracking-wide truncate">
-              {address.slice(0, 8)}...{address.slice(-8)}
-            </span>
+            <CryptoId value={address} head={8} tail={8} className="text-white truncate" />
             <button
               type="button"
               onClick={copyAddress}
@@ -703,7 +702,7 @@ export default function WalletConnect() {
                   value={manualAddress}
                   onChange={(e) => setManualAddress(e.target.value.trim())}
                   placeholder="GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-                  className="w-full px-3 py-2 bg-[#18181b] border border-[#3f3f46] rounded-lg text-white font-mono text-xs placeholder-[#71717a] focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#18181b] border border-[#3f3f46] rounded-lg text-white font-mono tracking-tight text-xs placeholder-[#71717a] focus:outline-none focus:border-blue-500"
                 />
                 <button
                   type="button"

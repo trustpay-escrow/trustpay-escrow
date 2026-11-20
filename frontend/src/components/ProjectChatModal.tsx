@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { useWalletStore } from '@/store/walletStore';
+import { CryptoId } from '@/components/ui/CryptoId';
 
 export interface ChatMessage {
   id: string;
@@ -164,8 +165,6 @@ export function ProjectChatModal({
 
   if (!isOpen) return null;
 
-  const truncateAddr = (addr: string) =>
-    addr ? `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}` : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
@@ -184,11 +183,14 @@ export function ProjectChatModal({
             <h3 className="text-base font-bold text-white truncate max-w-sm sm:max-w-md">
               {projectTitle}
             </h3>
-            <div className="text-[11px] text-[#a1a1aa] flex items-center gap-1.5 font-mono">
+            <div className="text-xs text-[#a1a1aa] flex items-center gap-1.5">
               <span>To:</span>
-              <span className="bg-[#232326] px-1.5 py-0.5 rounded border border-[#333338] text-[#e4e4e7]">
-                {truncateAddr(receiverAddress)}
-              </span>
+              <CryptoId
+                value={receiverAddress}
+                head={6}
+                tail={4}
+                className="bg-[#232326] px-1.5 py-0.5 rounded border border-[#333338] text-[#e4e4e7]"
+              />
             </div>
           </div>
 

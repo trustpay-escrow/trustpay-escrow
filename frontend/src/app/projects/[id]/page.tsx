@@ -12,6 +12,7 @@ import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
+import { CryptoId } from '@/components/ui/CryptoId';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import {
   createProjectOnChain,
@@ -713,29 +714,40 @@ export default function ProjectDetailsPage() {
           <div className="mt-6 pt-6 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block mb-0.5">👤 Client Wallet</span>
-              <span className="font-mono text-slate-200 truncate block">
-                {project.client_address
-                  ? `${project.client_address.slice(0, 8)}...${project.client_address.slice(-6)}`
-                  : 'Unassigned'}
-              </span>
+              {project.client_address ? (
+                <CryptoId
+                  value={project.client_address}
+                  head={8}
+                  tail={6}
+                  className="text-slate-200 truncate block"
+                />
+              ) : (
+                <span className="text-slate-200 truncate block">Unassigned</span>
+              )}
             </div>
 
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block mb-0.5">🛠️ Freelancer Wallet</span>
-              <span className="font-mono text-slate-200 truncate block">
-                {project.freelancer_address
-                  ? `${project.freelancer_address.slice(0, 8)}...${project.freelancer_address.slice(-6)}`
-                  : 'Pending Assignment'}
-              </span>
+              {project.freelancer_address ? (
+                <CryptoId
+                  value={project.freelancer_address}
+                  head={8}
+                  tail={6}
+                  className="text-slate-200 truncate block"
+                />
+              ) : (
+                <span className="text-slate-200 truncate block">Pending Assignment</span>
+              )}
             </div>
 
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block mb-0.5">⚖️ Designated Arbiter</span>
-              <span className="font-mono text-slate-200 truncate block">
-                {project.arbiter_address
-                  ? `${project.arbiter_address.slice(0, 8)}...${project.arbiter_address.slice(-6)}`
-                  : `${DEFAULT_ARBITER_ADDRESS.slice(0, 8)}...${DEFAULT_ARBITER_ADDRESS.slice(-6)}`}
-              </span>
+              <CryptoId
+                value={project.arbiter_address || DEFAULT_ARBITER_ADDRESS}
+                head={8}
+                tail={6}
+                className="text-slate-200 truncate block"
+              />
             </div>
           </div>
 
@@ -923,14 +935,14 @@ export default function ProjectDetailsPage() {
                       {m.description && <p className="text-sm text-slate-400 pl-10">{m.description}</p>}
 
                       {m.deliverable_hash && (
-                        <div className="pl-10 pt-1 text-xs text-indigo-300 flex items-center gap-2 flex-wrap font-mono">
-                          <span className="text-slate-500 font-sans font-medium">Deliverable Hash:</span>
-                          <span
-                            className="bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 truncate max-w-sm text-[11px]"
+                        <div className="pl-10 pt-1 text-xs text-indigo-300 flex items-center gap-2 flex-wrap">
+                          <span className="text-slate-500 font-medium">Deliverable Hash:</span>
+                          <CryptoId
+                            value={m.deliverable_hash}
+                            prefix="🔒 "
                             title={m.deliverable_hash}
-                          >
-                            🔒 {m.deliverable_hash}
-                          </span>
+                            className="bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 truncate max-w-sm"
+                          />
                         </div>
                       )}
 
@@ -1090,7 +1102,7 @@ export default function ProjectDetailsPage() {
                   value={deliverableHash}
                   onChange={(e) => setDeliverableHash(e.target.value)}
                   placeholder="bafybeic... or sha256 hex (auto-generated if left blank)"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono tracking-tight text-xs focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -1215,11 +1227,16 @@ export default function ProjectDetailsPage() {
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>Recipient Freelancer:</span>
-                <span className="font-mono text-slate-400">
-                  {project.freelancer_address
-                    ? `${project.freelancer_address.slice(0, 8)}...${project.freelancer_address.slice(-6)}`
-                    : 'Designated Freelancer'}
-                </span>
+                {project.freelancer_address ? (
+                  <CryptoId
+                    value={project.freelancer_address}
+                    head={8}
+                    tail={6}
+                    className="text-slate-400"
+                  />
+                ) : (
+                  <span className="text-slate-400">Designated Freelancer</span>
+                )}
               </div>
             </div>
 
@@ -1262,14 +1279,18 @@ export default function ProjectDetailsPage() {
                   value={fundFreelancerAddress}
                   onChange={(e) => setFundFreelancerAddress(e.target.value)}
                   placeholder="G..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 font-mono tracking-tight text-sm focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-slate-400">
                 <div className="flex justify-between">
                   <span>Contract Target:</span>
-                  <span className="font-mono text-indigo-300 text-[11px] truncate max-w-[200px]">{DEFAULT_ESCROW_CONTRACT_ID}</span>
+                  <CryptoId
+                    value={DEFAULT_ESCROW_CONTRACT_ID}
+                    title={DEFAULT_ESCROW_CONTRACT_ID}
+                    className="text-indigo-300 truncate max-w-[200px]"
+                  />
                 </div>
                 <div className="flex justify-between">
                   <span>Total Escrow Deposit:</span>
@@ -1437,9 +1458,9 @@ export default function ProjectDetailsPage() {
                 href={getStellarExplorerUrl(txState.txHash, 'tx')}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-indigo-400 hover:text-indigo-300 underline font-mono block pt-1"
+                className="text-xs text-indigo-400 hover:text-indigo-300 underline block pt-1"
               >
-                View on Stellar.Expert ({txState.txHash.slice(0, 8)}...) ↗
+                View on Stellar.Expert (<CryptoId value={txState.txHash} head={8} tail={0} />) ↗
               </a>
             )}
 
