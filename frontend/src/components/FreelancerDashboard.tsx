@@ -14,6 +14,7 @@ import { ProjectCardSkeletonList, ProposalSkeletonList } from '@/components/skel
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
 import { ProjectFilterBar } from '@/components/ProjectFilterBar';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { triggerCelebrationConfetti } from '@/lib/confetti';
 
 export function FreelancerDashboard() {
   const router = useRouter();
@@ -350,6 +351,7 @@ export function FreelancerDashboard() {
         setProposals((prev) => [newProp, ...prev]);
 
         toast.success('Application submitted successfully!');
+        triggerCelebrationConfetti();
         setSelectedProject(null);
         setProposalCoverNote('');
         setProposalPortfolioUrl('');

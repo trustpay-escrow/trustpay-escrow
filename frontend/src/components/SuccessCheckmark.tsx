@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { triggerCelebrationConfetti } from '@/lib/confetti';
 
 export interface SuccessCheckmarkProps {
   isOpen: boolean;
@@ -75,6 +76,7 @@ export function SuccessCheckmark({
       if (playSound && !audioPlayedRef.current) {
         audioPlayedRef.current = true;
         playCelebrationChime();
+        triggerCelebrationConfetti();
       }
 
       const handleKeyDown = (e: KeyboardEvent) => {
