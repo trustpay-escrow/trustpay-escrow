@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
+import { CryptoId } from '@/components/ui/CryptoId';
 
 export interface ApplicantCardData {
   id: string;
@@ -77,9 +78,10 @@ export function ApplicantCard({
             Freelancer Stellar Address
           </span>
           <div className="flex items-center space-x-2">
-            <span className="font-mono text-xs sm:text-sm text-white bg-[#232326] px-3 py-1 rounded-xl border border-[#333338] select-all break-all">
-              {walletAddr}
-            </span>
+            <CryptoId
+              value={walletAddr}
+              className="sm:text-sm text-white bg-[#232326] px-3 py-1 rounded-xl border border-[#333338] select-all break-all"
+            />
             <button
               onClick={handleCopyWallet}
               className="text-[#a1a1aa] hover:text-white transition-colors p-1 text-xs"

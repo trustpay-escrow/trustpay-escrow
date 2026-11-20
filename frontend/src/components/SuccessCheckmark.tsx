@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+import { CryptoId } from '@/components/ui/CryptoId';
 
 export interface SuccessCheckmarkProps {
   isOpen: boolean;
@@ -102,11 +103,6 @@ export function SuccessCheckmark({
 
   if (!isOpen) return null;
 
-  const truncateAddress = (addr: string) => {
-    if (!addr || addr.length <= 12) return addr;
-    return `${addr.slice(0, 6)}...${addr.slice(-6)}`;
-  };
-
   return (
     <div
       role="dialog"
@@ -200,16 +196,20 @@ export function SuccessCheckmark({
             {recipientAddress && (
               <div className="flex items-baseline justify-between pt-1 border-t border-slate-800/60 text-xs">
                 <span className="text-slate-400">Counterparty:</span>
-                <span className="font-mono text-slate-300" title={recipientAddress}>
-                  {truncateAddress(recipientAddress)}
-                </span>
+                <CryptoId
+                  value={recipientAddress}
+                  head={6}
+                  tail={6}
+                  title={recipientAddress}
+                  className="text-slate-300"
+                />
               </div>
             )}
 
             {txHash && (
-              <div className="text-[11px] font-mono text-slate-500 truncate pt-1">
+              <div className="text-xs text-slate-500 truncate pt-1">
                 <span className="text-slate-600 mr-1">Tx:</span>
-                <span className="text-indigo-400">{txHash}</span>
+                <CryptoId value={txHash} className="text-indigo-400" />
               </div>
             )}
           </div>

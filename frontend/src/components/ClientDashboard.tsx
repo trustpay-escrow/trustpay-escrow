@@ -1097,7 +1097,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                       value={formFreelancerAddress}
                       onChange={(e) => setFormFreelancerAddress(e.target.value)}
                       placeholder="G..."
-                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono tracking-tight text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 )}
