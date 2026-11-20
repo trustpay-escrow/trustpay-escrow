@@ -66,6 +66,7 @@ For the Stellar ecosystem, TrustPay Escrow:
 - **Project File Attachments:** Secure off-chain file uploads stored in Supabase with lightbox image previews.
 - **Automated Timelocks & Notifications:** Express background cron jobs monitor milestone deadlines, auto-release inactive approvals, and send real-time user notifications.
 - **On-Chain Dispute Arbitration:** Built-in dispute pathway for client or freelancer intervention with arbiter resolution logic.
+- **Liquidity Depth Optimizer:** For escrows above 10,000 units, the create-project form previews AMM pool reserves, flags slippage above 1.0%, and recommends multi-tranche deposits for DEX funding paths.
 
 ---
 
@@ -305,6 +306,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser with the Freighter extension installed.
+
+The liquidity optimizer reads live pool reserves when `NEXT_PUBLIC_<BASE>_<QUOTE>_POOL_ADDRESS` is configured (see `.env.example`); otherwise it renders clearly-labelled illustrative depth. The AMM maths and optimizer UI are covered by `npm test`.
 
 ---
 

@@ -44,6 +44,15 @@ describe('MilestoneSubmitModal', () => {
     expect(screen.getByTestId('submit-deliverable')).toBeInTheDocument();
   });
 
+  it('calls onClose once when Escape is pressed', () => {
+    const onClose = vi.fn();
+    render(<MilestoneSubmitModal isOpen onClose={onClose} project={project} milestone={milestone} />);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects invalid GitHub PR links before adding them', async () => {
     render(<MilestoneSubmitModal isOpen onClose={vi.fn()} project={project} milestone={milestone} />);
     const input = screen.getByTestId('pr-url-input');

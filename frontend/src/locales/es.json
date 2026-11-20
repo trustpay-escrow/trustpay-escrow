@@ -1,0 +1,82 @@
+{
+  "nav": {
+    "howItWorks": "Cómo Funciona",
+    "features": "Características",
+    "testimonials": "Testimonios",
+    "connectWallet": "Conectar Billetera",
+    "faq": "Preguntas Frecuentes",
+    "launchDashboard": "Abrir Panel"
+  },
+  "hero": {
+    "badge": "Fideicomiso Stellar de Próxima Generación",
+    "title": "Fideicomiso Descentralizado para Freelancers en Stellar",
+    "description": "Bloquea fondos en contratos inteligentes Soroban. Libera pagos de hitos de forma segura con protección de disputa por arbitraje dual y tarifas de red mínimas.",
+    "createProject": "Crear Proyecto de Fideicomiso",
+    "browseProjects": "Explorar Proyectos",
+    "statsVolume": "+$2.4M",
+    "statsVolumeLabel": "Volumen en Fideicomiso",
+    "statsSpeed": "< 3s",
+    "statsSpeedLabel": "Velocidad de Liquidación",
+    "statsFee": "< $0.001",
+    "statsFeeLabel": "Tarifa Media de Red"
+  },
+  "buttons": {
+    "submit": "Enviar",
+    "cancel": "Cancelar",
+    "next": "Siguiente Paso",
+    "back": "Atrás",
+    "saveDraft": "Guardar Borrador",
+    "restoreDraft": "Restaurar Borrador",
+    "createProject": "Crear Proyecto",
+    "depositEscrow": "Confirmar y Depositar Fideicomiso",
+    "markAllRead": "Marcar todo como leído",
+    "filter": "Filtrar",
+    "close": "Cerrar",
+    "resolveDispute": "Resolver Disputa"
+  },
+  "status": {
+    "active": "Activo",
+    "completed": "Completado",
+    "disputed": "En Disputa",
+    "pending": "Pendiente",
+    "approved": "Aprobado",
+    "draft": "Borrador"
+  },
+  "wizard": {
+    "step1Title": "Resumen y Categoría",
+    "step1Desc": "Define el título, categoría y alcance del proyecto",
+    "step2Title": "Hitos y Plazos",
+    "step2Desc": "Establece presupuesto, fechas de entrega y tareas",
+    "step3Title": "Selección de Token y Rendimiento",
+    "step3Desc": "Selecciona el token de fideicomiso y activa rendimiento",
+    "step4Title": "Revisión en Cadena y Depósito",
+    "step4Desc": "Revisa los parámetros del proyecto y bloquea los fondos",
+    "stepIndicator": "Paso {current} de {total}"
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "all": "Todas",
+    "escrow": "Fideicomiso",
+    "proposals": "Propuestas",
+    "disputes": "Disputas",
+    "system": "Sistema",
+    "noNotifications": "Aún no hay notificaciones",
+    "soundSettings": "Alertas de Sonido",
+    "mute": "Silenciar Sonidos",
+    "unmute": "Activar Sonidos"
+  },
+  "dispute": {
+    "title": "Mediación de Disputas",
+    "stepperDisputeRaised": "Disputa Iniciada",
+    "stepperStatementFiled": "Declaración Presentada",
+    "stepperCounterEvidence": "Contraevidencia",
+    "stepperArbiterReview": "Revisión del Árbitro",
+    "scopeTitle": "Alcance Original del Proyecto",
+    "deliverablesTitle": "Entregables y Evidencia",
+    "arbiterVerdict": "Veredicto del Árbitro",
+    "clientRefund": "Monto de Reembolso al Cliente",
+    "freelancerPayout": "Monto de Pago al Freelancer",
+    "executeRuling": "Ejecutar Resolución en Cadena",
+    "privateNotes": "Notas Privadas del Árbitro (Restringido)"
+  }
+}

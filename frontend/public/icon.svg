@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="shieldGrad" x1="256" y1="32" x2="256" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#09090b" />
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#818cf8" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Ambient Glow -->
+  <path d="M256 40 C350 40 440 70 440 180 C440 320 340 420 256 468 C172 420 72 320 72 180 C72 70 162 40 256 40 Z" fill="#6366f1" opacity="0.25" filter="url(#glow)"/>
+
+  <!-- Outer Shield Border -->
+  <path d="M256 44 C346 44 432 72 432 178 C432 312 336 408 256 454 C176 408 80 312 80 178 C80 72 166 44 256 44 Z" fill="url(#borderGrad)"/>
+
+  <!-- Inner Shield Fill -->
+  <path d="M256 64 C332 64 406 88 406 178 C406 296 322 382 256 424 C190 382 106 296 106 178 C106 88 180 64 256 64 Z" fill="url(#shieldGrad)"/>
+
+  <!-- Escrow Verification Checkmark -->
+  <path d="M180 250 L232 306 L338 186" stroke="#ffffff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

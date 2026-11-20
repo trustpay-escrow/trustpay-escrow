@@ -1,7 +1,7 @@
 import { authFetch } from '@/lib/api';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWalletStore } from '@/store/walletStore';
-import { NotificationItem } from '@/types/notification';
+import { NotificationItem, NotificationCategory, getNotificationCategory } from '@/types/notification';
 import { toast } from 'sonner';
 
 const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -11,6 +11,7 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<NotificationCategory>('all');
 
   const fetchNotifications = useCallback(async (silent = false) => {
     if (!address) {
@@ -178,9 +179,38 @@ export function useNotifications() {
     }
   };
 
+  const filteredNotifications = useMemo(() => {
+    if (activeTab === 'all') return notifications;
+    return notifications.filter((n) => getNotificationCategory(n) === activeTab);
+  }, [notifications, activeTab]);
+
+  const unreadCountsByCategory = useMemo(() => {
+    const counts: Record<NotificationCategory, number> = {
+      all: 0,
+      escrow: 0,
+      proposals: 0,
+      disputes: 0,
+      system: 0,
+    };
+    notifications.forEach((item) => {
+      if (!item.is_read) {
+        counts.all += 1;
+        const cat = getNotificationCategory(item);
+        if (cat in counts) {
+          counts[cat] += 1;
+        }
+      }
+    });
+    return counts;
+  }, [notifications]);
+
   return {
     notifications,
+    filteredNotifications,
     unreadCount,
+    unreadCountsByCategory,
+    activeTab,
+    setActiveTab,
     loading,
     markAsRead,
     markAllAsRead,

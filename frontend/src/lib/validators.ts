@@ -1,5 +1,39 @@
 import { z } from 'zod';
 
+export const step1OverviewSchema = z.object({
+  title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title is too long'),
+  description: z.string().min(20, 'Description must be at least 20 characters').max(2000, 'Description is too long'),
+  category: z.enum(['Development', 'Design', 'Writing', 'Marketing', 'Other'], {
+    message: 'Invalid category selected'
+  }),
+  custom_category: z.string().optional(),
+  visibility: z.enum(['Public', 'Private'], {
+    message: 'Visibility must be Public or Private'
+  }),
+});
+
+export const step2MilestonesSchema = z.object({
+  budget: z.number().positive('Budget must be greater than 0').max(1000000, 'Budget exceeds maximum limit'),
+  deadline: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: 'Invalid deadline date',
+  }).refine((val) => {
+    const selectedDate = new Date(val);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return selectedDate >= today;
+  }, {
+    message: 'Deadline cannot be in the past',
+  }),
+});
+
+export const step3TokenYieldSchema = z.object({
+  token: z.enum(['USDC', 'EURC', 'XLM', 'PYUSD']),
+  token_address: z.string().optional(),
+  yield_enabled: z.boolean().optional().default(false),
+  estimated_yield: z.number().optional().default(0),
+  blend_pool_address: z.string().optional(),
+});
+
 export const projectSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters').max(100, 'Title is too long'),
   description: z.string().min(20, 'Description must be at least 20 characters').max(2000, 'Description is too long'),

@@ -38,3 +38,50 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
 };
 
 export const DEFAULT_TOKEN = SUPPORTED_TOKENS.USDC;
+
+export interface LiquidityPoolConfig {
+  contractAddress: string;
+  feeBps: number;
+  reserveDecimals: number;
+}
+
+export const LIQUIDITY_POOLS: Record<string, LiquidityPoolConfig> = {
+  'USDC/EURC': {
+    contractAddress: process.env.NEXT_PUBLIC_USDC_EURC_POOL_ADDRESS || '',
+    feeBps: Number(process.env.NEXT_PUBLIC_USDC_EURC_POOL_FEE_BPS || 30),
+    reserveDecimals: 7,
+  },
+  'EURC/USDC': {
+    contractAddress: process.env.NEXT_PUBLIC_EURC_USDC_POOL_ADDRESS || '',
+    feeBps: Number(process.env.NEXT_PUBLIC_EURC_USDC_POOL_FEE_BPS || 30),
+    reserveDecimals: 7,
+  },
+  'USDC/XLM': {
+    contractAddress: process.env.NEXT_PUBLIC_USDC_XLM_POOL_ADDRESS || '',
+    feeBps: Number(process.env.NEXT_PUBLIC_USDC_XLM_POOL_FEE_BPS || 30),
+    reserveDecimals: 7,
+  },
+  'XLM/USDC': {
+    contractAddress: process.env.NEXT_PUBLIC_XLM_USDC_POOL_ADDRESS || '',
+    feeBps: Number(process.env.NEXT_PUBLIC_XLM_USDC_POOL_FEE_BPS || 30),
+    reserveDecimals: 7,
+  },
+  'USDC/PYUSD': {
+    contractAddress: process.env.NEXT_PUBLIC_USDC_PYUSD_POOL_ADDRESS || '',
+    feeBps: Number(process.env.NEXT_PUBLIC_USDC_PYUSD_POOL_FEE_BPS || 30),
+    reserveDecimals: 7,
+  },
+  'PYUSD/USDC': {
+    contractAddress: process.env.NEXT_PUBLIC_PYUSD_USDC_POOL_ADDRESS || '',
+    feeBps: Number(process.env.NEXT_PUBLIC_PYUSD_USDC_POOL_FEE_BPS || 30),
+    reserveDecimals: 7,
+  },
+};
+
+export function getLiquidityPoolConfig(baseToken: string, quoteToken: string): LiquidityPoolConfig | null {
+  return LIQUIDITY_POOLS[`${baseToken}/${quoteToken}`] || null;
+}
+
+export function getLiquidityPoolKey(baseToken: string, quoteToken: string): string {
+  return `${baseToken}/${quoteToken}`;
+}
