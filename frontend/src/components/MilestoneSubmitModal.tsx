@@ -14,6 +14,7 @@ import {
 import type { Milestone, Project } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
 import { MarkdownDeliverableEditor } from './MarkdownDeliverableEditor';
+import { DeliverableDiffViewer } from './DeliverableDiffViewer';
 
 const MAX_FILES = 20;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -89,6 +90,7 @@ export function MilestoneSubmitModal({
   const [isDragging, setIsDragging] = useState(false);
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showDiff, setShowDiff] = useState(false);
   const [txStatus, setTxStatus] = useState<{ stage: TxStage | 'validating'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const objectUrlsRef = useRef<string[]>([]);
@@ -311,6 +313,27 @@ export function MilestoneSubmitModal({
               Work Summary <span className="text-red-400">*</span>
             </label>
             <MarkdownDeliverableEditor value={notes} onChange={setNotes} />
+            {(milestone.deliverable_notes || notes.trim()) && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowDiff((v) => !v)}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 underline font-semibold"
+                >
+                  {showDiff ? 'Hide revision diff' : 'Compare with previous revision'}
+                </button>
+                {showDiff && (
+                  <div className="mt-2">
+                    <DeliverableDiffViewer
+                      previousText={milestone.deliverable_notes || ''}
+                      currentText={notes}
+                      previousLabel="Previous revision"
+                      currentLabel="New deliverable"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="space-y-2">
