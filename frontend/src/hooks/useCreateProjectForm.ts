@@ -4,6 +4,7 @@ import { projectSchema, ProjectFormData } from '@/lib/validators';
 import { z } from 'zod';
 import { useWalletStore } from '@/store/walletStore';
 import { useRouter } from 'next/navigation';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import { HORIZON_URL } from '@/lib/soroban';
@@ -111,6 +112,8 @@ export function useCreateProjectForm() {
   const { address } = useWalletStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof ProjectFormData, string>>>({});
+  const [isDirty, setIsDirty] = useState(false);
+  const unsavedWarning = useUnsavedChangesWarning({ isDirty });
   
   const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
@@ -154,6 +157,7 @@ export function useCreateProjectForm() {
     const { name, value } = e.target;
     const newValue = name === 'budget' ? Number(value) : value;
     setFormData(prev => ({ ...prev, [name]: newValue }));
+    setIsDirty(true);
     
     // Clear error for this field when user types
     if (errors[name as keyof ProjectFormData]) {
@@ -230,6 +234,7 @@ export function useCreateProjectForm() {
       }
 
       toast.success('Project created successfully!');
+      setIsDirty(false);
       
       // Redirect to milestones creation page
       if (data.project && data.project.id) {
@@ -274,6 +279,9 @@ export function useCreateProjectForm() {
     balanceShortfall,
     hasSufficientBalance,
     refreshBalance: walletBalance.refresh,
+    isDirty,
+    setIsDirty,
+    unsavedWarning,
   };
 }
 

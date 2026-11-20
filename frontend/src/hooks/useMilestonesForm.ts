@@ -3,10 +3,13 @@ import { toast } from 'sonner';
 import { milestoneArraySchema, MilestoneFormData } from '@/lib/validators';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
 export function useMilestonesForm(projectId: string) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const unsavedWarning = useUnsavedChangesWarning({ isDirty });
   
   const [errors, setErrors] = useState<Array<Partial<Record<keyof MilestoneFormData, string>>>>([{}]);
   
@@ -124,6 +127,7 @@ export function useMilestonesForm(projectId: string) {
       }
 
       toast.success('Milestones added successfully!');
+      setIsDirty(false);
       router.push(`/projects/${projectId}`);
     } catch (error: any) {
       toast.error(error.message);
@@ -139,6 +143,9 @@ export function useMilestonesForm(projectId: string) {
     handleMilestoneChange,
     addMilestone,
     removeMilestone,
-    handleSubmit
+    handleSubmit,
+    isDirty,
+    setIsDirty,
+    unsavedWarning,
   };
 }

@@ -10,7 +10,9 @@ interface WalletState {
   isClient: boolean;
   isFreelancer: boolean;
   token: string | null;
+  isConnecting: boolean;
   setActiveRole: (role: ActiveRole) => void;
+  setIsConnecting: (isConnecting: boolean) => void;
   setWalletInfo: (
     address: string,
     isClient?: boolean,
@@ -30,9 +32,11 @@ export const useWalletStore = create<WalletState>()(
       isClient: true,
       isFreelancer: true,
       token: null,
+      isConnecting: false,
       setActiveRole: (activeRole) => set({ activeRole }),
+      setIsConnecting: (isConnecting) => set({ isConnecting }),
       setWalletInfo: (address, isClient = true, isFreelancer = true, walletName = 'Freighter', token = null) =>
-        set({ address, isClient, isFreelancer, walletName, token }),
+        set({ address, isClient, isFreelancer, walletName, token, isConnecting: false }),
       disconnect: () => {
         try {
           const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -47,11 +51,20 @@ export const useWalletStore = create<WalletState>()(
           isClient: true,
           isFreelancer: true,
           token: null,
+          isConnecting: false,
         });
       },
     }),
     {
       name: 'trustpay-wallet-storage',
+      partialize: (state) => ({
+        address: state.address,
+        walletName: state.walletName,
+        activeRole: state.activeRole,
+        isClient: state.isClient,
+        isFreelancer: state.isFreelancer,
+        token: state.token,
+      }),
     }
   )
 );

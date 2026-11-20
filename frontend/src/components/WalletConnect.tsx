@@ -36,8 +36,12 @@ interface WalletOption {
 }
 
 export default function WalletConnect() {
-  const { address, activeRole, walletName, setWalletInfo, disconnect } = useWalletStore();
-  const [isConnecting, setIsConnecting] = useState(false);
+  const { address, activeRole, walletName, setWalletInfo, disconnect, isConnecting: storeIsConnecting, setIsConnecting: setStoreIsConnecting } = useWalletStore();
+  const [isConnecting, setIsConnectingState] = useState(false);
+  const setIsConnecting = (val: boolean) => {
+    setIsConnectingState(val);
+    setStoreIsConnecting(val);
+  };
   const [connectingWallet, setConnectingWallet] = useState<WalletType | null>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showXBullModal, setShowXBullModal] = useState(false);
@@ -166,6 +170,8 @@ export default function WalletConnect() {
       } else {
         toast.error("Freighter wallet not installed. Please install the Freighter browser extension or select another wallet.");
       }
+    } catch (outerErr: any) {
+      toast.error(getErrorMessage(outerErr));
     } finally {
       setIsConnecting(false);
       setConnectingWallet(null);
@@ -567,11 +573,36 @@ export default function WalletConnect() {
             type="button"
             onClick={connectFreighter}
             disabled={isConnecting}
-            className="w-full p-3.5 rounded-2xl bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-blue-500/50 text-white font-bold transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 text-left flex items-center justify-between group cursor-pointer disabled:opacity-60"
+            data-testid="connect-freighter-button"
+            className="w-full p-3.5 rounded-2xl bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-blue-500/50 text-white font-bold transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 text-left flex items-center justify-between group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3.5">
               <div className="w-10 h-10 rounded-xl bg-[#1e1b4b] border border-indigo-500/30 flex items-center justify-center text-lg shadow-sm">
-                🪐
+                {isConnecting && connectingWallet === "freighter" ? (
+                  <svg
+                    className="animate-spin w-5 h-5 text-blue-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    data-testid="wallet-spinner"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                ) : (
+                  "🪐"
+                )}
               </div>
               <div>
                 <div className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
@@ -587,7 +618,9 @@ export default function WalletConnect() {
                 Official
               </span>
               <span className="text-sm font-bold text-blue-400">
-                {connectingWallet === "freighter" ? "..." : "Connect Freighter Wallet →"}
+                {isConnecting && connectingWallet === "freighter"
+                  ? "Waiting for Wallet..."
+                  : "Connect Freighter Wallet →"}
               </span>
             </div>
           </button>
@@ -617,7 +650,9 @@ export default function WalletConnect() {
                 Popular
               </span>
               <span className="text-sm font-bold text-amber-400">
-                {connectingWallet === "xbull" ? "..." : "Connect xBull Wallet →"}
+                {isConnecting && connectingWallet === "xbull"
+                  ? "Waiting for Wallet..."
+                  : "Connect xBull Wallet →"}
               </span>
             </div>
           </button>
