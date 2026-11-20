@@ -15,6 +15,7 @@ import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import { useTokenBalance, getBalanceShortfall } from '@/hooks/useCreateProjectForm';
 import { BalanceWarningBadge } from '@/components/BalanceWarningBadge';
+import { LiquidityDepthOptimizer } from '@/components/LiquidityDepthOptimizer';
 import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
@@ -964,6 +965,14 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 isLoading={walletBalance.loading}
                 error={walletBalance.error}
               />
+
+              {formBudget !== '' && Number(formBudget) > 10000 && (
+                <LiquidityDepthOptimizer
+                  amount={Number(formBudget)}
+                  sourceToken={formToken === 'USDC' ? 'EURC' : 'USDC'}
+                  targetToken={formToken}
+                />
+              )}
 
               {/* Visibility Radio Buttons */}
               <div className="space-y-2 pt-1">

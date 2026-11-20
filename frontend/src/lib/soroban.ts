@@ -1,5 +1,6 @@
 import {
   rpc,
+  Account,
   Address,
   nativeToScVal,
   scValToNative,
@@ -35,6 +36,85 @@ export function getSorobanRpcServer(): rpc.Server {
   return new rpc.Server(SOROBAN_RPC_URL, {
     allowHttp: SOROBAN_RPC_URL.startsWith('http://'),
   });
+}
+
+export interface AmmPoolReserveSnapshot {
+  reserveBase: number;
+  reserveQuote: number;
+}
+
+function readReserveAmount(value: unknown): number {
+  if (typeof value === 'bigint') return Number(value);
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : 0;
+}
+
+export function parseAmmReserves(value: unknown, reserveDecimals = 7): AmmPoolReserveSnapshot {
+  const scale = 10 ** Math.max(0, Number.isFinite(reserveDecimals) ? reserveDecimals : 7);
+  let rawBase: unknown;
+  let rawQuote: unknown;
+
+  if (Array.isArray(value)) {
+    rawBase = value[0];
+    rawQuote = value[1];
+  } else if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    rawBase = record.reserveBase ?? record.reserve_base ?? record.reserveA ?? record.reserve_a ?? record.base ?? record[0];
+    rawQuote = record.reserveQuote ?? record.reserve_quote ?? record.reserveB ?? record.reserve_b ?? record.quote ?? record[1];
+  }
+
+  const reserveBase = readReserveAmount(rawBase) / scale;
+  const reserveQuote = readReserveAmount(rawQuote) / scale;
+  if (reserveBase <= 0 || reserveQuote <= 0) {
+    throw new Error('AMM pool returned invalid reserve values.');
+  }
+  return { reserveBase, reserveQuote };
+}
+
+/**
+ * Simulates a read-only `get_reserves` call against a constant-product AMM pool contract.
+ */
+export async function fetchAmmPoolReserves(options: {
+  contractAddress: string;
+  sourceAccount?: string;
+  reserveDecimals?: number;
+  functionName?: string;
+}): Promise<AmmPoolReserveSnapshot> {
+  const {
+    contractAddress,
+    sourceAccount = DEFAULT_ARBITER_ADDRESS,
+    reserveDecimals = 7,
+    functionName = 'get_reserves',
+  } = options;
+  if (!contractAddress) {
+    throw new Error('No AMM pool contract is configured for this token pair.');
+  }
+
+  const server = getSorobanRpcServer();
+  const account = new Account(sourceAccount, '0');
+  const transaction = new TransactionBuilder(account, {
+    fee: '10000',
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: contractAddress,
+        function: functionName,
+        args: [],
+      })
+    )
+    .setTimeout(30)
+    .build();
+
+  const simulation = await server.simulateTransaction(transaction);
+  if (rpc.Api.isSimulationError(simulation)) {
+    throw new Error(`AMM pool simulation failed: ${simulation.error}`);
+  }
+  const returnValue = simulation.result?.retval;
+  if (!returnValue) {
+    throw new Error('AMM pool simulation returned no reserve data.');
+  }
+  return parseAmmReserves(scValToNative(returnValue), reserveDecimals);
 }
 
 /**
