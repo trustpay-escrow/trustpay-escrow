@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import NumberRoll from './NumberRoll';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useWalletStore } from '@/store/walletStore';
@@ -551,6 +552,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     await handleAcceptProposal(applicant.id);
   };
 
+  const totalVolume = projects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
+  const activeEscrows = projects.filter(p => p.project_id_onchain !== null || p.status === 'open' || p.status === 'disputed').length;
+  const completedMilestones = projects.reduce((sum, p) => sum + (p.milestones?.filter(m => m.status === 'approved').length || 0), 0);
+
   return (
     <div className="w-full min-h-screen bg-[#121212] text-[#f4f4f5] font-sans p-4 sm:p-6 md:p-10 transition-colors duration-200">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -601,7 +606,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]/50'
               }`}
             >
-              Applicants ({selectedProjectForApplicants?.applicants?.length || 0})
+              Applicants (<NumberRoll value={selectedProjectForApplicants?.applicants?.length || 0} />)
             </button>
           </div>
         </div>
@@ -609,9 +614,31 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         {/* VIEW 1: MY PROJECTS */}
         {activeTab === 'projects' && (
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-6 sm:p-8 shadow-2xl transition-all duration-300">
+            {/* Dashboard Statistic Cards with Smooth NumberRoll Counter */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Total Volume</div>
+                <div className="text-xl sm:text-2xl font-black text-white mt-1">
+                  <NumberRoll value={totalVolume} prefix="$" decimals={0} />
+                </div>
+              </div>
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Active Escrows</div>
+                <div className="text-xl sm:text-2xl font-black text-blue-400 mt-1">
+                  <NumberRoll value={activeEscrows} />
+                </div>
+              </div>
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Completed Milestones</div>
+                <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
+                  <NumberRoll value={completedMilestones} />
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                {projects.length} {projects.length === 1 ? 'project' : 'projects'}
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-1.5">
+                <NumberRoll value={projects.length} /> <span>{projects.length === 1 ? 'project' : 'projects'}</span>
               </h2>
               <button
                 onClick={() => setActiveTab('create')}
