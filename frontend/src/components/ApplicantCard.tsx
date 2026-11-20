@@ -1,4 +1,6 @@
 'use client';
+import { AddressBadge } from '@/components/AddressBadge';
+import { PortfolioLinkPreview } from '@/components/PortfolioLinkPreview';
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
@@ -80,13 +82,7 @@ export function ApplicantCard({
             <span className="font-mono text-xs sm:text-sm text-white bg-[#232326] px-3 py-1 rounded-xl border border-[#333338] select-all break-all">
               {walletAddr}
             </span>
-            <button
-              onClick={handleCopyWallet}
-              className="text-[#a1a1aa] hover:text-white transition-colors p-1 text-xs"
-              title="Copy Wallet Address"
-            >
-              {copied ? '✓' : '📋'}
-            </button>
+            <AddressBadge address={walletAddr} showExplorerLink={true} />
           </div>
         </div>
 

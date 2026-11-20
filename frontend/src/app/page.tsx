@@ -1,3 +1,4 @@
+import Accordion from '@/components/Accordion';
 'use client';
 
 import React, { useState } from 'react';
@@ -340,28 +341,14 @@ export default function Home() {
             </h2>
           </div>
 
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => (
-              <div
-                key={idx}
-                className="bg-[#18181b]/80 border border-[#27272a] rounded-2xl overflow-hidden transition-colors"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                  className="w-full px-6 py-5 flex items-center justify-between text-left font-bold text-white hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  <span className="text-sm sm:text-base">{faq.q}</span>
-                  <span className="text-xl text-[#71717a]">{openFaq === idx ? "−" : "+"}</span>
-                </button>
-                {openFaq === idx && (
-                  <div className="px-6 pb-5 text-xs sm:text-sm text-[#a1a1aa] leading-relaxed border-t border-[#27272a]/40 pt-4">
-                    {faq.a}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <Accordion
+            items={faqs.map((faq, idx) => ({
+              id: aq-,
+              title: faq.q,
+              content: faq.a,
+            }))}
+            type="single"
+          />
         </div>
       </section>
 
