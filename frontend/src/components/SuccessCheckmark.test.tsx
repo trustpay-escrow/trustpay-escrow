@@ -41,6 +41,15 @@ describe('SuccessCheckmark Component', () => {
     expect(screen.getByText('0xabc123456789def')).toBeInTheDocument();
     expect(screen.getByText('GAUBK6...E5F6G7')).toBeInTheDocument();
 
+    for (const id of [screen.getByText('0xabc123456789def'), screen.getByText('GAUBK6...E5F6G7')]) {
+      expect(id).toHaveAttribute('data-crypto-id');
+      expect(id).toHaveClass('font-mono', 'tracking-tight', 'text-xs');
+    }
+    expect(screen.getByText('GAUBK6...E5F6G7')).toHaveAttribute(
+      'title',
+      'GAUBK6P5Z7I7ZXZZ6D7XQWJ7M2U3H7T5W7O6X7Y8Z9A1B2C3D4E5F6G7'
+    );
+
     const svg = screen.getByTestId('checkmark-svg');
     expect(svg).toHaveClass('scale-100');
     expect(svg).toHaveClass('opacity-100');

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 
 export type MilestoneStatus =
   | 'pending'
@@ -20,12 +20,40 @@ export interface StatusBadgeProps {
   disableAnimation?: boolean;
 }
 
+export const STATUS_TOOLTIPS: Record<string, string> = {
+  pending: 'Pending: Work has not started yet. Freelancer will begin work shortly.',
+  in_progress: 'In Progress: Freelancer is actively developing deliverables.',
+  submitted: 'Submitted: Client has 14 days to approve or request revisions before auto-release.',
+  pending_review: 'In Review: Client is evaluating submitted deliverables and code.',
+  approved: 'Approved: Work has been accepted. Funds are releasing to freelancer wallet.',
+  completed: 'Completed: Milestone settlement complete and on-chain escrow finalized.',
+  revision_requested: 'Revision Requested: Freelancer must submit updated deliverables addressing feedback.',
+  disputed: 'Disputed: Arbiter is reviewing evidence to resolve locked escrow funds.',
+};
+
+export function getStatusTooltip(status: string): string {
+  const norm = (status || '').toLowerCase().trim();
+  if (norm === 'submitted') return STATUS_TOOLTIPS.submitted;
+  if (norm === 'pending_review') return STATUS_TOOLTIPS.pending_review;
+  if (norm === 'pending') return STATUS_TOOLTIPS.pending;
+  if (norm === 'approved') return STATUS_TOOLTIPS.approved;
+  if (norm === 'completed') return STATUS_TOOLTIPS.completed;
+  if (norm === 'revision_requested' || norm === 'revision') return STATUS_TOOLTIPS.revision_requested;
+  if (norm === 'disputed') return STATUS_TOOLTIPS.disputed;
+  if (norm === 'in_progress') return STATUS_TOOLTIPS.in_progress;
+  return `Current status: ${status}`;
+}
+
 export function StatusBadge({
   status,
   label,
   className = '',
   disableAnimation = false,
 }: StatusBadgeProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const tooltipId = useId();
+
   const normalized = (status || '').toLowerCase().trim();
 
   const isPendingReview =
@@ -95,22 +123,73 @@ export function StatusBadge({
   }
 
   const shouldPulse = config.hasPulse && !disableAnimation;
+  const tooltipText = getStatusTooltip(status);
+
+  const showTooltip = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setIsVisible(true);
+  };
+
+  const hideTooltip = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setIsVisible(false);
+  };
+
+  const handleTouch = () => {
+    if (isVisible) {
+      hideTooltip();
+    } else {
+      setIsVisible(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        setIsVisible(false);
+      }, 3000);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   return (
-    <span
-      data-testid="status-badge"
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${config.bg} ${config.border} ${config.textColor} ${className}`}
-    >
-      {/* 6px Indicator Dot with Amber CSS Pulse Animation */}
+    <div className="relative inline-block">
       <span
-        data-testid="status-badge-dot"
-        className={`w-1.5 h-1.5 rounded-full ${config.dotColor} ${
-          shouldPulse ? 'motion-safe:animate-pulse ring-2 ring-amber-400/20' : ''
-        }`}
-        aria-hidden="true"
-      />
-      <span>{config.text}</span>
-    </span>
+        data-testid="status-badge"
+        tabIndex={0}
+        role="status"
+        aria-describedby={isVisible ? tooltipId : undefined}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
+        onClick={handleTouch}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-amber-400/50 ${config.bg} ${config.border} ${config.textColor} ${className}`}
+      >
+        {/* 6px Indicator Dot with Amber CSS Pulse Animation */}
+        <span
+          data-testid="status-badge-dot"
+          className={`w-1.5 h-1.5 rounded-full ${config.dotColor} ${
+            shouldPulse ? 'motion-safe:animate-pulse ring-2 ring-amber-400/20' : ''
+          }`}
+          aria-hidden="true"
+        />
+        <span>{config.text}</span>
+      </span>
+
+      {isVisible && (
+        <div
+          id={tooltipId}
+          data-testid="status-badge-tooltip"
+          role="tooltip"
+          className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs text-slate-100 bg-slate-900/95 border border-slate-700/80 rounded-lg shadow-xl backdrop-blur-sm whitespace-normal w-max max-w-xs text-center pointer-events-none transition-all duration-200"
+        >
+          {tooltipText}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900/95" />
+        </div>
+      )}
+    </div>
   );
 }
 

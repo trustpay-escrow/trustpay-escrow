@@ -19,6 +19,7 @@ import { LiquidityDepthOptimizer } from '@/components/LiquidityDepthOptimizer';
 import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
+import { AccountsPayableExportModal } from '@/components/AccountsPayableExportModal';
 import {
   createProjectOnChain,
   lockEscrowOnChain,
@@ -115,6 +116,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [newMilestoneDeliverableType, setNewMilestoneDeliverableType] =
     useState('GitHub Repository');
   const [showAddMilestoneModal, setShowAddMilestoneModal] = useState(false);
+  const [showApExportModal, setShowApExportModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Function to fetch real projects from backend
@@ -654,13 +656,22 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
                 {projects.length} {projects.length === 1 ? 'project' : 'projects'}
               </h2>
-              <button
-                onClick={() => setActiveTab('create')}
-                className="inline-flex items-center space-x-2 px-4 py-2 bg-transparent hover:bg-[#27272a] text-white font-medium text-sm rounded-xl border border-[#3f3f46] transition-all hover:border-[#52525b] shadow-sm active:scale-95"
-              >
-                <span className="text-lg leading-none">+</span>
-                <span>Create project</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowApExportModal(true)}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-[#232326] hover:bg-[#2d2d33] text-[#e4e4e7] font-medium text-xs rounded-xl border border-[#333338] transition-all"
+                  title="Export monthly accounts payable ledger (CSV / Excel)"
+                >
+                  <span>📊 AP Export</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('create')}
+                  className="inline-flex items-center space-x-2 px-4 py-2 bg-transparent hover:bg-[#27272a] text-white font-medium text-sm rounded-xl border border-[#3f3f46] transition-all hover:border-[#52525b] shadow-sm active:scale-95"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  <span>Create project</span>
+                </button>
+              </div>
             </div>
 
             {loading ? (
@@ -1097,7 +1108,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                       value={formFreelancerAddress}
                       onChange={(e) => setFormFreelancerAddress(e.target.value)}
                       placeholder="G..."
-                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono tracking-tight text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 )}
@@ -1694,6 +1705,13 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
           </div>
         </div>
       )}
+
+      {/* Enterprise Accounts Payable Export Modal */}
+      <AccountsPayableExportModal
+        isOpen={showApExportModal}
+        onClose={() => setShowApExportModal(false)}
+        projects={projects}
+      />
     </div>
   );
 }

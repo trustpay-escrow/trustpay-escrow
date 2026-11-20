@@ -749,6 +749,97 @@ export async function autoReleaseMilestoneOnChain(params: {
   });
 }
 
+/**
+ * Executes a mutual (non-dispute) project cancellation once both client and
+ * freelancer have agreed on a refund split. Broadcasts `mutual_cancel`.
+ */
+export async function mutualCancelOnChain(params: {
+  callerAddress: string;
+  projectIdOnChain: number | bigint | string;
+  clientRefundAmount: number;
+  freelancerCompensation: number;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const {
+    callerAddress,
+    projectIdOnChain,
+    clientRefundAmount,
+    freelancerCompensation,
+    contractAddress,
+    onStatusUpdate,
+  } = params;
+
+  const args: xdr.ScVal[] = [
+    Address.fromString(callerAddress).toScVal(),
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    nativeToScVal(BigInt(Math.round(clientRefundAmount * 10_000_000)), { type: 'i128' }),
+    nativeToScVal(BigInt(Math.round(freelancerCompensation * 10_000_000)), { type: 'i128' }),
+  ];
+
+  return invokeSorobanMethod({
+    callerAddress,
+    contractAddress,
+    functionName: 'mutual_cancel',
+    args,
+    onStatusUpdate,
+  });
+}
+
+/**
+ * Verified open-source repository hosting the audited Soroban contract source.
+ */
+export const OFFICIAL_CONTRACT_REPO_URL =
+  'https://github.com/trustpay-escrow/trustpay-escrow/tree/main/contracts';
+
+/**
+ * Expected SHA-256 (WASM hash) of the official release build artifact.
+ * Configure via NEXT_PUBLIC_ESCROW_WASM_SHA256 once a release is published.
+ */
+export const EXPECTED_WASM_SHA256 = (
+  process.env.NEXT_PUBLIC_ESCROW_WASM_SHA256 || ''
+).toLowerCase();
+
+function xdrBufferToHex(buf: Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Queries the Soroban RPC for the deployed contract instance's WASM bytecode
+ * hash (the SHA-256 digest of the compiled contract WASM) via ledger entries.
+ */
+export async function getContractWasmHash(
+  contractAddress: string = DEFAULT_ESCROW_CONTRACT_ID
+): Promise<string> {
+  const server = getSorobanRpcServer();
+
+  const result = await server.getContractData(
+    contractAddress,
+    xdr.ScVal.scvSymbol('ContractInstance'),
+    rpc.Durability.Persistent
+  );
+
+  const data = result.val;
+  if (data.switch().name !== 'contractData') {
+    throw new Error('Contract instance ledger entry not found.');
+  }
+
+  const instanceVal = data.contractData().val();
+  if (instanceVal.switch().name !== 'scvContractInstance') {
+    throw new Error('Contract has no instance data on ledger.');
+  }
+
+  const executable = instanceVal.instance().executable();
+  if (executable.switch().name !== 'contractExecutableWasm') {
+    throw new Error('Contract executable is not an inline WASM hash.');
+  }
+
+  return xdrBufferToHex(executable.wasmHash());
+}
+
 import { decodeSorobanError, DecodedSorobanError } from './soroban-error-decoder';
 import { showSorobanErrorToast } from '@/components/SorobanErrorToast';
 

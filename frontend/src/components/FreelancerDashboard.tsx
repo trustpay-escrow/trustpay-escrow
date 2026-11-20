@@ -13,6 +13,8 @@ import { MilestoneSubmitModal } from './MilestoneSubmitModal';
 import { ProjectChatModal } from './ProjectChatModal';
 import { ProjectCardSkeletonList, ProposalSkeletonList } from '@/components/skeletons';
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
+import { ProjectFilterBar } from '@/components/ProjectFilterBar';
+import { CryptoId } from '@/components/ui/CryptoId';
 
 export function FreelancerDashboard() {
   const router = useRouter();
@@ -455,26 +457,12 @@ export function FreelancerDashboard() {
               </div>
 
               {/* Search & Category Filter */}
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Search projects..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full sm:w-auto px-3 py-1.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs placeholder-[#71717a] focus:outline-none focus:border-indigo-500"
-                />
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full sm:w-auto px-3 py-1.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
-                >
-                  <option value="All">All Categories</option>
-                  <option value="Development">Development</option>
-                  <option value="Design">Design</option>
-                  <option value="Writing">Writing</option>
-                  <option value="Marketing">Marketing</option>
-                </select>
-              </div>
+              <ProjectFilterBar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                selectedCategory={selectedCategory}
+                onCategoryChange={setSelectedCategory}
+              />
             </div>
 
             {/* Project List */}
@@ -686,9 +674,10 @@ export function FreelancerDashboard() {
                       {prop.stellar_address && (
                         <div className="text-xs text-[#a1a1aa] flex items-center space-x-1.5">
                           <span className="text-[#71717a]">Wallet:</span>
-                          <span className="font-mono text-[#e4e4e7] bg-[#232326] px-2 py-0.5 rounded text-[11px] border border-[#333338]">
-                            {prop.stellar_address}
-                          </span>
+                          <CryptoId
+                            value={prop.stellar_address}
+                            className="text-[#e4e4e7] bg-[#232326] px-2 py-0.5 rounded border border-[#333338] break-all"
+                          />
                         </div>
                       )}
 
@@ -985,7 +974,7 @@ export function FreelancerDashboard() {
                   placeholder="e.g. GAUBK... (Your Stellar Public Key)"
                   disabled
                   readOnly
-                  className="w-full px-3.5 py-2.5 bg-[#1c1c20] border border-[#27272a] rounded-xl text-[#a1a1aa] font-mono text-xs cursor-not-allowed opacity-80 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-[#1c1c20] border border-[#27272a] rounded-xl text-[#a1a1aa] font-mono tracking-tight text-xs cursor-not-allowed opacity-80 focus:outline-none"
                   required
                 />
                 {address && (
