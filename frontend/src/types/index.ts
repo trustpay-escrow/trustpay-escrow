@@ -63,6 +63,7 @@ export interface Applicant {
   status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   granted?: boolean;
   created_at?: string;
+  zk_attestation?: unknown;
 }
 
 export interface Proposal {

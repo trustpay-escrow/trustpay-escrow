@@ -4,11 +4,13 @@ import React, { useState } from 'react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useWalletStore } from '@/store/walletStore';
 import { NotificationCenter } from '@/components/NotificationCenter';
+import { NotificationScheduleModal } from './NotificationScheduleModal';
 
 export default function NotificationBell() {
   const { address } = useWalletStore();
   const { unreadCount } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   if (!address) {
     return null;
@@ -46,8 +48,25 @@ export default function NotificationBell() {
         )}
       </button>
 
+      {/* Milestone reminder schedule */}
+      <button
+        type="button"
+        onClick={() => setScheduleOpen(true)}
+        className="relative p-2.5 rounded-xl bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] text-amber-400 hover:text-amber-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+        title="Milestone reminder schedule"
+        aria-label="Open milestone reminder schedule"
+      >
+        ⏰
+      </button>
+
       {/* Slide-over Notification Drawer */}
       <NotificationCenter isOpen={isOpen} onClose={() => setIsOpen(false)} />
+
+      <NotificationScheduleModal
+        project={null}
+        isOpen={scheduleOpen}
+        onClose={() => setScheduleOpen(false)}
+      />
     </>
   );
 }

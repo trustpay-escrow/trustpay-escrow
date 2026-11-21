@@ -29,10 +29,13 @@
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
+    "lib0": "0.2.85",
     "morgan": "^1.11.0",
     "pg": "^8.23.1",
     "winston": "^3.19.0",
     "ws": "^8.21.1",
+    "y-protocols": "1.0.7",
+    "yjs": "13.6.33",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Project } from '@/types';
 import { fetchProjectAuditEvents, ProjectAuditEventRecord } from '@/lib/api';
 import { getStellarExplorerUrl } from '@/lib/soroban';
+import { CryptoId } from '@/components/ui/CryptoId';
 
 export type AuditEventType = 'project' | 'milestone' | 'proposal' | 'dispute';
 export type AuditFilter = 'all' | AuditEventType;
@@ -89,7 +90,7 @@ export function buildProjectAuditEvents(project: Project): AuditEvent[] {
       type: 'proposal',
       action: 'Proposal Accepted',
       description: project.freelancer_address
-        ? `${project.freelancer_address} was assigned to the project.`
+        ? 'The freelancer was assigned to the project.'
         : 'A freelancer proposal was accepted for this project.',
       timestamp: shifted(1),
       signer: project.freelancer_address || project.client_address,
@@ -156,9 +157,6 @@ function avatarStyle(address: string): string {
   return AVATAR_STYLES[hash % AVATAR_STYLES.length];
 }
 
-function truncateAddress(address: string): string {
-  return address.length > 14 ? `${address.slice(0, 6)}...${address.slice(-4)}` : address;
-}
 
 function formatTimestamp(timestamp: string): string {
   const parsed = Date.parse(timestamp);
@@ -300,17 +298,21 @@ export function ProjectAuditLog({ project, events, className = '' }: ProjectAudi
                         >
                           {event.signer.slice(2, 4).toUpperCase()}
                         </span>
-                        <span className="font-mono text-[11px] text-slate-300" title={event.signer}>
-                          {truncateAddress(event.signer)}
-                        </span>
+                        <CryptoId
+                          value={event.signer}
+                          head={6}
+                          tail={4}
+                          title={event.signer}
+                          className="text-slate-300"
+                        />
                       </div>
                     ) : (
                       <span className="text-[11px] text-slate-500">Signer unavailable</span>
                     )}
 
                     {event.txHash && (
-                      <span className="font-mono text-[10px] text-slate-500">
-                        Tx {truncateAddress(event.txHash)}
+                      <span className="text-xs text-slate-500">
+                        Tx <CryptoId value={event.txHash} head={6} tail={4} />
                         {event.ledger !== undefined ? ` • Ledger ${event.ledger}` : ''}
                       </span>
                     )}

@@ -3,6 +3,49 @@ import { toast } from 'sonner';
 import { milestoneArraySchema, MilestoneFormData } from '@/lib/validators';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
+import { authFetch } from '@/lib/api';
+
+const getApiUrl = () => process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+export async function submitMilestones(
+  projectId: string,
+  milestones: MilestoneFormData[]
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  if (!projectId) {
+    return { success: false, error: 'Project ID is required' };
+  }
+
+  const validation = milestoneArraySchema.safeParse(milestones);
+  if (!validation.success) {
+    const errorMessages = validation.error.issues
+      .map((issue) => `${issue.path.join('.') || 'field'}: ${issue.message}`)
+      .join(' | ');
+    toast.error(`Validation failed: ${errorMessages}`);
+    return { success: false, error: errorMessages };
+  }
+
+  try {
+    const res = await authFetch(`${getApiUrl()}/api/milestones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, milestones: validation.data }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = data.error || data.message || 'Failed to create milestones';
+      toast.error(message);
+      return { success: false, error: message, data };
+    }
+
+    toast.success('Milestones added successfully!');
+    return { success: true, data };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create milestones';
+    toast.error(message);
+    return { success: false, error: message };
+  }
+}
 
 export function useMilestonesForm(projectId: string) {
   const router = useRouter();
@@ -81,7 +124,7 @@ export function useMilestonesForm(projectId: string) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Array<Partial<Record<keyof MilestoneFormData, string>>> = milestones.map(() => ({}));
-        let errorMessages: string[] = [];
+        const errorMessages: string[] = [];
         
         error.issues.forEach(err => {
           const index = err.path[0] as number;
@@ -111,22 +154,13 @@ export function useMilestonesForm(projectId: string) {
 
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/milestones`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, milestones }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to create milestones');
+      const result = await submitMilestones(projectId, milestones);
+      if (!result.success) {
+        setLoading(false);
+        return;
       }
 
-      toast.success('Milestones added successfully!');
       router.push(`/projects/${projectId}`);
-    } catch (error: any) {
-      toast.error(error.message);
     } finally {
       setLoading(false);
     }
@@ -139,6 +173,9 @@ export function useMilestonesForm(projectId: string) {
     handleMilestoneChange,
     addMilestone,
     removeMilestone,
-    handleSubmit
+    handleSubmit,
+    setMilestones,
+    submitMilestones: (milestonesToSubmit: MilestoneFormData[] = milestones) =>
+      submitMilestones(projectId, milestonesToSubmit),
   };
 }

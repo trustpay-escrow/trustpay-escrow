@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { useWalletStore } from '@/store/walletStore';
+import { useWalletStore, useActiveWalletAddress } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
 import { ApplicantCard } from './ApplicantCard';
+import { FreelancerProfileModal } from './FreelancerProfileModal';
 import { ProjectChatModal } from './ProjectChatModal';
 import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
@@ -19,6 +20,7 @@ import { LiquidityDepthOptimizer } from '@/components/LiquidityDepthOptimizer';
 import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
+import { NotificationScheduleModal } from '@/components/NotificationScheduleModal';
 import {
   createProjectOnChain,
   lockEscrowOnChain,
@@ -35,6 +37,7 @@ export interface ClientDashboardProps {
 export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProps) {
   const router = useRouter();
   const { address } = useWalletStore();
+  const activeWalletAddress = useActiveWalletAddress() || address;
   const [activeTab, setActiveTab] = useState<'projects' | 'create' | 'applicants'>(defaultTab);
   const [loading, setLoading] = useState(true);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name?: string } | null>(null);
@@ -66,7 +69,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   // Selected project for Applicants view
   const [selectedProjectForApplicants, setSelectedProjectForApplicants] = useState<Project | null>(null);
+  const [profileApplicant, setProfileApplicant] = useState<Applicant | null>(null);
   const [auditProject, setAuditProject] = useState<Project | null>(null);
+  const [reminderProject, setReminderProject] = useState<Project | null>(null);
 
   // Create Project Form State
   const [formTitle, setFormTitle] = useState('');
@@ -83,7 +88,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [formFreelancerAddress, setFormFreelancerAddress] = useState('');
   const [formLockImmediately, setFormLockImmediately] = useState(false);
   const [fundingTxMessage, setFundingTxMessage] = useState('');
-  const walletBalance = useTokenBalance(address, formToken);
+  const walletBalance = useTokenBalance(activeWalletAddress, formToken);
   const balanceShortfall = getBalanceShortfall(walletBalance.balance, formBudget === '' ? 0 : formBudget);
   const hasInsufficientBalance = walletBalance.balance !== null && balanceShortfall > 0;
   
@@ -122,10 +127,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     setLoading(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const clientParam = address ? `&client_address=${encodeURIComponent(address)}` : '';
-      const res = await authFetch(
-        `${apiUrl}/api/projects?page=${pageToFetch}&limit=6${clientParam}`
-      );
+      const clientParam = activeWalletAddress ? `&client_address=${encodeURIComponent(activeWalletAddress)}` : '';
+      const res = await authFetch(`${apiUrl}/api/projects?page=${pageToFetch}&limit=6${clientParam}`);
       if (res.ok) {
         const data = await res.json();
         if (data.projects && Array.isArray(data.projects)) {
@@ -201,7 +204,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   useEffect(() => {
     fetchBackendProjects();
-  }, [address]);
+  }, [address, activeWalletAddress]);
 
   // Add Milestone to Form
   const handleAddMilestone = () => {
@@ -525,7 +528,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         token_address: SUPPORTED_TOKENS[formToken]?.issuerOrContractAddress,
         deadline: formDeadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         visibility: formVisibility,
-        client_address: clientAddr,
+        client_address: activeWalletAddress || clientAddr,
         freelancer_address: formFreelancerAddress.trim() || undefined,
         status: onChainProjectId ? 'in_progress' : 'draft',
         contract_id: contractId,
@@ -749,17 +752,29 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     </div>
 
                     <div className="self-start sm:self-center flex flex-col items-end gap-1.5">
-                      <button
-                        type="button"
-                        data-testid="client-audit-log-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setAuditProject(proj);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-bold text-indigo-300 transition-colors hover:bg-indigo-500/20"
-                      >
-                        <span aria-hidden="true">🔗</span> Audit Log
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setReminderProject(proj);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-300 transition-colors hover:bg-amber-500/20"
+                        >
+                          <span aria-hidden="true">⏰</span> Reminders
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="client-audit-log-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setAuditProject(proj);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-bold text-indigo-300 transition-colors hover:bg-indigo-500/20"
+                        >
+                          <span aria-hidden="true">🔗</span> Audit Log
+                        </button>
+                      </div>
                       <CalendarExportButton project={proj} compact label="Calendar" />
                       {proj.project_id_onchain !== undefined && proj.project_id_onchain !== null && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
@@ -1007,7 +1022,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               </div>
 
               <BalanceWarningBadge
-                address={address}
+                address={activeWalletAddress}
                 balance={walletBalance.balance}
                 budget={formBudget === '' ? 0 : formBudget}
                 token={formToken}
@@ -1097,7 +1112,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                       value={formFreelancerAddress}
                       onChange={(e) => setFormFreelancerAddress(e.target.value)}
                       placeholder="G..."
-                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono tracking-tight text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 )}
@@ -1507,6 +1522,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     applicant={applicant}
                     onAccept={(id) => handleAcceptProposal(id)}
                     onDeny={(id) => handleDenyProposal(id)}
+                    onOpenProfile={() => setProfileApplicant(applicant)}
                     onOpenChat={(freelancerAddr) => {
                       if (!address) {
                         toast.error('Please connect your Stellar wallet first');
@@ -1673,6 +1689,17 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         senderAddress={chatModalState.senderAddress}
         receiverAddress={chatModalState.receiverAddress}
         recipientRoleLabel={chatModalState.recipientRoleLabel}
+      />
+
+      <FreelancerProfileModal
+        applicant={profileApplicant}
+        onClose={() => setProfileApplicant(null)}
+      />
+
+      <NotificationScheduleModal
+        project={reminderProject}
+        isOpen={Boolean(reminderProject)}
+        onClose={() => setReminderProject(null)}
       />
 
       {auditProject && (

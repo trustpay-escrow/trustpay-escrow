@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
+import { CryptoId } from '@/components/ui/CryptoId';
+import { ZkAttestationBadge } from './ZkAttestationBadge';
 
 export interface ApplicantCardData {
   id: string;
@@ -15,6 +17,7 @@ export interface ApplicantCardData {
   status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   created_at?: string;
   granted?: boolean;
+  zk_attestation?: unknown;
 }
 
 export interface ApplicantCardProps {
@@ -22,6 +25,7 @@ export interface ApplicantCardProps {
   onAccept: (id: string) => Promise<void> | void;
   onDeny: (id: string) => Promise<void> | void;
   onOpenChat?: (freelancerAddress: string) => void;
+  onOpenProfile?: () => void;
   isProcessing?: boolean;
 }
 
@@ -30,6 +34,7 @@ export function ApplicantCard({
   onAccept,
   onDeny,
   onOpenChat,
+  onOpenProfile,
   isProcessing = false,
 }: ApplicantCardProps) {
   const [copied, setCopied] = useState(false);
@@ -77,9 +82,10 @@ export function ApplicantCard({
             Freelancer Stellar Address
           </span>
           <div className="flex items-center space-x-2">
-            <span className="font-mono text-xs sm:text-sm text-white bg-[#232326] px-3 py-1 rounded-xl border border-[#333338] select-all break-all">
-              {walletAddr}
-            </span>
+            <CryptoId
+              value={walletAddr}
+              className="sm:text-sm text-white bg-[#232326] px-3 py-1 rounded-xl border border-[#333338] select-all break-all"
+            />
             <button
               onClick={handleCopyWallet}
               className="text-[#a1a1aa] hover:text-white transition-colors p-1 text-xs"
@@ -88,6 +94,11 @@ export function ApplicantCard({
               {copied ? '✓' : '📋'}
             </button>
           </div>
+          {Boolean(applicant.zk_attestation) && (
+            <div className="pt-1">
+              <ZkAttestationBadge attestation={applicant.zk_attestation} />
+            </div>
+          )}
         </div>
 
         {/* Status Badge */}
@@ -142,16 +153,22 @@ export function ApplicantCard({
 
       {/* Submission Date & Action Buttons Footer */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#27272a]/60">
-        {applicant.created_at && (
-          <span className="text-[11px] text-[#71717a]">
-            Applied on:{' '}
-            {new Date(applicant.created_at).toLocaleDateString(undefined, {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {onOpenProfile && (
+            <button
+              type="button"
+              onClick={onOpenProfile}
+              className="px-3 py-1.5 bg-[#232326] hover:bg-[#27272a] text-[#e4e4e7] border border-[#333338] text-[11px] font-bold rounded-xl transition-colors"
+            >
+              ZK Profile
+            </button>
+          )}
+          {applicant.created_at && (
+            <span className="text-[11px] text-[#71717a]">
+              Applied on: {new Date(applicant.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+            </span>
+          )}
+        </div>
 
         {/* Accept / Deny Buttons (Visible when pending) */}
         {currentStatus === 'pending' ? (

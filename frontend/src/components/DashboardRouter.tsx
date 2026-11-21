@@ -1,16 +1,19 @@
 'use client';
 
 import React from 'react';
-import { useWalletStore } from '@/store/walletStore';
+import { useWalletStore, useActiveWalletAddress } from '@/store/walletStore';
 import { ClientDashboard } from './ClientDashboard';
 import { FreelancerDashboard } from './FreelancerDashboard';
 import { ArbiterDashboard } from './ArbiterDashboard';
 import { RoleSwitcher } from './RoleSwitcher';
 import WalletConnect from './WalletConnect';
 import NotificationBell from './NotificationBell';
+import { OrgWalletSwitcher } from './OrgWalletSwitcher';
+import { CryptoId } from '@/components/ui/CryptoId';
 
 export function DashboardRouter() {
   const { address, activeRole, disconnect } = useWalletStore();
+  const activeWalletAddress = useActiveWalletAddress() || address;
 
   // AUTH GUARD: If user has not connected wallet, block dashboard and require wallet connect
   if (!address) {
@@ -50,9 +53,12 @@ export function DashboardRouter() {
           <span className="font-extrabold text-blue-500 tracking-wider">TRUSTPAY ESCROW</span>
           <span className="text-[#52525b]">|</span>
           <span className="text-[#a1a1aa]">Wallet:</span>
-          <span className="font-semibold text-white bg-[#27272a] px-2.5 py-0.5 rounded-md font-mono text-[11px] border border-[#3f3f46]">
-            {address.slice(0, 6)}...{address.slice(-4)}
-          </span>
+          <CryptoId
+            value={activeWalletAddress ?? ''}
+            head={6}
+            tail={4}
+            className="font-semibold text-white bg-[#27272a] px-2.5 py-0.5 rounded-md border border-[#3f3f46]"
+          />
           <button
             onClick={disconnect}
             className="text-[11px] text-[#71717a] hover:text-red-400 font-semibold underline transition-colors ml-2"
@@ -63,6 +69,7 @@ export function DashboardRouter() {
 
         {/* Right Section: Notification Bell & Mode Switcher */}
         <div className="flex items-center space-x-4">
+          <OrgWalletSwitcher />
           <NotificationBell />
 
           <div className="flex items-center space-x-2">
