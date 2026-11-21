@@ -14,11 +14,17 @@ import { ProjectCardSkeletonList, ProposalSkeletonList } from '@/components/skel
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
 import { ProjectFilterBar } from '@/components/ProjectFilterBar';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { usePersistentTab, usePersistentFilter } from '@/hooks/usePersistentTab';
 
 export function FreelancerDashboard() {
   const router = useRouter();
   const { address } = useWalletStore();
-  const [activeTab, setActiveTab] = useState<'explore' | 'proposals' | 'jobs'>('explore');
+  const [activeTab, setActiveTab] = usePersistentTab<'explore' | 'proposals' | 'jobs'>({
+    key: 'freelancer_active_tab',
+    defaultTab: 'explore',
+    allowedTabs: ['explore', 'proposals', 'jobs'] as const,
+    walletAddress: address,
+  });
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -54,9 +60,9 @@ export function FreelancerDashboard() {
   // Milestone submission modal state
   const [submittingMilestone, setSubmittingMilestone] = useState<{ project: Project; milestone: Milestone } | null>(null);
 
-  // Search and Category filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  // Search and Category filters (persisted in sessionStorage)
+  const [searchQuery, setSearchQuery] = usePersistentFilter<string>('freelancer_search', '', address);
+  const [selectedCategory, setSelectedCategory] = usePersistentFilter<string>('freelancer_category', 'All', address);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
