@@ -44,6 +44,14 @@ describe('SoundSynthesizer', () => {
     expect(() => {
       soundSynthesizer.playPing();
     }).not.toThrow();
+
+    expect(() => {
+      soundSynthesizer.playClick();
+    }).not.toThrow();
+
+    expect(() => {
+      soundSynthesizer.playTick();
+    }).not.toThrow();
   });
 
   it('should handle play method with type argument', () => {
@@ -51,6 +59,8 @@ describe('SoundSynthesizer', () => {
       soundSynthesizer.play('success');
       soundSynthesizer.play('alert');
       soundSynthesizer.play('ping');
+      soundSynthesizer.play('click');
+      soundSynthesizer.play('tick');
     }).not.toThrow();
   });
 
