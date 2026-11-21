@@ -31,6 +31,20 @@ export function isBalanceSufficient(balance: number | null, budget: number): boo
   return getBalanceShortfall(balance, budget) === 0;
 }
 
+export function getCurrencySymbol(token: string): string {
+  switch (token) {
+    case 'EURC':
+      return '€';
+    case 'XLM':
+      return 'XLM';
+    case 'PYUSD':
+      return '$';
+    case 'USDC':
+    default:
+      return '$';
+  }
+}
+
 function readTokenBalance(account: HorizonAccountResponse, token: string): number {
   const tokenConfig = SUPPORTED_TOKENS[token];
   const lines = account.balances || [];
