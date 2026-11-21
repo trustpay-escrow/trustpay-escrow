@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { toast } from 'sonner';
-import { CryptoId } from '@/components/ui/CryptoId';
+import { AddressBadge } from '@/components/AddressBadge';
 
 export interface ApplicantCardData {
   id: string;
@@ -27,22 +27,12 @@ export interface ApplicantCardProps {
 }
 
 export function ApplicantCard({ applicant, onAccept, onDeny, onOpenChat, isProcessing = false }: ApplicantCardProps) {
-  const [copied, setCopied] = useState(false);
   const [actionLoading, setActionLoading] = useState<'accept' | 'deny' | null>(null);
 
   const walletAddr = applicant.stellar_address || applicant.freelancer_address || applicant.name || 'GAUBK...NLSGV';
   const coverText = applicant.cover_note || applicant.pitch || 'No cover note provided.';
   const portfolioUrl = applicant.portfolio_url;
   const currentStatus = applicant.status || (applicant.granted ? 'accepted' : 'pending');
-
-  const handleCopyWallet = () => {
-    if (walletAddr) {
-      navigator.clipboard.writeText(walletAddr);
-      setCopied(true);
-      toast.success('Wallet address copied!');
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   const handleAcceptClick = async () => {
     try {
@@ -72,17 +62,14 @@ export function ApplicantCard({ applicant, onAccept, onDeny, onOpenChat, isProce
             Freelancer Stellar Address
           </span>
           <div className="flex items-center space-x-2">
-            <CryptoId
+            <AddressBadge
               value={walletAddr}
-              className="sm:text-sm text-white bg-[#232326] px-3 py-1 rounded-xl border border-[#333338] select-all break-all"
+              cryptoClassName="sm:text-sm text-white select-all break-all"
+              className="bg-[#232326] px-3 py-1 rounded-xl border border-[#333338]"
+              onCopy={() => {
+                toast.success('Wallet address copied!');
+              }}
             />
-            <button
-              onClick={handleCopyWallet}
-              className="text-[#a1a1aa] hover:text-white transition-colors p-1 text-xs"
-              title="Copy Wallet Address"
-            >
-              {copied ? '✓' : '📋'}
-            </button>
           </div>
         </div>
 
