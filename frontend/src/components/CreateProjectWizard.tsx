@@ -1,13 +1,17 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useCreateProjectForm } from '@/hooks/useCreateProjectForm';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import { BalanceWarningBadge } from '@/components/BalanceWarningBadge';
 import { useWalletStore } from '@/store/walletStore';
+import { FiatOnRampModal } from '@/components/FiatOnRampModal';
+import { PathPaymentSwapWidget } from '@/components/PathPaymentSwapWidget';
 
 export function CreateProjectWizard() {
   const { address } = useWalletStore();
+  const [showOnRamp, setShowOnRamp] = useState(false);
+  const [showSwap, setShowSwap] = useState(false);
   const {
     formData,
     loading,
@@ -27,6 +31,8 @@ export function CreateProjectWizard() {
     balanceShortfall,
     hasSufficientBalance,
     refreshBalance,
+    handleFiatDepositDetected,
+    handlePathSwapComplete,
   } = useCreateProjectForm();
 
   const steps = [
@@ -412,6 +418,46 @@ export function CreateProjectWizard() {
               budget={formData.budget}
               token={formData.token}
               onRefresh={refreshBalance}
+            />
+
+            {address && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowOnRamp(true)}
+                  className="rounded-lg border border-[#27272a] px-3 py-2 text-xs font-semibold text-white hover:border-blue-500"
+                >
+                  Buy USDC with card or bank
+                </button>
+                {formData.token === 'USDC' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSwap((v) => !v)}
+                    aria-expanded={showSwap}
+                    className="rounded-lg border border-[#27272a] px-3 py-2 text-xs font-semibold text-white hover:border-blue-500"
+                  >
+                    Pay with XLM or EURC
+                  </button>
+                )}
+              </div>
+            )}
+            {showSwap && address && (
+              <PathPaymentSwapWidget
+                walletAddress={address}
+                destinationToken={formData.token}
+                requiredAmount={balanceShortfall > 0 ? balanceShortfall : formData.budget}
+                onSwapComplete={handlePathSwapComplete}
+              />
+            )}
+            <FiatOnRampModal
+              isOpen={showOnRamp}
+              onClose={() => setShowOnRamp(false)}
+              walletAddress={address}
+              suggestedAmount={balanceShortfall > 0 ? balanceShortfall : formData.budget}
+              onDepositDetected={(result) => {
+                setShowOnRamp(false);
+                handleFiatDepositDetected(result);
+              }}
             />
 
             {!address && (

@@ -4,6 +4,8 @@ export interface TokenConfig {
   issuerOrContractAddress: string;
   icon: string;
   decimals: number;
+  /** Classic Stellar asset issuer (G...) used for Horizon path finding and DEX swaps. Native XLM has none. */
+  classicIssuer?: string;
 }
 
 export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
@@ -13,6 +15,7 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
     issuerOrContractAddress: process.env.NEXT_PUBLIC_USDC_TOKEN_ADDRESS || 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA',
     icon: '$',
     decimals: 7,
+    classicIssuer: process.env.NEXT_PUBLIC_USDC_ISSUER || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
   },
   EURC: {
     symbol: 'EURC',
@@ -20,6 +23,7 @@ export const SUPPORTED_TOKENS: Record<string, TokenConfig> = {
     issuerOrContractAddress: process.env.NEXT_PUBLIC_EURC_TOKEN_ADDRESS || 'CDOIV56NSBNVNZN4XPTOT7JVRK6AW4RUISEPYUZYIIKMVIY7X3OH4S5X',
     icon: '€',
     decimals: 7,
+    classicIssuer: process.env.NEXT_PUBLIC_EURC_ISSUER || 'GB3Q6QDZYTHWT7E5PVS3W7FUT5GVAFC5KSZFFLPU25GO7VTC3NM2ZTVO',
   },
   XLM: {
     symbol: 'XLM',

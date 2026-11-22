@@ -5,6 +5,7 @@ import Link from 'next/link';
 import NotificationBell from '@/components/NotificationBell';
 import LanguageSelector from '@/components/LanguageSelector';
 import { useI18n } from '@/lib/i18n';
+import { useSep10Session } from '@/hooks/useSep10Session';
 
 interface HeaderProps {
   showDashboardLink?: boolean;
@@ -12,6 +13,7 @@ interface HeaderProps {
 
 export function Header({ showDashboardLink = true }: HeaderProps) {
   const { t } = useI18n();
+  useSep10Session();
 
   return (
     <header className="w-full border-b border-[#27272a]/60 bg-[#09090b]/80 backdrop-blur-xl sticky top-0 z-50 px-6 py-4 transition-all">

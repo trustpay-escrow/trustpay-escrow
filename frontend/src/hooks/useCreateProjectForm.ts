@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   projectSchema,
@@ -137,6 +137,8 @@ export function useCreateProjectForm() {
   const [errors, setErrors] = useState<Partial<Record<keyof ProjectFormData, string>>>({});
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  // Auto-funding after a fiat deposit: idle -> waiting (refresh requested) -> reloading -> submit/give up
+  const autoFundRef = useRef<'idle' | 'waiting' | 'reloading'>('idle');
 
   const [formData, setFormData] = useState<ProjectFormData>(() => {
     if (typeof window !== 'undefined') {
@@ -154,6 +156,7 @@ export function useCreateProjectForm() {
   });
 
   const walletBalance = useTokenBalance(address, formData.token);
+  const refreshBalance = walletBalance.refresh;
   const balanceShortfall = getBalanceShortfall(walletBalance.balance, formData.budget);
   const hasSufficientBalance = isBalanceSufficient(walletBalance.balance, formData.budget);
 
@@ -347,9 +350,49 @@ export function useCreateProjectForm() {
     }
   };
 
+  /** Called once a fiat on-ramp deposit lands: refreshes the balance, then funds the escrow automatically. */
+  const handleFiatDepositDetected = useCallback(
+    (result: { amount: number }) => {
+      toast.success(`${result.amount} USDC received. Funding your escrow…`);
+      autoFundRef.current = 'waiting';
+      refreshBalance();
+    },
+    [refreshBalance]
+  );
+
+  /** Called after a DEX path-payment swap lands USDC in the wallet so the balance check updates. */
+  const handlePathSwapComplete = useCallback(
+    (result: { received: number; token: string }) => {
+      toast.success(`Received at least ${result.received} ${result.token}. Balance updated.`);
+      refreshBalance();
+    },
+    [refreshBalance]
+  );
+
+  useEffect(() => {
+    const phase = autoFundRef.current;
+    if (phase === 'waiting' && walletBalance.loading) {
+      autoFundRef.current = 'reloading';
+    } else if (phase === 'reloading' && !walletBalance.loading) {
+      autoFundRef.current = 'idle';
+      if (hasSufficientBalance && !loading) {
+        // Defer so the submit runs after this render commits, with the refreshed balance.
+        setTimeout(() => void handleSubmit(), 0);
+      } else {
+        toast.info(
+          `Deposit received, but your ${formData.token} balance is still short. Add more funds or lower the budget.`
+        );
+      }
+    }
+    // handleSubmit intentionally omitted: it closes over the latest form state on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletBalance.loading]);
+
   return {
     formData,
     setFormData,
+    handleFiatDepositDetected,
+    handlePathSwapComplete,
     loading,
     errors,
     currentStep,

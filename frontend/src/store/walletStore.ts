@@ -56,6 +56,8 @@ export interface WalletState {
   activeOrgAccountId: string | null;
   roleFilterStates: Record<ActiveRole, RoleFilterState>;
   setActiveRole: (role: ActiveRole) => void;
+  /** Replaces the in-memory SEP-0010 JWT (e.g. after a silent refresh). */
+  setToken: (token: string | null) => void;
   setRoleFilter: (role: ActiveRole, filters: Partial<RoleFilterState>) => void;
   setWalletInfo: (
     address: string,
@@ -93,6 +95,7 @@ export const useWalletStore = create<WalletState>()(
         arbiter: { status: 'disputed', search: '', category: 'All' },
       },
       setActiveRole: (activeRole) => set({ activeRole }),
+      setToken: (token) => set({ token }),
       setRoleFilter: (role, filters) =>
         set((state) => ({
           roleFilterStates: {
@@ -195,6 +198,11 @@ export const useWalletStore = create<WalletState>()(
     {
       name: 'trustpay-wallet-storage',
       storage: createJSONStorage(getStorageProvider),
+      // The SEP-0010 JWT is kept in memory only; the httpOnly cookie restores it after a reload.
+      partialize: (state) => {
+        const { token: _token, ...persisted } = state;
+        return persisted;
+      },
     }
   )
 );

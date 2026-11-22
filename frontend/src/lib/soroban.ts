@@ -8,6 +8,8 @@ import {
   TransactionBuilder,
   Networks,
   Operation,
+  Asset,
+  Horizon,
 } from '@stellar/stellar-sdk';
 import { signTransaction, isConnected } from '@stellar/freighter-api';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
@@ -783,3 +785,87 @@ export async function executeSorobanCall<T>(
 export * from './soroban-error-decoder';
 export { showSorobanErrorToast } from '@/components/SorobanErrorToast';
 
+
+export interface PathPaymentSwapResult {
+  success: boolean;
+  txHash: string;
+  /** Minimum destination amount that was enforced on-chain. */
+  destMin: string;
+}
+
+/**
+ * Swaps `sendAmount` of `sendAsset` into `destAsset` through the Stellar DEX with a
+ * `pathPaymentStrictSend` operation paid back to the caller. The `destMin` bound makes the
+ * swap revert atomically if slippage exceeds the user's tolerance.
+ *
+ * Note: Soroban contract invocations must be the only operation in their transaction, so
+ * funding the escrow with the swapped USDC is a second transaction (`lockEscrowOnChain`).
+ */
+export async function swapViaPathPayment(options: {
+  callerAddress: string;
+  sendAsset: { code: string; issuer?: string };
+  sendAmount: string;
+  destAsset: { code: string; issuer?: string };
+  destMin: string;
+  path?: Array<{ code: string; issuer?: string }>;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<PathPaymentSwapResult> {
+  const { callerAddress, sendAsset, sendAmount, destAsset, destMin, path = [], onStatusUpdate } = options;
+  const toAsset = (a: { code: string; issuer?: string }) =>
+    a.issuer ? new Asset(a.code, a.issuer) : Asset.native();
+
+  onStatusUpdate?.('preparing', 'Validating wallet connection and account status...');
+  if (!(await isConnected())) {
+    throw new Error('Freighter wallet extension is not detected. Please install and unlock Freighter.');
+  }
+  await ensureAccountExists(callerAddress);
+
+  const horizon = new Horizon.Server(HORIZON_URL);
+  const account = await horizon.loadAccount(callerAddress);
+
+  const tx = new TransactionBuilder(account, {
+    fee: '10000',
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.pathPaymentStrictSend({
+        sendAsset: toAsset(sendAsset),
+        sendAmount,
+        destination: callerAddress,
+        destAsset: toAsset(destAsset),
+        destMin,
+        path: path.map(toAsset),
+      })
+    )
+    .setTimeout(180)
+    .build();
+
+  onStatusUpdate?.('signing', 'Awaiting swap authorization in Freighter wallet...');
+  let signResult: any;
+  try {
+    signResult = await signTransaction(tx.toXDR(), { networkPassphrase: STELLAR_NETWORK_PASSPHRASE });
+  } catch (err: any) {
+    throw new Error(`Wallet signing cancelled or rejected: ${err.message || err}`);
+  }
+  if (signResult?.error) {
+    throw new Error(typeof signResult.error === 'string' ? signResult.error : signResult.error.message || 'Freighter rejected signature');
+  }
+  const signedXdr = typeof signResult === 'string' ? signResult : signResult?.signedTxXdr || '';
+  if (!signedXdr) throw new Error('Transaction signing was rejected or returned empty XDR.');
+
+  onStatusUpdate?.('submitting', 'Broadcasting swap to the Stellar DEX...');
+  try {
+    const res = await horizon.submitTransaction(TransactionBuilder.fromXDR(signedXdr, STELLAR_NETWORK_PASSPHRASE));
+    onStatusUpdate?.('success', 'Swap confirmed on Stellar!');
+    return { success: true, txHash: res.hash, destMin };
+  } catch (err: any) {
+    const codes = err?.response?.data?.extras?.result_codes?.operations as string[] | undefined;
+    if (codes?.includes('op_under_dest_min')) {
+      throw new Error('Price moved beyond your slippage tolerance. Refresh the quote or raise the tolerance.');
+    }
+    if (codes?.includes('op_no_trust')) {
+      throw new Error(`Your account needs a trustline for ${destAsset.code} before it can receive the swap.`);
+    }
+    throw new Error(`Swap failed: ${codes?.join(', ') || err?.message || err}`);
+  }
+}

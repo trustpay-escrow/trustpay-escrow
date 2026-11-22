@@ -1,4 +1,5 @@
 import { useWalletStore } from '@/store/walletStore';
+import { refreshSessionToken } from '@/lib/sep10-auth';
 
 /**
  * Returns Authorization header with the active SEP-0010 JWT token if available.
@@ -17,12 +18,21 @@ export function getAuthHeaders(extraHeaders: Record<string, string> = {}): Recor
  * and Authorization: Bearer <token> headers for all backend API calls.
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const headers = getAuthHeaders((options.headers as Record<string, string>) || {});
-  return fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  const send = () =>
+    fetch(url, {
+      ...options,
+      headers: getAuthHeaders((options.headers as Record<string, string>) || {}),
+      credentials: 'include',
+    });
+
+  const response = await send();
+  if (response.status !== 401 || !useWalletStore.getState().address) return response;
+
+  // Token may have lapsed between scheduled refreshes: refresh once and retry transparently.
+  const fresh = await refreshSessionToken(useWalletStore.getState().token);
+  if (!fresh) return response;
+  useWalletStore.getState().setToken(fresh);
+  return send();
 }
 
 export interface ProjectAuditEventRecord {
