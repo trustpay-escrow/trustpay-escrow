@@ -13,6 +13,7 @@ import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { DeliverableChecksums } from '@/components/FileChecksumBadge';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import {
@@ -980,6 +981,12 @@ export default function ProjectDetailsPage() {
                           >
                             {m.deliverable_url}
                           </a>
+                        </div>
+                      )}
+
+                      {m.deliverable_notes && (
+                        <div className="pl-10 pt-1">
+                          <DeliverableChecksums notes={m.deliverable_notes} />
                         </div>
                       )}
 

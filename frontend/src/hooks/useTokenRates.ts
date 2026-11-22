@@ -125,3 +125,70 @@ export function useTokenRates(
     refresh,
   };
 }
+
+// ── USD price feed for price alerts (#253) ──────────────────────────────────
+
+export const TOKEN_PRICE_POLL_MS = 60_000;
+
+const COINGECKO_IDS: Record<string, string> = { XLM: 'stellar', USDC: 'usd-coin' };
+
+export type TokenPricesUsd = Partial<Record<'XLM' | 'USDC', number>>;
+
+/** Fetches USD prices. Override the source with NEXT_PUBLIC_PRICE_FEED_URL (same JSON shape as CoinGecko simple/price). */
+export async function fetchTokenPricesUsd(tokens: Array<'XLM' | 'USDC'> = ['XLM', 'USDC']): Promise<TokenPricesUsd> {
+  const ids = tokens.map((t) => COINGECKO_IDS[t]).join(',');
+  const base = process.env.NEXT_PUBLIC_PRICE_FEED_URL || 'https://api.coingecko.com/api/v3/simple/price';
+  const response = await fetch(`${base}?ids=${ids}&vs_currencies=usd`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Price feed responded with ${response.status}`);
+  const data = (await response.json()) as Record<string, { usd?: number }>;
+  const prices: TokenPricesUsd = {};
+  for (const token of tokens) {
+    const value = data[COINGECKO_IDS[token]]?.usd;
+    if (typeof value === 'number' && Number.isFinite(value)) prices[token] = value;
+  }
+  return prices;
+}
+
+export interface UseTokenPricesResult {
+  prices: TokenPricesUsd;
+  loading: boolean;
+  error: string | null;
+  lastUpdated: number | null;
+}
+
+/** Polls USD prices every 60 seconds while mounted. */
+export function useTokenPrices(
+  options: { enabled?: boolean; pollMs?: number } = {}
+): UseTokenPricesResult {
+  const { enabled = true, pollMs = TOKEN_PRICE_POLL_MS } = options;
+  const [prices, setPrices] = useState<TokenPricesUsd>({});
+  const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    const load = async () => {
+      try {
+        const next = await fetchTokenPricesUsd();
+        if (!active) return;
+        setPrices((prev) => ({ ...prev, ...next }));
+        setLastUpdated(Date.now());
+        setError(null);
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : 'Price feed unavailable');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), pollMs);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [enabled, pollMs]);
+
+  return { prices, loading, error, lastUpdated };
+}

@@ -27,6 +27,10 @@ export interface ApplicantCardProps {
   onOpenChat?: (freelancerAddress: string) => void;
   onOpenProfile?: () => void;
   isProcessing?: boolean;
+  /** Whether the client has starred this freelancer (#255). */
+  isStarred?: boolean;
+  /** When provided, a star toggle is shown on the card. */
+  onToggleStar?: (applicant: ApplicantCardData) => void;
 }
 
 export function ApplicantCard({
@@ -36,6 +40,8 @@ export function ApplicantCard({
   onOpenChat,
   onOpenProfile,
   isProcessing = false,
+  isStarred = false,
+  onToggleStar,
 }: ApplicantCardProps) {
   const [copied, setCopied] = useState(false);
   const [actionLoading, setActionLoading] = useState<'accept' | 'deny' | null>(null);
@@ -93,6 +99,21 @@ export function ApplicantCard({
             >
               {copied ? '✓' : '📋'}
             </button>
+            {onToggleStar && (
+              <button
+                type="button"
+                onClick={() => onToggleStar(applicant)}
+                aria-pressed={isStarred}
+                aria-label={isStarred ? 'Remove from saved contractors' : 'Save contractor'}
+                title={isStarred ? 'Remove from saved contractors' : 'Save contractor'}
+                className={`p-1 text-base transition-colors ${
+                  isStarred ? 'text-amber-400 hover:text-amber-300' : 'text-[#71717a] hover:text-amber-300'
+                }`}
+                data-testid="applicant-star-toggle"
+              >
+                {isStarred ? '★' : '☆'}
+              </button>
+            )}
           </div>
           {Boolean(applicant.zk_attestation) && (
             <div className="pt-1">

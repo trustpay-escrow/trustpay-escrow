@@ -21,6 +21,10 @@ import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
 import { NotificationScheduleModal } from '@/components/NotificationScheduleModal';
+import { GasFeeEstimatorWidget } from '@/components/GasFeeEstimatorWidget';
+import { TokenPriceAlertWidget } from '@/components/TokenPriceAlertWidget';
+import { StarredFreelancersList } from '@/components/StarredFreelancersList';
+import { useStarredFreelancers } from '@/hooks/useStarredFreelancers';
 import {
   createProjectOnChain,
   lockEscrowOnChain,
@@ -28,17 +32,20 @@ import {
   getStellarExplorerUrl,
   DEFAULT_ESCROW_CONTRACT_ID,
   showSorobanErrorToast,
+  setSorobanBaseFee,
 } from '@/lib/soroban';
 
 export interface ClientDashboardProps {
-  defaultTab?: 'projects' | 'create' | 'applicants';
+  defaultTab?: 'projects' | 'create' | 'applicants' | 'saved';
 }
 
 export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProps) {
   const router = useRouter();
   const { address } = useWalletStore();
   const activeWalletAddress = useActiveWalletAddress() || address;
-  const [activeTab, setActiveTab] = useState<'projects' | 'create' | 'applicants'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'projects' | 'create' | 'applicants' | 'saved'>(defaultTab);
+  const { starred, isStarred, toggle: toggleStarred, setNotes: setStarredNotes } =
+    useStarredFreelancers(activeWalletAddress);
   const [loading, setLoading] = useState(true);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name?: string } | null>(null);
 
@@ -613,6 +620,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               {activeTab === 'projects' && 'my projects'}
               {activeTab === 'create' && 'create project'}
               {activeTab === 'applicants' && 'applicants'}
+              {activeTab === 'saved' && 'saved contractors'}
             </span>
           </div>
 
@@ -647,8 +655,34 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
             >
               Applicants ({selectedProjectForApplicants?.applicants?.length || 0})
             </button>
+            <button
+              onClick={() => setActiveTab('saved')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'saved'
+                  ? 'bg-[#27272a] text-white shadow-sm'
+                  : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]/50'
+              }`}
+              data-testid="saved-contractors-tab"
+            >
+              Saved Contractors ({starred.length})
+            </button>
           </div>
         </div>
+
+        {/* Network fee gauge and token price alerts (#256, #253) */}
+        {activeTab === 'projects' && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <GasFeeEstimatorWidget onChange={(selection) => setSorobanBaseFee(selection.feeStroops)} />
+            <TokenPriceAlertWidget
+              onFundNow={(alert, price) => {
+                toast.success(
+                  `Funding at ${alert.token} $${price?.toFixed(4) ?? alert.target}. Choose a project to fund.`
+                );
+                setActiveTab('create');
+              }}
+            />
+          </div>
+        )}
 
         {/* VIEW 1: MY PROJECTS */}
         {activeTab === 'projects' && (
@@ -1523,6 +1557,19 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     onAccept={(id) => handleAcceptProposal(id)}
                     onDeny={(id) => handleDenyProposal(id)}
                     onOpenProfile={() => setProfileApplicant(applicant)}
+                    isStarred={isStarred(applicant.stellar_address || applicant.freelancer_address || '')}
+                    onToggleStar={(a) => {
+                      const addr = a.stellar_address || a.freelancer_address || '';
+                      if (!addr) {
+                        toast.error('This applicant has no wallet address to save.');
+                        return;
+                      }
+                      toggleStarred({
+                        address: addr,
+                        name: a.name,
+                        lastProjectTitle: selectedProjectForApplicants?.title,
+                      });
+                    }}
                     onOpenChat={(freelancerAddr) => {
                       if (!address) {
                         toast.error('Please connect your Stellar wallet first');
@@ -1547,6 +1594,28 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* VIEW 4: SAVED CONTRACTORS (#255) */}
+        {activeTab === 'saved' && (
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <div className="pb-4 border-b border-[#27272a]">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Saved Contractors</h2>
+              <p className="text-xs sm:text-sm text-[#a1a1aa] mt-1">
+                Freelancers you have starred, with private notes only you can see.
+              </p>
+            </div>
+            <StarredFreelancersList
+              starred={starred}
+              onUnstar={(addr) => toggleStarred({ address: addr })}
+              onSaveNotes={setStarredNotes}
+              onInvite={(f) => {
+                setFormFreelancerAddress(f.address);
+                setActiveTab('create');
+                toast.success(`Escrow form pre-filled for ${f.name || 'your saved contractor'}.`);
+              }}
+            />
           </div>
         )}
       </div>
