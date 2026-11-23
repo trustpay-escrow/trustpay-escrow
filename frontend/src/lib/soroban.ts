@@ -778,157 +778,94 @@ export async function autoReleaseMilestoneOnChain(params: {
 }
 
 /**
- * Prepares an unsigned Soroban transaction for off-band (SEP-0007) signing.
- * Unlike invokeSorobanMethod this does NOT require the Freighter extension —
- * the returned XDR is meant to be scanned by a mobile wallet via QR code.
+ * Executes a mutual (non-dispute) project cancellation once both client and
+ * freelancer have agreed on a refund split. Broadcasts `mutual_cancel`.
  */
-export async function prepareSep07Transaction(options: {
+export async function mutualCancelOnChain(params: {
   callerAddress: string;
-  contractAddress?: string;
-  functionName: string;
-  args: xdr.ScVal[];
-}): Promise<{ txXdr: string; sourceAccount: string; contractAddress: string; functionName: string }> {
-  const { callerAddress, functionName, args } = options;
-  const targetContract = options.contractAddress || DEFAULT_ESCROW_CONTRACT_ID;
-
-  await ensureAccountExists(callerAddress);
-
-  const server = getSorobanRpcServer();
-  const sourceAccount = await server.getAccount(callerAddress);
-
-  const baseTx = new TransactionBuilder(sourceAccount, {
-    fee: '100000',
-    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      Operation.invokeContractFunction({
-        contract: targetContract,
-        function: functionName,
-        args,
-      })
-    )
-    .setTimeout(180)
-    .build();
-
-  const preparedTx = await server.prepareTransaction(baseTx);
-
-  return {
-    txXdr: preparedTx.toXDR(),
-    sourceAccount: callerAddress,
-    contractAddress: targetContract,
-    functionName,
-  };
-}
-
-/**
- * Builds a SEP-0007 `web+stellar:tx` URI for a prepared transaction XDR.
- * Compatible with Lobstr, Solar, and StellarX mobile wallets.
- */
-export function buildSep07Uri(txXdr: string, options?: { callbackUrl?: string; memo?: string }): string {
-  const params = new URLSearchParams();
-  params.set('xdr', txXdr);
-  params.set('network_passphrase', STELLAR_NETWORK_PASSPHRASE);
-  params.set('replace', 'web+stellar:tx');
-  if (options?.callbackUrl) params.set('callback', options.callbackUrl);
-  if (options?.memo) params.set('memo', options.memo);
-  return `web+stellar:tx?${params.toString()}`;
-}
-
-/**
- * Polls Horizon for a transaction submitted by `sourceAccount` after `startedAt`.
- * Mobile wallets sign and broadcast the SEP-0007 transaction themselves, so we
- * detect submission by watching the account's recent ledger transactions.
- * Times out after `timeoutMs` (default 60s).
- */
-export async function pollSep07Submission(
-  sourceAccount: string,
-  startedAt: Date,
-  timeoutMs = 60_000
-): Promise<{ txHash: string; createdAt: string }> {
-  const deadline = Date.now() + timeoutMs;
-  const startedIso = startedAt.toISOString();
-
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(
-        `${HORIZON_URL}/transactions?account=${encodeURIComponent(sourceAccount)}&order=desc&limit=10`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const records: any[] = Array.isArray(data?._embedded?.records) ? data._embedded.records : [];
-        const match = records.find((r) => r.created_at && r.created_at >= startedIso);
-        if (match?.hash) {
-          return { txHash: match.hash, createdAt: match.created_at };
-        }
-      }
-    } catch {
-      // Transient network errors — keep polling until deadline
-    }
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-
-  throw new Error('Timed out waiting for mobile wallet signature (60s). Please try again.');
-}
-
-/**
- * Confirms a transaction reached SUCCESS on the Soroban RPC ledger.
- */
-export async function confirmSorobanTransaction(txHash: string, maxAttempts = 20): Promise<boolean> {
-  const server = getSorobanRpcServer();
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      const tx = await server.getTransaction(txHash);
-      if (tx.status === 'SUCCESS') return true;
-      if (tx.status === 'FAILED') return false;
-    } catch {
-      // Not yet ingested — keep polling
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-  return false;
-}
-
-/**
- * Claims accumulated arbitration reward fees for an approved arbiter.
- */
-export async function claimArbiterFeesOnChain(params: {
-  arbiterAddress: string;
+  projectIdOnChain: number | bigint | string;
+  clientRefundAmount: number;
+  freelancerCompensation: number;
   contractAddress?: string;
   onStatusUpdate?: TxStatusCallback;
 }): Promise<SorobanTxResult> {
-  const { arbiterAddress, contractAddress, onStatusUpdate } = params;
+  const {
+    callerAddress,
+    projectIdOnChain,
+    clientRefundAmount,
+    freelancerCompensation,
+    contractAddress,
+    onStatusUpdate,
+  } = params;
 
-  const args: xdr.ScVal[] = [Address.fromString(arbiterAddress).toScVal()];
+  const args: xdr.ScVal[] = [
+    Address.fromString(callerAddress).toScVal(),
+    nativeToScVal(BigInt(projectIdOnChain), { type: 'u64' }),
+    nativeToScVal(BigInt(Math.round(clientRefundAmount * 10_000_000)), { type: 'i128' }),
+    nativeToScVal(BigInt(Math.round(freelancerCompensation * 10_000_000)), { type: 'i128' }),
+  ];
 
   return invokeSorobanMethod({
-    callerAddress: arbiterAddress,
+    callerAddress,
     contractAddress,
-    functionName: 'claim_arbiter_fees',
+    functionName: 'mutual_cancel',
     args,
     onStatusUpdate,
   });
 }
 
 /**
- * Fetches recent Soroban contract events for diagnostic inspection.
+ * Verified open-source repository hosting the audited Soroban contract source.
  */
-export async function fetchContractEvents(options: {
-  contractId?: string;
-  ledgerWindow?: number;
-}): Promise<any[]> {
+export const OFFICIAL_CONTRACT_REPO_URL =
+  'https://github.com/trustpay-escrow/trustpay-escrow/tree/main/contracts';
+
+/**
+ * Expected SHA-256 (WASM hash) of the official release build artifact.
+ * Configure via NEXT_PUBLIC_ESCROW_WASM_SHA256 once a release is published.
+ */
+export const EXPECTED_WASM_SHA256 = (
+  process.env.NEXT_PUBLIC_ESCROW_WASM_SHA256 || ''
+).toLowerCase();
+
+function xdrBufferToHex(buf: Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Queries the Soroban RPC for the deployed contract instance's WASM bytecode
+ * hash (the SHA-256 digest of the compiled contract WASM) via ledger entries.
+ */
+export async function getContractWasmHash(
+  contractAddress: string = DEFAULT_ESCROW_CONTRACT_ID
+): Promise<string> {
   const server = getSorobanRpcServer();
-  const latest = await server.getLatestLedger();
-  const ledgerWindow = options.ledgerWindow ?? 500;
 
-  const request: any = {
-    startLedger: Math.max(1, latest.sequence - ledgerWindow),
-    filters: options.contractId
-      ? [{ type: 'contract', contractId: options.contractId }]
-      : undefined,
-  };
+  const result = await server.getContractData(
+    contractAddress,
+    xdr.ScVal.scvSymbol('ContractInstance'),
+    rpc.Durability.Persistent
+  );
 
-  const res: any = await server.getEvents(request);
-  return Array.isArray(res?.events) ? res.events : [];
+  const data = result.val;
+  if (data.switch().name !== 'contractData') {
+    throw new Error('Contract instance ledger entry not found.');
+  }
+
+  const instanceVal = data.contractData().val();
+  if (instanceVal.switch().name !== 'scvContractInstance') {
+    throw new Error('Contract has no instance data on ledger.');
+  }
+
+  const executable = instanceVal.instance().executable();
+  if (executable.switch().name !== 'contractExecutableWasm') {
+    throw new Error('Contract executable is not an inline WASM hash.');
+  }
+
+  return xdrBufferToHex(executable.wasmHash());
 }
 
 import { decodeSorobanError, DecodedSorobanError } from './soroban-error-decoder';

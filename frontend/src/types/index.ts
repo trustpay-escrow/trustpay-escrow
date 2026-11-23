@@ -63,6 +63,7 @@ export interface Applicant {
   pitch: string;
   cover_note?: string;
   portfolio_url?: string;
+  demo_url?: string;
   status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   granted?: boolean;
   created_at?: string;
