@@ -35,26 +35,46 @@ export interface RoleFilterState {
   category?: string;
 }
 
+export interface OrgWalletAccount {
+  id: string;
+  label: string;
+  address: string;
+  walletName?: string;
+  isPrimary?: boolean;
+  addedAt: string;
+}
+
 export interface WalletState {
   address: string | null;
   walletName: string | null;
+  network: string | null;
+  targetNetwork: string;
   activeRole: ActiveRole;
   isClient: boolean;
   isFreelancer: boolean;
   isArbiter: boolean;
   token: string | null;
+  orgAccounts: OrgWalletAccount[];
+  activeOrgAccountId: string | null;
   roleFilterStates: Record<ActiveRole, RoleFilterState>;
   setActiveRole: (role: ActiveRole) => void;
-  setRoleFilter: (role: ActiveRole, filters: Partial<RoleFilterState>) => void;
+  setNetwork: (network: string | null) => void;
   setWalletInfo: (
     address: string,
     isClient?: boolean,
     isFreelancer?: boolean,
-    walletNameOrArbiter?: string | boolean,
+    walletName?: string,
     token?: string | null,
-    isArbiter?: boolean
+    network?: string | null
   ) => void;
+  addOrgAccount: (account: { label: string; address: string; walletName?: string }) => void;
+  removeOrgAccount: (id: string) => void;
+  setActiveOrgAccount: (id: string | null) => void;
   disconnect: () => void;
+}
+
+function primaryOrgAccountId(address: string) {
+  return `primary:${address}`;
 }
 
 export const useWalletStore = create<WalletState>()(
@@ -62,42 +82,31 @@ export const useWalletStore = create<WalletState>()(
     (set, get) => ({
       address: null,
       walletName: null,
+      network: null,
+      targetNetwork: process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'TESTNET',
       activeRole: 'client',
       isClient: true,
       isFreelancer: true,
       isArbiter: true,
       token: null,
+      orgAccounts: [],
+      activeOrgAccountId: null,
       roleFilterStates: {
         client: { status: 'all', search: '', category: 'All' },
         freelancer: { status: 'all', search: '', category: 'All' },
         arbiter: { status: 'disputed', search: '', category: 'All' },
       },
       setActiveRole: (activeRole) => set({ activeRole }),
-      setRoleFilter: (role, filters) =>
-        set((state) => ({
-          roleFilterStates: {
-            ...state.roleFilterStates,
-            [role]: { ...state.roleFilterStates[role], ...filters },
-          },
-        })),
+      setNetwork: (network) => set({ network }),
       setWalletInfo: (
         address,
         isClient = true,
         isFreelancer = true,
-        walletNameOrArbiter = 'Freighter',
+        walletName = 'Freighter',
         token = null,
-        isArbiterParam = true
-      ) => {
-        let walletName = 'Freighter';
-        let isArbiter = true;
-        if (typeof walletNameOrArbiter === 'string') {
-          walletName = walletNameOrArbiter;
-          isArbiter = isArbiterParam;
-        } else if (typeof walletNameOrArbiter === 'boolean') {
-          isArbiter = walletNameOrArbiter;
-        }
-        set({ address, isClient, isFreelancer, isArbiter, walletName, token });
-      },
+        network = null
+      ) =>
+        set({ address, isClient, isFreelancer, walletName, token, network }),
       disconnect: () => {
         try {
           const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -108,11 +117,14 @@ export const useWalletStore = create<WalletState>()(
         set({
           address: null,
           walletName: null,
+          network: null,
           activeRole: 'client',
           isClient: true,
           isFreelancer: true,
           isArbiter: true,
           token: null,
+          orgAccounts: [],
+          activeOrgAccountId: null,
         });
       },
     }),
@@ -122,6 +134,14 @@ export const useWalletStore = create<WalletState>()(
     }
   )
 );
+
+export function getActiveWalletAddress(state: WalletState): string | null {
+  return state.orgAccounts.find((account) => account.id === state.activeOrgAccountId)?.address || state.address;
+}
+
+export function useActiveWalletAddress(): string | null {
+  return useWalletStore((state) => getActiveWalletAddress(state));
+}
 
 /**
  * Permission Selector: Prevents clients from accidentally submitting proposals to their own escrows.

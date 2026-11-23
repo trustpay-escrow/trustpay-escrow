@@ -1048,6 +1048,12 @@ export default function ProjectDetailsPage() {
                         </div>
                       )}
 
+                      {m.deliverable_notes && (
+                        <div className="pl-10 pt-1">
+                          <DeliverableChecksums notes={m.deliverable_notes} />
+                        </div>
+                      )}
+
                       {m.revision_note && m.status === 'in_revision' && (
                         <div className="pl-10 pt-2 text-xs text-amber-300/90 bg-amber-950/30 p-3 rounded-xl border border-amber-500/30">
                           <strong className="text-amber-400 block mb-0.5 flex items-center gap-1">

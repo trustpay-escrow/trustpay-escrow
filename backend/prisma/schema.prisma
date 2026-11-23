@@ -19,6 +19,7 @@ model User {
   role           String?       // client | freelancer | arbiter
   isClient       Boolean?      @default(true) @map("is_client")
   isFreelancer   Boolean?      @default(true) @map("is_freelancer")
+  notificationPreferences Json? @map("notification_preferences")
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   // Relations

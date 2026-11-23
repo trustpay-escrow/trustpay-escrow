@@ -88,4 +88,57 @@ describe('ApplicantCard Component', () => {
 
     expect(screen.getByText('Accepted')).toBeInTheDocument();
   });
+
+  it('disables accept button and shows Quote Expired when proposal is expired', () => {
+    const expiredApplicant: ApplicantCardData = {
+      ...mockApplicant,
+      expires_at: new Date(Date.now() - 3600000).toISOString(),
+    };
+
+    render(
+      <ApplicantCard
+        applicant={expiredApplicant}
+        onAccept={vi.fn()}
+        onDeny={vi.fn()}
+      />
+    );
+
+    const acceptButton = screen.getByRole('button', { name: /quote expired/i });
+    expect(acceptButton).toBeDisabled();
+    expect(screen.getByTestId('proposal-expired-badge')).toBeInTheDocument();
+  });
+
+  it('renders countdown badge when expires_at is in the future', () => {
+    const futureApplicant: ApplicantCardData = {
+      ...mockApplicant,
+      expires_at: new Date(Date.now() + 86400000 * 3).toISOString(),
+    };
+
+    render(
+      <ApplicantCard
+        applicant={futureApplicant}
+        onAccept={vi.fn()}
+        onDeny={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('proposal-countdown-badge')).toBeInTheDocument();
+  });
+
+  it('calls onWithdraw when withdraw button is clicked', () => {
+    const onWithdrawMock = vi.fn();
+    render(
+      <ApplicantCard
+        applicant={mockApplicant}
+        onAccept={vi.fn()}
+        onDeny={vi.fn()}
+        onWithdraw={onWithdrawMock}
+      />
+    );
+
+    const withdrawBtn = screen.getByRole('button', { name: /withdraw proposal/i });
+    fireEvent.click(withdrawBtn);
+
+    expect(onWithdrawMock).toHaveBeenCalledWith('app-999');
+  });
 });

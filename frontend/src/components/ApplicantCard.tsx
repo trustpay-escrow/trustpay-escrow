@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { ProposalExpirationBadge, formatTimeRemaining } from '@/components/ProposalExpirationBadge';
 
 export interface ApplicantCardData {
   id: string;
@@ -13,34 +14,38 @@ export interface ApplicantCardData {
   pitch?: string;
   cover_note?: string;
   portfolio_url?: string;
-  status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
+  status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected' | 'withdrawn';
   created_at?: string;
+  expires_at?: string;
   granted?: boolean;
+  zk_attestation?: unknown;
 }
 
 export interface ApplicantCardProps {
   applicant: ApplicantCardData;
   onAccept: (id: string) => Promise<void> | void;
   onDeny: (id: string) => Promise<void> | void;
+  onWithdraw?: (id: string) => Promise<void> | void;
   onOpenChat?: (freelancerAddress: string) => void;
+  onOpenProfile?: () => void;
   isProcessing?: boolean;
+  /** Whether the client has starred this freelancer (#255). */
+  isStarred?: boolean;
+  /** When provided, a star toggle is shown on the card. */
+  onToggleStar?: (applicant: ApplicantCardData) => void;
 }
 
-export function ApplicantCard({
-  applicant,
-  onAccept,
-  onDeny,
-  onOpenChat,
-  isProcessing = false,
-}: ApplicantCardProps) {
+export function ApplicantCard({ applicant, onAccept, onDeny, onWithdraw, onOpenChat, isProcessing = false }: ApplicantCardProps) {
   const [copied, setCopied] = useState(false);
-  const [actionLoading, setActionLoading] = useState<'accept' | 'deny' | null>(null);
+  const [actionLoading, setActionLoading] = useState<'accept' | 'deny' | 'withdraw' | null>(null);
 
   const walletAddr =
     applicant.stellar_address || applicant.freelancer_address || applicant.name || 'GAUBK...NLSGV';
   const coverText = applicant.cover_note || applicant.pitch || 'No cover note provided.';
   const portfolioUrl = applicant.portfolio_url;
   const currentStatus = applicant.status || (applicant.granted ? 'accepted' : 'pending');
+
+  const isExpired = applicant.expires_at ? formatTimeRemaining(new Date(applicant.expires_at)).isExpired : false;
 
   const handleCopyWallet = () => {
     if (walletAddr) {
@@ -52,6 +57,10 @@ export function ApplicantCard({
   };
 
   const handleAcceptClick = async () => {
+    if (isExpired) {
+      toast.error('Cannot accept an expired proposal.');
+      return;
+    }
     try {
       setActionLoading('accept');
       await onAccept(applicant.id);
@@ -64,6 +73,17 @@ export function ApplicantCard({
     try {
       setActionLoading('deny');
       await onDeny(applicant.id);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleWithdrawClick = async () => {
+    if (!onWithdraw) return;
+    try {
+      setActionLoading('withdraw');
+      await onWithdraw(applicant.id);
+      toast.success('Proposal withdrawn successfully.');
     } finally {
       setActionLoading(null);
     }
@@ -89,12 +109,35 @@ export function ApplicantCard({
             >
               {copied ? '✓' : '📋'}
             </button>
+            {onToggleStar && (
+              <button
+                type="button"
+                onClick={() => onToggleStar(applicant)}
+                aria-pressed={isStarred}
+                aria-label={isStarred ? 'Remove from saved contractors' : 'Save contractor'}
+                title={isStarred ? 'Remove from saved contractors' : 'Save contractor'}
+                className={`p-1 text-base transition-colors ${
+                  isStarred ? 'text-amber-400 hover:text-amber-300' : 'text-[#71717a] hover:text-amber-300'
+                }`}
+                data-testid="applicant-star-toggle"
+              >
+                {isStarred ? '★' : '☆'}
+              </button>
+            )}
           </div>
+          {Boolean(applicant.zk_attestation) && (
+            <div className="pt-1">
+              <ZkAttestationBadge attestation={applicant.zk_attestation} />
+            </div>
+          )}
         </div>
 
-        {/* Status Badge */}
-        <div className="self-start sm:self-center">
-          {currentStatus === 'pending' && (
+        {/* Status Badge & Expiration Countdown */}
+        <div className="self-start sm:self-center flex flex-wrap items-center gap-2">
+          {applicant.expires_at && (
+            <ProposalExpirationBadge expiresAt={applicant.expires_at} />
+          )}
+          {(currentStatus === 'pending') && (
             <span className="px-3 py-1 bg-[#451a03] text-[#f97316] border border-[#78350f] text-xs font-semibold rounded-full inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#f97316] animate-pulse"></span>
               Pending Review
@@ -110,6 +153,11 @@ export function ApplicantCard({
             <span className="px-3 py-1 bg-[#450a0a] text-[#f87171] border border-[#7f1d1d] text-xs font-semibold rounded-full inline-flex items-center gap-1.5">
               <span>Denied</span>
               <span>✕</span>
+            </span>
+          )}
+          {currentStatus === 'withdrawn' && (
+            <span className="px-3 py-1 bg-zinc-800 text-zinc-400 border border-zinc-700 text-xs font-semibold rounded-full inline-flex items-center gap-1.5">
+              <span>Withdrawn</span>
             </span>
           )}
         </div>
@@ -144,20 +192,35 @@ export function ApplicantCard({
 
       {/* Submission Date & Action Buttons Footer */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[#27272a]/60">
-        {applicant.created_at && (
-          <span className="text-[11px] text-[#71717a]">
-            Applied on:{' '}
-            {new Date(applicant.created_at).toLocaleDateString(undefined, {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {onOpenProfile && (
+            <button
+              type="button"
+              onClick={onOpenProfile}
+              className="px-3 py-1.5 bg-[#232326] hover:bg-[#27272a] text-[#e4e4e7] border border-[#333338] text-[11px] font-bold rounded-xl transition-colors"
+            >
+              ZK Profile
+            </button>
+          )}
+          {applicant.created_at && (
+            <span className="text-[11px] text-[#71717a]">
+              Applied on: {new Date(applicant.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+            </span>
+          )}
+        </div>
 
         {/* Accept / Deny Buttons (Visible when pending) */}
         {currentStatus === 'pending' ? (
-          <div className="flex items-center space-x-2.5 self-end sm:self-center">
+          <div className="flex flex-wrap items-center space-x-2.5 self-end sm:self-center">
+            {onWithdraw && (
+              <button
+                onClick={handleWithdrawClick}
+                disabled={isProcessing || actionLoading !== null}
+                className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 text-xs font-semibold rounded-xl transition-all active:scale-95 disabled:opacity-50"
+              >
+                {actionLoading === 'withdraw' ? 'Withdrawing...' : 'Withdraw Proposal'}
+              </button>
+            )}
             <button
               onClick={handleDenyClick}
               disabled={isProcessing || actionLoading !== null}
@@ -168,11 +231,15 @@ export function ApplicantCard({
             </button>
             <button
               onClick={handleAcceptClick}
-              disabled={isProcessing || actionLoading !== null}
-              className="px-5 py-2 bg-[#052e16] hover:bg-[#14532d] text-[#22c55e] hover:text-white border border-[#14532d] text-xs font-bold rounded-xl shadow-lg shadow-emerald-950/40 transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-1"
+              disabled={isProcessing || actionLoading !== null || isExpired}
+              className={`px-5 py-2 text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-1 ${
+                isExpired
+                  ? 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed'
+                  : 'bg-[#052e16] hover:bg-[#14532d] text-[#22c55e] hover:text-white border border-[#14532d] shadow-emerald-950/40'
+              }`}
             >
-              <span>{actionLoading === 'accept' ? 'Accepting...' : 'Accept Application'}</span>
-              <span>✓</span>
+              <span>{actionLoading === 'accept' ? 'Accepting...' : isExpired ? 'Quote Expired' : 'Accept Application'}</span>
+              <span>{isExpired ? '✕' : '✓'}</span>
             </button>
           </div>
         ) : (
