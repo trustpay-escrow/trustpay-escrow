@@ -208,7 +208,8 @@ export const requestRevision = async (req: Request, res: Response): Promise<any>
       });
     }
 
-    const { revision_note, actor_address } = validation.data;
+    const { revision_note, revision_checklist, revision_attachments, actor_address } =
+      validation.data;
 
     const { data: milestone, error: fetchErr } = await supabase
       .from('milestones')
@@ -246,6 +247,8 @@ export const requestRevision = async (req: Request, res: Response): Promise<any>
         status: 'in_revision',
         revisions_remaining: newRemaining,
         revision_note,
+        ...(revision_checklist ? { revision_checklist } : {}),
+        ...(revision_attachments ? { revision_attachments } : {}),
         submitted_at: null,
         auto_release_at: null,
       })

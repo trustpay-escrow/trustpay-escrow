@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { isConnected, requestAccess, getNetworkDetails, setAllowed, signTransaction } from "@stellar/freighter-api";
 import { toast } from "sonner";
 import { useWalletStore } from "@/store/walletStore";
+import { CryptoId } from "@/components/ui/CryptoId";
 import { useRouter } from "next/navigation";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useWalletEventListener } from "@/hooks/useWalletEventListener";
@@ -82,50 +83,22 @@ export default function WalletConnect() {
     }
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      toast.info("Requesting SEP-0010 authentication challenge...");
-
-      // 1. Fetch challenge XDR from backend
-      const challengeRes = await fetch(`${apiUrl}/api/auth/challenge?account=${userAddress}`);
-      if (!challengeRes.ok) {
-        const errData = await challengeRes.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to retrieve authentication challenge");
-      }
-      const { transaction: challengeXdr, network } = await challengeRes.json();
-
-      let signedXdr = challengeXdr;
-
-      // 2. Prompt wallet for cryptographic signature
-      if (customSigner) {
-        toast.info(`Please sign the challenge in ${selectedWallet}...`);
-        signedXdr = await customSigner(challengeXdr);
-      } else if (selectedWallet.includes("Freighter")) {
-        toast.info("Please sign the authentication challenge in Freighter...");
-        const networkPassphrase =
-          network === "PUBLIC"
-            ? "Public Global Stellar Network ; September 2015"
-            : "Test SDF Network ; September 2015";
-        const signResult = await signTransaction(challengeXdr, { networkPassphrase });
-        if (typeof signResult === "string") {
-          signedXdr = signResult;
-        } else if (signResult && (signResult as any).signedTxXdr) {
-          signedXdr = (signResult as any).signedTxXdr;
-        } else if (signResult && (signResult as any).error) {
-          throw new Error((signResult as any).error);
-        }
-      }
-
-      // 3. Submit signed challenge to /api/auth/verify
-      toast.info("Verifying cryptographic signature on backend...");
-      const verifyRes = await fetch(`${apiUrl}/api/auth/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ transaction: signedXdr }),
+      // 1-3. Request challenge, sign it with the wallet, exchange it for a time-bound JWT
+      toast.info(`Please sign the authentication challenge in ${selectedWallet}...`);
+      const result = await authenticateWithSep10({
+        account: userAddress,
+        signer: customSigner
+          ? (challengeXdr) => customSigner(challengeXdr)
+          : selectedWallet.includes("Freighter")
+            ? signChallengeWithFreighter
+            : async (challengeXdr) => challengeXdr,
       });
-      const data = await verifyRes.json();
+      const signedXdr = result.signedXdr;
+      toast.info("Verifying cryptographic signature on backend...");
+      const verifyRes = { status: result.status, ok: result.ok };
+      const data = { token: result.token, error: result.error };
 
-      if (verifyRes.status === 403 && data.requiresRegistration) {
+      if (result.requiresRegistration) {
         setTempAddress(userAddress);
         setTempWalletName(selectedWallet);
         setTempSignedXdr(signedXdr);
@@ -529,9 +502,7 @@ export default function WalletConnect() {
           </div>
 
           <div className="flex items-center gap-2 bg-[#18181b] px-3.5 py-2 rounded-xl border border-[#3f3f46] w-full justify-between">
-            <span className="font-mono text-xs text-white tracking-wide truncate">
-              {address.slice(0, 8)}...{address.slice(-8)}
-            </span>
+            <CryptoId value={address} head={8} tail={8} className="text-white truncate" />
             <button
               type="button"
               onClick={copyAddress}
@@ -712,7 +683,7 @@ export default function WalletConnect() {
                   value={manualAddress}
                   onChange={(e) => setManualAddress(e.target.value.trim())}
                   placeholder="GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-                  className="w-full px-3 py-2 bg-[#18181b] border border-[#3f3f46] rounded-lg text-white font-mono text-xs placeholder-[#71717a] focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#18181b] border border-[#3f3f46] rounded-lg text-white font-mono tracking-tight text-xs placeholder-[#71717a] focus:outline-none focus:border-blue-500"
                 />
                 <button
                   type="button"

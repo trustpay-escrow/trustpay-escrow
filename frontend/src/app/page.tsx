@@ -1,10 +1,12 @@
+import Accordion from '@/components/Accordion';
 'use client';
 
 import React, { useState } from 'react';
 import WalletConnect from "@/components/WalletConnect";
-import NotificationBell from "@/components/NotificationBell";
-import EscrowGlobeVisualizer3D, { type GlobeEscrow } from "@/components/EscrowGlobeVisualizer3D";
+import Header from "@/components/Header";
+import { useI18n } from "@/lib/i18n";
 import Link from 'next/link';
+import EscrowGlobeVisualizer3D, { GlobeEscrow } from "@/components/EscrowGlobeVisualizer3D";
 
 const liveEscrows: GlobeEscrow[] = [
   {
@@ -46,6 +48,7 @@ const liveEscrows: GlobeEscrow[] = [
 
 export default function Home() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const { t, formatAmount } = useI18n();
 
   const testimonials = [
     {
@@ -101,41 +104,7 @@ export default function Home() {
       <div className="absolute bottom-[10%] left-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
       {/* Navigation Header */}
-      <header className="w-full border-b border-[#27272a]/60 bg-[#09090b]/80 backdrop-blur-xl sticky top-0 z-50 px-6 py-4 transition-all">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 group-hover:scale-105 transition-transform font-black text-xl">
-              T
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-lg text-white tracking-tight group-hover:text-blue-400 transition-colors">TRUSTPAY</span>
-              <span className="text-[10px] text-[#a1a1aa] font-medium tracking-wider uppercase">Stellar Escrow</span>
-            </div>
-            <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#052e16] text-[#22c55e] border border-[#14532d] ml-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse"></span>
-              Stellar Testnet
-            </span>
-          </Link>
-
-          <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-[#a1a1aa]">
-            <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#testimonials" className="hover:text-white transition-colors">Testimonials</a>
-            <a href="#wallet" className="hover:text-white transition-colors">Connect Wallet</a>
-            <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
-          </nav>
-
-          <div className="flex items-center space-x-3">
-            <NotificationBell />
-            <Link
-              href="/projects"
-              className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-600/20 border border-blue-500/30 transition-all hover:shadow-blue-600/30 hover:-translate-y-0.5"
-            >
-              Launch Dashboard ↗
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="relative z-10 max-w-5xl mx-auto px-6 pt-16 pb-20 text-center flex flex-col items-center">
@@ -158,16 +127,34 @@ export default function Home() {
         </p>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 mb-16 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 w-full sm:w-auto">
+          {/* Primary Hero CTA with ambient radial gradient pulse & particle glow shimmer */}
+          <div className="relative group/cta w-full sm:w-auto">
+            <div
+              className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 opacity-70 blur-lg animate-hero-glow group-hover/cta:opacity-100 group-hover/cta:scale-105 transition-all duration-500 pointer-events-none"
+              aria-hidden="true"
+            />
+            <Link
+              href="/projects/create"
+              data-testid="hero-create-escrow-cta"
+              className="relative flex items-center justify-center space-x-2 w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-blue-600/30 border border-blue-400/40 transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] text-center"
+            >
+              <span>Create Escrow</span>
+              <span className="text-blue-200 text-xs font-semibold px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm">
+                Instant V1
+              </span>
+            </Link>
+          </div>
+
           <Link
             href="/projects"
-            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-blue-600/25 border border-blue-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] text-center"
+            className="w-full sm:w-auto px-8 py-4 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm rounded-2xl border border-[#27272a] hover:border-[#3f3f46] transition-all hover:scale-[1.01] active:scale-[0.98] text-center"
           >
-            Explore Projects Portal 🚀
+            Explore Projects Portal ↗
           </Link>
           <a
             href="#how-it-works"
-            className="w-full sm:w-auto px-8 py-4 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm rounded-2xl border border-[#27272a] hover:border-[#3f3f46] transition-all text-center"
+            className="w-full sm:w-auto px-8 py-4 text-[#a1a1aa] hover:text-white font-semibold text-sm transition-colors text-center"
           >
             How It Works ↓
           </a>
@@ -259,7 +246,7 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-bold text-white">Instant Payout</h3>
               <p className="text-xs sm:text-sm text-[#a1a1aa] leading-relaxed">
-                Client reviews and approves. The smart contract instantly releases funds to the freelancer's wallet.
+                Client reviews and approves. The smart contract instantly releases funds to the freelancer&apos;s wallet.
               </p>
             </div>
           </div>
@@ -340,7 +327,7 @@ export default function Home() {
                   </div>
                   {/* Quote Content */}
                   <p className="text-xs sm:text-sm text-[#d4d4d8] leading-relaxed italic">
-                    "{item.content}"
+                    &quot;{item.content}&quot;
                   </p>
                 </div>
 
@@ -372,45 +359,71 @@ export default function Home() {
             </h2>
           </div>
 
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => (
-              <div
-                key={idx}
-                className="bg-[#18181b]/80 border border-[#27272a] rounded-2xl overflow-hidden transition-colors"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                  className="w-full px-6 py-5 flex items-center justify-between text-left font-bold text-white hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  <span className="text-sm sm:text-base">{faq.q}</span>
-                  <span className="text-xl text-[#71717a]">{openFaq === idx ? "−" : "+"}</span>
-                </button>
-                {openFaq === idx && (
-                  <div className="px-6 pb-5 text-xs sm:text-sm text-[#a1a1aa] leading-relaxed border-t border-[#27272a]/40 pt-4">
-                    {faq.a}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <Accordion
+            items={faqs.map((faq, idx) => ({
+              id: aq-,
+              title: faq.q,
+              content: faq.a,
+            }))}
+            type="single"
+          />
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="w-full border-t border-[#27272a]/60 py-8 text-center text-xs text-[#71717a] bg-[#09090b]">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+      <footer className="w-full border-t border-[#27272a]/60 py-8 text-xs text-[#71717a] bg-[#09090b]">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-5">
+          <div className="flex items-center gap-3">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
               T
             </div>
-            <span className="text-white font-bold">TrustPay Escrow</span>
-            <span>© 2026. Built on Stellar Soroban.</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-white font-bold">TrustPay Escrow</span>
+              <span>© {new Date().getFullYear()} TrustPay Escrow. Built for Stellar Network.</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-6">
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
             <Link href="/projects" className="hover:text-white transition-colors">Projects Portal</Link>
             <Link href="/projects/create" className="hover:text-white transition-colors">Create Escrow</Link>
             <a href="#how-it-works" className="hover:text-white transition-colors">Docs</a>
+            <span className="hidden sm:inline-block w-px h-3 bg-[#3f3f46]" aria-hidden="true" />
+            <a
+              href="https://github.com/trustpay-escrow/trustpay-escrow"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="TrustPay Escrow on GitHub"
+              className="group inline-flex items-center gap-1.5 transition-all duration-300 hover:text-white hover:scale-105"
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-[#a1a1aa] group-hover:text-white transition-colors duration-300" aria-hidden="true">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A7.995 7.995 0 0016 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              GitHub
+            </a>
+            <a
+              href="https://developers.stellar.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Stellar documentation"
+              className="group inline-flex items-center gap-1.5 transition-all duration-300 hover:text-white hover:scale-105"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-[#a1a1aa] group-hover:text-white transition-colors duration-300" aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+              </svg>
+              Stellar Docs
+            </a>
+            <a
+              href="https://www.drips.network/wave"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Drips Wave"
+              className="group inline-flex items-center gap-1.5 transition-all duration-300 hover:text-white hover:scale-105"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-[#a1a1aa] group-hover:text-white transition-colors duration-300" aria-hidden="true">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+              </svg>
+              Drips Wave
+            </a>
           </div>
         </div>
       </footer>

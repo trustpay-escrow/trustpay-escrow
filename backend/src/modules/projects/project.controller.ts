@@ -91,6 +91,8 @@ export const getProjects = async (req: Request, res: Response): Promise<any> => 
         status: p.status,
         created_at: p.created_at,
         granted: p.status === 'accepted',
+        counter_offer: p.counter_offer || null,
+        negotiation_status: p.negotiation_status || 'none',
       }));
 
       return {
@@ -156,7 +158,8 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       token_address,
       yield_enabled,
       estimated_yield,
-      blend_pool_address
+      blend_pool_address,
+      retainer_config
     } = validationResult.data;
 
     let userId: string | null = null;
@@ -227,6 +230,7 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
     if (yield_enabled !== undefined) projectPayload.yield_enabled = yield_enabled;
     if (estimated_yield !== undefined && estimated_yield > 0) projectPayload.estimated_yield = estimated_yield;
     if (blend_pool_address) projectPayload.blend_pool_address = blend_pool_address;
+    if (retainer_config) projectPayload.retainer_config = retainer_config;
 
     let newProject: any = null;
     let { data: insertedProject, error } = await supabase
@@ -244,6 +248,7 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
       delete projectPayload.token_address;
       delete projectPayload.contract_id;
       delete projectPayload.project_id_onchain;
+      delete projectPayload.retainer_config;
 
       const fallbackResult = await supabase
         .from('projects')
@@ -270,6 +275,8 @@ export const createProject = async (req: Request, res: Response): Promise<any> =
         title: m.title,
         description: m.description || '',
         amount: Number(m.amount) || 0,
+        start_date: m.start_date || null,
+        depends_on: Array.isArray(m.depends_on) ? m.depends_on : [],
         due_date: m.due_date || deadline || null,
         deliverable_type: m.deliverable_type || 'Deliverable',
         revision_limit: Number(m.revision_limit) || 0,

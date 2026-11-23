@@ -2,7 +2,9 @@ import { Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { supabase } from '../../config/supabase.js';
 import { env } from '../../config/env.js';
+import { redisCache } from '../../config/redis.js';
 import { UserConnectRequest } from '../../shared/types/index.js';
+import { AuthenticatedRequest } from '../../shared/middleware/auth.js';
 import { logger } from '../../shared/utils/logger.js';
 
 export const connectWallet = async (req: UserConnectRequest, res: Response) => {
@@ -109,5 +111,75 @@ export const connectWallet = async (req: UserConnectRequest, res: Response) => {
   } catch (err: any) {
     logger.error(`Unexpected error in connectWallet: ${err.message}`, { stack: err.stack });
     return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+const DEFAULT_NOTIFICATION_PREFERENCES = {
+  intervals: { '7d': true, '3d': true, '24h': true, '2h': false },
+  channels: { in_app: true, browser_push: false, telegram: false },
+  telegramChatId: '',
+};
+
+function normalizeNotificationPreferences(input: any) {
+  const source = input?.preferences && typeof input.preferences === 'object' ? input.preferences : input;
+  return {
+    intervals: { ...DEFAULT_NOTIFICATION_PREFERENCES.intervals, ...(source?.intervals || {}) },
+    channels: { ...DEFAULT_NOTIFICATION_PREFERENCES.channels, ...(source?.channels || {}) },
+    telegramChatId: source?.telegramChatId ?? source?.telegram_chat_id ?? '',
+  };
+}
+
+export const getNotificationPreferences = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const address = req.user?.stellar_address;
+    if (!address) return res.status(401).json({ error: 'Authentication required' });
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('notification_preferences')
+      .eq('stellar_address', address)
+      .maybeSingle();
+
+    if (!error && data?.notification_preferences) {
+      return res.json({ preferences: normalizeNotificationPreferences(data.notification_preferences) });
+    }
+
+    const cached = await redisCache.get(`notification-prefs:${address}`);
+    if (cached) {
+      try {
+        return res.json({ preferences: normalizeNotificationPreferences(JSON.parse(cached)) });
+      } catch {
+        // fall through to defaults
+      }
+    }
+
+    return res.json({ preferences: DEFAULT_NOTIFICATION_PREFERENCES });
+  } catch (err: any) {
+    logger.error(`Error fetching notification preferences: ${err.message}`);
+    return res.status(500).json({ error: 'Failed to fetch notification preferences' });
+  }
+};
+
+export const updateNotificationPreferences = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const address = req.user?.stellar_address;
+    if (!address) return res.status(401).json({ error: 'Authentication required' });
+
+    const preferences = normalizeNotificationPreferences(req.body || {});
+
+    const { error } = await supabase
+      .from('users')
+      .update({ notification_preferences: preferences })
+      .eq('stellar_address', address);
+
+    if (!error) {
+      return res.json({ message: 'Notification preferences saved', preferences });
+    }
+
+    await redisCache.set(`notification-prefs:${address}`, JSON.stringify(preferences));
+    return res.json({ message: 'Notification preferences saved', preferences, persisted: 'cache' });
+  } catch (err: any) {
+    logger.error(`Error saving notification preferences: ${err.message}`);
+    return res.status(500).json({ error: 'Failed to save notification preferences' });
   }
 };

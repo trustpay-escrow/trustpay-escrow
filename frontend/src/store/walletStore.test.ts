@@ -42,4 +42,15 @@ describe('useWalletStore Zustand Store', () => {
     expect(state.address).toBeNull();
     expect(state.activeRole).toBe('client');
   });
+
+  it('keeps the SEP-0010 JWT in memory only', () => {
+    useWalletStore.getState().setWalletInfo('GBRPYHIL2CI3FNQ4BXLFMNDLFJUNPU2HY3ZMFOGOF2W2GOGC25NC47WG', true, true, 'Freighter', 'jwt-1');
+    expect(useWalletStore.getState().token).toBe('jwt-1');
+    useWalletStore.getState().setToken('jwt-2');
+    expect(useWalletStore.getState().token).toBe('jwt-2');
+
+    const persisted = JSON.parse(window.localStorage.getItem('trustpay-wallet-storage') ?? '{}');
+    expect(persisted.state.address).toBeTruthy();
+    expect(persisted.state).not.toHaveProperty('token');
+  });
 });

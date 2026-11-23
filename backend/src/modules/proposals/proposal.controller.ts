@@ -1,7 +1,11 @@
 import { Request, Response } from 'express';
 import { supabase } from '../../config/supabase.js';
 import { logger } from '../../shared/utils/logger.js';
-import { proposalSchema, updateProposalStatusSchema } from '../../shared/utils/validators.js';
+import {
+  counterOfferSchema,
+  proposalSchema,
+  updateProposalStatusSchema,
+} from '../../shared/utils/validators.js';
 import { createNotification } from '../notifications/notification.service.js';
 
 export const createProposal = async (req: Request, res: Response): Promise<any> => {
@@ -241,6 +245,230 @@ export const updateProposalStatus = async (req: Request, res: Response): Promise
     return res.json({ proposal: updated });
   } catch (err: any) {
     logger.error('Unexpected error updating proposal status:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * Two-way proposal counter-offer negotiation (#150).
+ *
+ * `counter` stores revised terms and notifies the other party, `accept` locks
+ * the agreed terms into the project/milestones, and `decline` leaves the
+ * original proposal untouched.
+ */
+export const counterOfferProposal = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: 'Proposal ID is required' });
+    }
+
+    const validation = counterOfferSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues,
+      });
+    }
+
+    const { action, milestones, note, actor_address } = validation.data;
+
+    const { data: proposal, error: fetchError } = await supabase
+      .from('proposals')
+      .select('*, projects:project_id(id, title, budget, client_id, freelancer_id)')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    const project = proposal.projects as
+      | { id: string; title: string; budget: number; client_id: string | null; freelancer_id: string | null }
+      | null;
+
+    let clientAddress: string | null = null;
+    let freelancerAddress: string | null = proposal.freelancer_address || null;
+    if (project) {
+      const userIds = [project.client_id, project.freelancer_id].filter(Boolean);
+      if (userIds.length > 0) {
+        const { data: users } = await supabase
+          .from('users')
+          .select('id, stellar_address')
+          .in('id', userIds);
+        const addressById = Object.fromEntries(
+          (users || []).map((user: any) => [user.id, user.stellar_address])
+        );
+        clientAddress = project.client_id ? addressById[project.client_id] || null : null;
+        freelancerAddress = freelancerAddress || (project.freelancer_id ? addressById[project.freelancer_id] || null : null);
+      }
+    }
+
+    const actorIsClient = Boolean(
+      actor_address &&
+        clientAddress &&
+        actor_address.toLowerCase() === clientAddress.toLowerCase()
+    );
+    const proposedBy = actorIsClient ? 'client' : 'freelancer';
+    const projectTitle = project?.title || 'the project';
+
+    if (action === 'counter') {
+      if (!milestones || milestones.length === 0) {
+        return res.status(400).json({ error: 'Counter-offer milestones are required' });
+      }
+
+      const counterOffer = {
+        proposed_by: proposedBy,
+        milestones,
+        total: Math.round(
+          milestones.reduce((sum, milestone) => sum + Number(milestone.amount), 0) * 100
+        ) / 100,
+        note: note?.trim() || undefined,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: updated, error: updateError } = await supabase
+        .from('proposals')
+        .update({ counter_offer: counterOffer, negotiation_status: 'countered' })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (updateError) {
+        logger.error(`Error saving counter-offer for proposal ${id}:`, updateError);
+        return res.status(500).json({ error: 'Failed to save counter-offer' });
+      }
+
+      const recipient = proposedBy === 'client' ? freelancerAddress : clientAddress;
+      if (recipient) {
+        await createNotification({
+          recipient_address: recipient,
+          sender_address: actor_address,
+          project_id: proposal.project_id,
+          type: 'counter_offer_received',
+          title: 'Counter-Offer Received 🤝',
+          message: `New terms were proposed for '${projectTitle}': ${counterOffer.total} total. Review and accept, decline, or re-counter.`,
+          link: `/projects?id=${proposal.project_id}`,
+        }).catch((notifyErr) => logger.error('Counter-offer notification failed:', notifyErr));
+      }
+
+      return res.json({ proposal: updated, message: 'Counter-offer sent' });
+    }
+
+    const existingCounterOffer = proposal.counter_offer as
+      | { proposed_by: string; milestones: any[]; total: number }
+      | null;
+
+    if (action === 'accept') {
+      if (!existingCounterOffer) {
+        return res.status(400).json({ error: 'There is no counter-offer to accept' });
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from('proposals')
+        .update({
+          status: 'accepted',
+          negotiation_status: 'accepted',
+          counter_offer: null,
+        })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (updateError) {
+        logger.error(`Error accepting counter-offer for proposal ${id}:`, updateError);
+        return res.status(500).json({ error: 'Failed to accept counter-offer' });
+      }
+
+      if (project) {
+        let freelancerUserId = project.freelancer_id;
+        if (!freelancerUserId && proposal.freelancer_address) {
+          const { data: existingUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('stellar_address', proposal.freelancer_address)
+            .maybeSingle();
+          freelancerUserId = existingUser?.id || null;
+          if (!freelancerUserId) {
+            const { data: newUser } = await supabase
+              .from('users')
+              .insert([{ stellar_address: proposal.freelancer_address, role: 'freelancer' }])
+              .select('id')
+              .single();
+            freelancerUserId = newUser?.id || null;
+          }
+        }
+
+        const projectUpdate: Record<string, any> = {
+          budget: existingCounterOffer.total,
+          status: 'in_progress',
+        };
+        if (freelancerUserId) projectUpdate.freelancer_id = freelancerUserId;
+
+        await supabase.from('projects').update(projectUpdate).eq('id', project.id);
+
+        await Promise.all(
+          existingCounterOffer.milestones.map((term: any) => {
+            const milestoneUpdate: Record<string, any> = { amount: term.amount };
+            if (term.title) milestoneUpdate.title = term.title;
+            if (term.due_date) milestoneUpdate.due_date = term.due_date;
+            return supabase
+              .from('milestones')
+              .update(milestoneUpdate)
+              .eq('project_id', project.id)
+              .eq('milestone_index', term.milestone_index);
+          })
+        );
+      }
+
+      const recipient =
+        existingCounterOffer.proposed_by === 'client' ? clientAddress : freelancerAddress;
+      if (recipient) {
+        await createNotification({
+          recipient_address: recipient,
+          sender_address: actor_address,
+          project_id: proposal.project_id,
+          type: 'counter_offer_accepted',
+          title: 'Counter-Offer Accepted 🎉',
+          message: `The revised terms for '${projectTitle}' were accepted and locked into the project.`,
+          link: `/projects?id=${proposal.project_id}`,
+        }).catch((notifyErr) => logger.error('Counter-offer acceptance notification failed:', notifyErr));
+      }
+
+      return res.json({ proposal: updated, message: 'Counter-offer accepted' });
+    }
+
+    // decline
+    const { data: updated, error: declineError } = await supabase
+      .from('proposals')
+      .update({ negotiation_status: 'declined' })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (declineError) {
+      logger.error(`Error declining counter-offer for proposal ${id}:`, declineError);
+      return res.status(500).json({ error: 'Failed to decline counter-offer' });
+    }
+
+    const declineRecipient = existingCounterOffer?.proposed_by === 'client'
+      ? clientAddress
+      : freelancerAddress;
+    if (declineRecipient) {
+      await createNotification({
+        recipient_address: declineRecipient,
+        sender_address: actor_address,
+        project_id: proposal.project_id,
+        type: 'counter_offer_declined',
+        title: 'Counter-Offer Declined',
+        message: `The revised terms for '${projectTitle}' were declined. The original proposal remains active.`,
+        link: `/projects?id=${proposal.project_id}`,
+      }).catch((notifyErr) => logger.error('Counter-offer decline notification failed:', notifyErr));
+    }
+
+    return res.json({ proposal: updated, message: 'Counter-offer declined' });
+  } catch (err: any) {
+    logger.error('Unexpected error negotiating counter-offer:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 };

@@ -1,39 +1,61 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import NumberRoll from './NumberRoll';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { useWalletStore } from '@/store/walletStore';
+import { useWalletStore, useActiveWalletAddress } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 import { Milestone, Project, Applicant } from '@/types';
 import { ImageLightboxModal } from './ImageLightboxModal';
-import { ApplicantCard } from './ApplicantCard';
+import { ApplicantCard, type ApplicantCardData } from './ApplicantCard';
+import { FreelancerProfileModal } from './FreelancerProfileModal';
 import { ProjectChatModal } from './ProjectChatModal';
 import { ProjectCardSkeletonList } from '@/components/skeletons';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import { useTokenBalance, getBalanceShortfall } from '@/hooks/useCreateProjectForm';
+import { usePersistentTab } from '@/hooks/usePersistentTab';
 import { BalanceWarningBadge } from '@/components/BalanceWarningBadge';
+import { LiquidityDepthOptimizer } from '@/components/LiquidityDepthOptimizer';
+import { TokenPriceAlertWidget } from '@/components/TokenPriceAlertWidget';
+import { StarredFreelancersList } from '@/components/StarredFreelancersList';
+import { NotificationScheduleModal } from '@/components/NotificationScheduleModal';
+import { ProposalCounterOfferModal } from '@/components/ProposalCounterOfferModal';
+import { useStarredFreelancers } from '@/hooks/useStarredFreelancers';
+import type { CounterOffer } from '@/lib/counter-offer';
+import { showSorobanErrorToast } from '@/components/SorobanErrorToast';
 import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
+import { AccountsPayableExportModal } from '@/components/AccountsPayableExportModal';
+import { GasFeeEstimatorWidget } from '@/components/GasFeeEstimatorWidget';
 import {
   createProjectOnChain,
   lockEscrowOnChain,
   assignFreelancerOnChain,
   getStellarExplorerUrl,
   DEFAULT_ESCROW_CONTRACT_ID,
+  setSorobanBaseFee,
 } from '@/lib/soroban';
 
 export interface ClientDashboardProps {
-  defaultTab?: 'projects' | 'create' | 'applicants';
+  defaultTab?: 'projects' | 'create' | 'applicants' | 'saved';
 }
 
 export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProps) {
   const router = useRouter();
   const { address } = useWalletStore();
-  const [activeTab, setActiveTab] = useState<'projects' | 'create' | 'applicants'>(defaultTab);
+  const activeWalletAddress = useActiveWalletAddress();
+  const { starred, isStarred, toggle: toggleStarred, setNotes: setStarredNotes } =
+    useStarredFreelancers(activeWalletAddress);
+  const [activeTab, setActiveTab] = usePersistentTab<"projects" | "create" | "applicants" | "saved">({
+    key: 'client_active_tab',
+    defaultTab,
+    allowedTabs: ['projects', 'create', 'applicants', 'saved'] as const,
+    walletAddress: address,
+  });
   const [loading, setLoading] = useState(true);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name?: string } | null>(null);
 
@@ -64,7 +86,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   // Selected project for Applicants view
   const [selectedProjectForApplicants, setSelectedProjectForApplicants] = useState<Project | null>(null);
+  const [profileApplicant, setProfileApplicant] = useState<Applicant | null>(null);
   const [auditProject, setAuditProject] = useState<Project | null>(null);
+  const [reminderProject, setReminderProject] = useState<Project | null>(null);
 
   // Create Project Form State
   const [formTitle, setFormTitle] = useState('');
@@ -80,8 +104,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [formYieldEnabled, setFormYieldEnabled] = useState(false);
   const [formFreelancerAddress, setFormFreelancerAddress] = useState('');
   const [formLockImmediately, setFormLockImmediately] = useState(false);
+  const [configuredFeeStroops, setConfiguredFeeStroops] = useState<number>(100);
   const [fundingTxMessage, setFundingTxMessage] = useState('');
-  const walletBalance = useTokenBalance(address, formToken);
+  const walletBalance = useTokenBalance(activeWalletAddress, formToken);
   const balanceShortfall = getBalanceShortfall(walletBalance.balance, formBudget === '' ? 0 : formBudget);
   const hasInsufficientBalance = walletBalance.balance !== null && balanceShortfall > 0;
   
@@ -91,7 +116,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const calculateEstimatedYield = () => {
     if (!formYieldEnabled || !formBudget || Number(formBudget) <= 0) return '0.00';
     const budgetNum = Number(formBudget);
-    const blendPrincipal = budgetNum * 0.70;
+    const blendPrincipal = budgetNum * 0.7;
     let days = 14;
     if (formDeadline) {
       const diffMs = new Date(formDeadline).getTime() - Date.now();
@@ -101,7 +126,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     const yieldVal = (blendPrincipal * 0.045 * days) / 365;
     return yieldVal.toFixed(2);
   };
-  
+
   // Milestones list for form (initialized as empty)
   const [formMilestones, setFormMilestones] = useState<Milestone[]>([]);
 
@@ -110,16 +135,22 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   const [newMilestoneAmount, setNewMilestoneAmount] = useState<number | ''>('');
   const [newMilestoneDueDate, setNewMilestoneDueDate] = useState('');
   const [newMilestoneRevisionLimit, setNewMilestoneRevisionLimit] = useState<number>(0);
-  const [newMilestoneDeliverableType, setNewMilestoneDeliverableType] = useState('GitHub Repository');
+  const [newMilestoneDeliverableType, setNewMilestoneDeliverableType] =
+    useState('GitHub Repository');
   const [showAddMilestoneModal, setShowAddMilestoneModal] = useState(false);
+  const [showApExportModal, setShowApExportModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Proposal counter-offer negotiation (#150)
+  const [counterOfferTarget, setCounterOfferTarget] = useState<ApplicantCardData | null>(null);
+  const [counterOfferSubmitting, setCounterOfferSubmitting] = useState(false);
 
   // Function to fetch real projects from backend
   const fetchBackendProjects = async (pageToFetch = currentPage) => {
     setLoading(true);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const clientParam = address ? `&client_address=${encodeURIComponent(address)}` : '';
+      const clientParam = activeWalletAddress ? `&client_address=${encodeURIComponent(activeWalletAddress)}` : '';
       const res = await authFetch(`${apiUrl}/api/projects?page=${pageToFetch}&limit=6${clientParam}`);
       if (res.ok) {
         const data = await res.json();
@@ -127,7 +158,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
           const mapped: Project[] = data.projects.map((p: any) => {
             const rawStatus = (p.status || 'draft').toLowerCase();
             let statusLabel: 'in_progress' | 'open' | 'completed' | 'draft' = 'open';
-            if (rawStatus === 'in_progress' || rawStatus === 'in progress') statusLabel = 'in_progress';
+            if (rawStatus === 'in_progress' || rawStatus === 'in progress')
+              statusLabel = 'in_progress';
             else if (rawStatus === 'completed') statusLabel = 'completed';
             else statusLabel = 'open';
 
@@ -140,7 +172,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               status: m.status || 'pending',
               due_date: m.due_date,
               revision_limit: m.revision_limit ?? 0,
-              deliverable_type: m.deliverable_type
+              deliverable_type: m.deliverable_type,
             }));
 
             // Applicants if open
@@ -155,7 +187,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               category: p.category || 'Development',
               budget: Number(p.budget) || 0,
               token: p.token || 'USDC',
-              token_address: p.token_address || SUPPORTED_TOKENS[p.token || 'USDC']?.issuerOrContractAddress,
+              token_address:
+                p.token_address || SUPPORTED_TOKENS[p.token || 'USDC']?.issuerOrContractAddress,
               deadline: p.deadline || '',
               visibility: p.visibility || 'public',
               contract_id: p.contract_id,
@@ -166,13 +199,14 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               applicants: realApplicants,
               files: p.files || [],
               attachments: p.attachments || [],
-              created_at: p.created_at
+              created_at: p.created_at,
             };
           });
 
           setProjects(mapped);
           if (mapped.length > 0) {
-            const projectWithApplicants = mapped.find(p => p.applicants && p.applicants.length > 0) || mapped[0];
+            const projectWithApplicants =
+              mapped.find((p) => p.applicants && p.applicants.length > 0) || mapped[0];
             setSelectedProjectForApplicants(projectWithApplicants);
           } else {
             setSelectedProjectForApplicants(null);
@@ -193,7 +227,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   useEffect(() => {
     fetchBackendProjects();
-  }, [address]);
+  }, [address, activeWalletAddress]);
 
   // Add Milestone to Form
   const handleAddMilestone = () => {
@@ -215,10 +249,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       status: 'pending',
       due_date: newMilestoneDueDate || undefined,
       revision_limit: Number(newMilestoneRevisionLimit) || 0,
-      deliverable_type: newMilestoneDeliverableType || 'GitHub Repository'
+      deliverable_type: newMilestoneDeliverableType || 'GitHub Repository',
     };
 
-    setFormMilestones(prev => [...prev, newItem]);
+    setFormMilestones((prev) => [...prev, newItem]);
     setNewMilestoneTitle('');
     setNewMilestoneDescription('');
     setNewMilestoneAmount('');
@@ -231,7 +265,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   // Remove Milestone
   const handleRemoveMilestone = (id: string) => {
-    setFormMilestones(prev => prev.filter(m => m.id !== id));
+    setFormMilestones((prev) => prev.filter((m) => m.id !== id));
     toast.info('Milestone removed');
   };
 
@@ -250,7 +284,12 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
     // Option B: Upfront escrow was funded on-chain without an assigned freelancer.
     // Bind winning freelancer to the existing on-chain escrow project.
-    if (project && onChainId && freelancerAddr && (!project.freelancer_id || !project.freelancer_address)) {
+    if (
+      project &&
+      onChainId &&
+      freelancerAddr &&
+      (!project.freelancer_id || !project.freelancer_address)
+    ) {
       try {
         toast.info(`Binding winning freelancer to on-chain escrow #${onChainId} in Freighter...`);
         await assignFreelancerOnChain({
@@ -267,9 +306,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     // Option A: Deposit on Award. The job was created as draft/open off-chain.
     // Client atomically locks escrow funds and binds the freelancer on-chain in one transaction.
     else if (!onChainId && freelancerAddr && project) {
-      const milestoneAmounts = (project.milestones && project.milestones.length > 0)
-        ? project.milestones.map((m) => Number(m.amount))
-        : [Number(project.budget) || 100];
+      const milestoneAmounts =
+        project.milestones && project.milestones.length > 0
+          ? project.milestones.map((m) => Number(m.amount))
+          : [Number(project.budget) || 100];
 
       const tokenConfig = SUPPORTED_TOKENS[project.token || 'USDC'] || SUPPORTED_TOKENS.USDC;
 
@@ -319,9 +359,15 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         setProjects((prev) =>
           prev.map((proj) => ({
             ...proj,
-            status: (proj.applicants || []).some((app) => app.id === proposalId) ? 'in_progress' : proj.status,
-            project_id_onchain: (proj.applicants || []).some((app) => app.id === proposalId) ? onChainId : proj.project_id_onchain,
-            contract_id: (proj.applicants || []).some((app) => app.id === proposalId) ? DEFAULT_ESCROW_CONTRACT_ID : proj.contract_id,
+            status: (proj.applicants || []).some((app) => app.id === proposalId)
+              ? 'in_progress'
+              : proj.status,
+            project_id_onchain: (proj.applicants || []).some((app) => app.id === proposalId)
+              ? onChainId
+              : proj.project_id_onchain,
+            contract_id: (proj.applicants || []).some((app) => app.id === proposalId)
+              ? DEFAULT_ESCROW_CONTRACT_ID
+              : proj.contract_id,
             applicants: (proj.applicants || [])
               .filter((app) => app.id === proposalId)
               .map((app) => ({ ...app, status: 'accepted', granted: true })),
@@ -387,6 +433,89 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     }
   };
 
+  // Proposal counter-offer negotiation (#150)
+  const handleSubmitCounterOffer = async (offer: CounterOffer) => {
+    if (!counterOfferTarget) return;
+    if (!address) {
+      throw new Error('Please connect your client wallet first');
+    }
+
+    setCounterOfferSubmitting(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await authFetch(`${apiUrl}/api/proposals/${counterOfferTarget.id}/counter-offer`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'counter',
+          milestones: offer.milestones,
+          note: offer.note,
+          actor_address: address,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to send counter-offer');
+      }
+
+      setSelectedProjectForApplicants((prev) =>
+        prev
+          ? {
+              ...prev,
+              applicants: (prev.applicants || []).map((applicant) =>
+                applicant.id === counterOfferTarget.id
+                  ? {
+                      ...applicant,
+                      counter_offer: offer,
+                      negotiation_status: 'countered' as const,
+                    }
+                  : applicant
+              ),
+            }
+          : prev
+      );
+      setCounterOfferTarget(null);
+      await fetchBackendProjects();
+    } finally {
+      setCounterOfferSubmitting(false);
+    }
+  };
+
+  const handleRespondToCounterOffer = async (
+    action: 'accept' | 'decline',
+    applicant: ApplicantCardData
+  ) => {
+    if (!address) {
+      toast.error('Please connect your client wallet first');
+      return;
+    }
+
+    setCounterOfferSubmitting(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const res = await authFetch(`${apiUrl}/api/proposals/${applicant.id}/counter-offer`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, actor_address: address }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to ${action} counter-offer`);
+      }
+      toast.success(
+        action === 'accept'
+          ? 'Counter-offer accepted — agreed terms locked into the project.'
+          : 'Counter-offer declined. The original proposal remains active.'
+      );
+      await fetchBackendProjects();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update the counter-offer');
+    } finally {
+      setCounterOfferSubmitting(false);
+    }
+  };
+
   // File Upload Handler with data URL & file metadata for live thumbnail previews
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -395,16 +524,18 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         const reader = new FileReader();
         reader.onload = (event) => {
           const fileDataUrl = event.target?.result as string;
-          const isImage = file.type.startsWith('image/') || Boolean(file.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i));
-          
-          setFormAttachments(prev => [
+          const isImage =
+            file.type.startsWith('image/') ||
+            Boolean(file.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i));
+
+          setFormAttachments((prev) => [
             ...prev,
             {
               name: file.name,
               url: fileDataUrl,
               type: isImage ? 'image' : 'file',
-              size: file.size
-            }
+              size: file.size,
+            },
           ]);
         };
         reader.readAsDataURL(file);
@@ -416,9 +547,12 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   // Remove / Cancel Attachment Handler
   const handleRemoveAttachment = (indexToRemove: number) => {
-    setFormAttachments(prev => {
+    setFormAttachments((prev) => {
       const target = prev[indexToRemove];
-      const name = typeof target === 'object' && target !== null ? (target.name || target.file_name) : String(target);
+      const name =
+        typeof target === 'object' && target !== null
+          ? target.name || target.file_name
+          : String(target);
       toast.info(`Removed ${name}`);
       return prev.filter((_, idx) => idx !== indexToRemove);
     });
@@ -458,14 +592,17 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
       if (formLockImmediately) {
         if (!formFreelancerAddress.trim()) {
-          toast.error('Please specify a designated freelancer address to lock escrow on-chain immediately');
+          toast.error(
+            'Please specify a designated freelancer address to lock escrow on-chain immediately'
+          );
           setIsSubmitting(false);
           return;
         }
 
-        const milestoneAmounts = formMilestones.length > 0
-          ? formMilestones.map((m) => Number(m.amount))
-          : [Number(formBudget)];
+        const milestoneAmounts =
+          formMilestones.length > 0
+            ? formMilestones.map((m) => Number(m.amount))
+            : [Number(formBudget)];
 
         toast.info('Initializing Soroban Escrow: Please confirm signature in Freighter...');
         const chainRes = await createProjectOnChain({
@@ -481,9 +618,12 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         toast.success(`Escrow project #${onChainProjectId} locked on Stellar!`);
       }
 
-      const finalCategory = formCategory === 'Other' 
-        ? (customCategory.trim() || 'Other')
-        : (formCategory === 'Web development' ? 'Development' : formCategory);
+      const finalCategory =
+        formCategory === 'Other'
+          ? customCategory.trim() || 'Other'
+          : formCategory === 'Web development'
+            ? 'Development'
+            : formCategory;
 
       const body = {
         title: formTitle,
@@ -494,7 +634,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         token_address: SUPPORTED_TOKENS[formToken]?.issuerOrContractAddress,
         deadline: formDeadline || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
         visibility: formVisibility,
-        client_address: clientAddr,
+        client_address: activeWalletAddress || clientAddr,
         freelancer_address: formFreelancerAddress.trim() || undefined,
         status: onChainProjectId ? 'in_progress' : 'draft',
         contract_id: contractId,
@@ -508,7 +648,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       const res = await authFetch(`${apiUrl}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -516,7 +656,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         let errorMsg = data.error || data.message || 'Failed to save project';
         if (data.details) {
           if (Array.isArray(data.details)) {
-            const detailMsgs = data.details.map((d: any) => `${d.path?.join('.') || 'field'}: ${d.message}`).join(' | ');
+            const detailMsgs = data.details
+              .map((d: any) => `${d.path?.join('.') || 'field'}: ${d.message}`)
+              .join(' | ');
             errorMsg = `Validation failed: ${detailMsgs}`;
           } else if (typeof data.details === 'string') {
             errorMsg = `${errorMsg} (${data.details})`;
@@ -540,7 +682,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       await fetchBackendProjects();
       setActiveTab('projects');
     } catch (err: any) {
-      toast.error(err.message || 'Error saving project', { duration: 6000 });
+      showSorobanErrorToast(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -552,19 +694,24 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     await handleAcceptProposal(applicant.id);
   };
 
-  useEscapeKey(() => setShowAddMilestoneModal(false), showAddMilestoneModal);
-  useEscapeKey(() => setAuditProject(null), Boolean(auditProject));
+  const totalVolume = projects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
+  const activeEscrows = projects.filter(p => p.project_id_onchain !== null || p.status === 'open' || p.status === 'disputed').length;
+  const completedMilestones = projects.reduce((sum, p) => sum + (p.milestones?.filter(m => m.status === 'approved').length || 0), 0);
 
   return (
     <div className="w-full min-h-screen bg-[#121212] text-[#f4f4f5] font-sans p-4 sm:p-6 md:p-10 transition-colors duration-200">
       <div className="max-w-4xl mx-auto space-y-6">
-        
         {/* Navigation Bar / Mode Selector */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[#27272a]">
           <div className="flex items-center space-x-2 text-sm sm:text-base font-medium text-[#a1a1aa]">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#27272a] text-[#f4f4f5]">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
               </svg>
             </span>
             <span className="text-[#e4e4e7] font-semibold">Client</span>
@@ -573,6 +720,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               {activeTab === 'projects' && 'my projects'}
               {activeTab === 'create' && 'create project'}
               {activeTab === 'applicants' && 'applicants'}
+              {activeTab === 'saved' && 'saved contractors'}
             </span>
           </div>
 
@@ -605,32 +753,84 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]/50'
               }`}
             >
-              Applicants ({selectedProjectForApplicants?.applicants?.length || 0})
+              Applicants (<NumberRoll value={selectedProjectForApplicants?.applicants?.length || 0} />)
+            </button>
+            <button
+              onClick={() => setActiveTab('saved')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'saved'
+                  ? 'bg-[#27272a] text-white shadow-sm'
+                  : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]/50'
+              }`}
+              data-testid="saved-contractors-tab"
+            >
+              Saved Contractors ({starred.length})
             </button>
           </div>
         </div>
 
+        {/* Network fee gauge and token price alerts (#256, #253) */}
+        {activeTab === 'projects' && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <GasFeeEstimatorWidget onFeeSelected={(feeStroops) => setSorobanBaseFee(feeStroops)} />
+            <TokenPriceAlertWidget />
+          </div>
+        )}
+
         {/* VIEW 1: MY PROJECTS */}
         {activeTab === 'projects' && (
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-6 sm:p-8 shadow-2xl transition-all duration-300">
+            {/* Dashboard Statistic Cards with Smooth NumberRoll Counter */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Total Volume</div>
+                <div className="text-xl sm:text-2xl font-black text-white mt-1">
+                  <NumberRoll value={totalVolume} prefix="$" decimals={0} />
+                </div>
+              </div>
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Active Escrows</div>
+                <div className="text-xl sm:text-2xl font-black text-blue-400 mt-1">
+                  <NumberRoll value={activeEscrows} />
+                </div>
+              </div>
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Completed Milestones</div>
+                <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
+                  <NumberRoll value={completedMilestones} />
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                {projects.length} {projects.length === 1 ? 'project' : 'projects'}
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-1.5">
+                <NumberRoll value={projects.length} /> <span>{projects.length === 1 ? 'project' : 'projects'}</span>
               </h2>
-              <button
-                onClick={() => setActiveTab('create')}
-                className="inline-flex items-center space-x-2 px-4 py-2 bg-transparent hover:bg-[#27272a] text-white font-medium text-sm rounded-xl border border-[#3f3f46] transition-all hover:border-[#52525b] shadow-sm active:scale-95"
-              >
-                <span className="text-lg leading-none">+</span>
-                <span>Create project</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowApExportModal(true)}
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-[#232326] hover:bg-[#2d2d33] text-[#e4e4e7] font-medium text-xs rounded-xl border border-[#333338] transition-all"
+                  title="Export monthly accounts payable ledger (CSV / Excel)"
+                >
+                  <span>📊 AP Export</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('create')}
+                  className="inline-flex items-center space-x-2 px-4 py-2 bg-transparent hover:bg-[#27272a] text-white font-medium text-sm rounded-xl border border-[#3f3f46] transition-all hover:border-[#52525b] shadow-sm active:scale-95"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  <span>Create project</span>
+                </button>
+              </div>
             </div>
 
             {loading ? (
               <ProjectCardSkeletonList count={3} />
             ) : projects.length === 0 ? (
               <div className="text-center py-12 bg-[#1c1c20]/50 border border-[#27272a] rounded-xl">
-                <p className="text-[#a1a1aa] text-sm mb-4">No projects created yet in the database.</p>
+                <p className="text-[#a1a1aa] text-sm mb-4">
+                  No projects created yet in the database.
+                </p>
                 <button
                   onClick={() => setActiveTab('create')}
                   className="px-4 py-2 bg-[#27272a] text-white font-semibold text-xs rounded-xl border border-[#3f3f46]"
@@ -651,23 +851,27 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                         router.push(`/projects/${proj.id}`);
                       }
                     }}
-                    className="group bg-[#1c1c20]/80 hover:bg-[#222227] border border-[#27272a] hover:border-[#3f3f46] rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all duration-200"
+                    className="group bg-[#1c1c20]/80 hover:bg-[#222227] border border-[#27272a] hover:border-[#3f3f46] rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all duration-200 card-hover-border"
                   >
                     <div className="space-y-1.5 flex-1">
                       <h3 className="text-base sm:text-lg font-bold text-white group-hover:text-blue-400 transition-colors">
                         {proj.title}
                       </h3>
-                      <p className="text-xs sm:text-sm text-[#a1a1aa]">
-                        {proj.subtitle}
-                      </p>
+                      <p className="text-xs sm:text-sm text-[#a1a1aa]">{proj.subtitle}</p>
 
                       {/* Attached Files & Image Thumbnails */}
-                      {((proj.attachments && proj.attachments.length > 0) || (proj.files && proj.files.length > 0)) && (
+                      {((proj.attachments && proj.attachments.length > 0) ||
+                        (proj.files && proj.files.length > 0)) && (
                         <div className="pt-2 flex flex-wrap items-center gap-2">
                           {(proj.files || proj.attachments || []).map((file: any, fIdx: number) => {
-                            const fileUrl = typeof file === 'string' ? file : (file.file_url || file.file_name);
-                            const fileName = typeof file === 'string' ? file : (file.file_name || 'Attachment');
-                            const isImage = typeof fileUrl === 'string' && (fileUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) || fileUrl.startsWith('data:image'));
+                            const fileUrl =
+                              typeof file === 'string' ? file : file.file_url || file.file_name;
+                            const fileName =
+                              typeof file === 'string' ? file : file.file_name || 'Attachment';
+                            const isImage =
+                              typeof fileUrl === 'string' &&
+                              (fileUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
+                                fileUrl.startsWith('data:image'));
 
                             if (isImage) {
                               return (
@@ -693,7 +897,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                             }
 
                             return (
-                              <span key={fIdx} className="text-[11px] bg-[#232326] text-[#e4e4e7] px-2 py-0.5 rounded border border-[#333338] font-mono">
+                              <span
+                                key={fIdx}
+                                className="text-[11px] bg-[#232326] text-[#e4e4e7] px-2 py-0.5 rounded border border-[#333338] font-mono"
+                              >
                                 📄 {fileName}
                               </span>
                             );
@@ -703,17 +910,29 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     </div>
 
                     <div className="self-start sm:self-center flex flex-col items-end gap-1.5">
-                      <button
-                        type="button"
-                        data-testid="client-audit-log-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setAuditProject(proj);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-bold text-indigo-300 transition-colors hover:bg-indigo-500/20"
-                      >
-                        <span aria-hidden="true">🔗</span> Audit Log
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setReminderProject(proj);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-300 transition-colors hover:bg-amber-500/20"
+                        >
+                          <span aria-hidden="true">⏰</span> Reminders
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="client-audit-log-button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setAuditProject(proj);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-bold text-indigo-300 transition-colors hover:bg-indigo-500/20"
+                        >
+                          <span aria-hidden="true">🔗</span> Audit Log
+                        </button>
+                      </div>
                       <CalendarExportButton project={proj} compact label="Calendar" />
                       {proj.project_id_onchain !== undefined && proj.project_id_onchain !== null && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
@@ -725,7 +944,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                           In progress
                         </span>
                       )}
-                      {(proj.status === 'open' || proj.status === 'draft' || (proj.status as string) === 'Open') && (
+                      {(proj.status === 'open' ||
+                        proj.status === 'draft' ||
+                        (proj.status as string) === 'Open') && (
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-[#451a03] text-[#f97316] border border-[#78350f]">
                           Open
                         </span>
@@ -747,7 +968,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-[#27272a]">
                     <div className="text-xs text-[#a1a1aa]">
                       Showing Page <span className="font-bold text-white">{currentPage}</span> of{' '}
-                      <span className="font-bold text-white">{totalPages}</span> ({totalProjects} total projects)
+                      <span className="font-bold text-white">{totalPages}</span> ({totalProjects}{' '}
+                      total projects)
                     </div>
                     <div className="flex items-center space-x-1.5">
                       <button
@@ -933,7 +1155,9 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   <input
                     type="number"
                     value={formBudget}
-                    onChange={(e) => setFormBudget(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) =>
+                      setFormBudget(e.target.value === '' ? '' : Number(e.target.value))
+                    }
                     placeholder="900"
                     className="w-full px-4 py-3 bg-[#232326] border border-[#333338] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-blue-500 transition-colors"
                   />
@@ -956,13 +1180,21 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               </div>
 
               <BalanceWarningBadge
-                address={address}
+                address={activeWalletAddress}
                 balance={walletBalance.balance}
                 budget={formBudget === '' ? 0 : formBudget}
                 token={formToken}
                 isLoading={walletBalance.loading}
                 error={walletBalance.error}
               />
+
+              {formBudget !== '' && Number(formBudget) > 10000 && (
+                <LiquidityDepthOptimizer
+                  amount={Number(formBudget)}
+                  sourceToken={formToken === 'USDC' ? 'EURC' : 'USDC'}
+                  targetToken={formToken}
+                />
+              )}
 
               {/* Visibility Radio Buttons */}
               <div className="space-y-2 pt-1">
@@ -1000,13 +1232,16 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm font-bold text-white">Direct Freelancer & Immediate Escrow Lock</span>
+                      <span className="text-sm font-bold text-white">
+                        Direct Freelancer & Immediate Escrow Lock
+                      </span>
                       <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
                         Soroban
                       </span>
                     </div>
                     <p className="text-xs text-[#a1a1aa]">
-                      Have a designated freelancer? Assign their address and lock funds into the smart contract immediately.
+                      Have a designated freelancer? Assign their address and lock funds into the
+                      smart contract immediately.
                     </p>
                   </div>
 
@@ -1035,28 +1270,32 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                       value={formFreelancerAddress}
                       onChange={(e) => setFormFreelancerAddress(e.target.value)}
                       placeholder="G..."
-                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-[#121212] border border-[#27272a] rounded-xl px-3.5 py-2 text-xs font-mono tracking-tight text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                 )}
               </div>
 
               {/* BLEND PROTOCOL YIELD STRATEGY TOGGLE */}
-              <div className={`p-5 rounded-2xl border transition-all duration-300 ${
-                formYieldEnabled 
-                  ? 'bg-gradient-to-br from-[#064e3b]/30 via-[#022c22]/40 to-[#0f172a]/60 border-emerald-500/40 shadow-lg shadow-emerald-950/40'
-                  : 'bg-[#1c1c20]/60 border-[#27272a]'
-              }`}>
+              <div
+                className={`p-5 rounded-2xl border transition-all duration-300 ${
+                  formYieldEnabled
+                    ? 'bg-gradient-to-br from-[#064e3b]/30 via-[#022c22]/40 to-[#0f172a]/60 border-emerald-500/40 shadow-lg shadow-emerald-950/40'
+                    : 'bg-[#1c1c20]/60 border-[#27272a]'
+                }`}
+              >
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <span className="text-sm font-bold text-white">Earn Yield with Blend Protocol</span>
+                      <TooltipHelper termKey="blend-yield" />
                       <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         ~4.5% APY
                       </span>
                     </div>
                     <p className="text-xs text-[#a1a1aa]">
-                      Optionally route 70% of escrowed USDC to Stellar&apos;s Blend Protocol while freelancer completes work.
+                      Optionally route 70% of escrowed USDC to Stellar&apos;s Blend Protocol while
+                      freelancer completes work.
                     </p>
                   </div>
 
@@ -1081,13 +1320,30 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   <div className="mt-4 pt-4 border-t border-emerald-500/20 space-y-3.5 animate-fadeIn">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-[#032019]/80 rounded-xl border border-emerald-500/30 gap-2">
                       <div>
-                        <span className="text-[11px] font-semibold text-emerald-300 uppercase tracking-wider block">Estimated Yield Projection</span>
+                        <span className="text-[11px] font-semibold text-emerald-300 uppercase tracking-wider block">
+                          Estimated Yield Projection
+                        </span>
                         <div className="text-lg font-black text-emerald-400">
                           ~${calculateEstimatedYield()} {formToken}
                         </div>
                       </div>
                       <div className="text-xs text-[#a1a1aa] sm:text-right">
-                        on <span className="font-bold text-white">{formBudget || 0} {formToken}</span> over <span className="font-bold text-white">{formDeadline ? Math.max(1, Math.ceil((new Date(formDeadline).getTime() - Date.now()) / 86400000)) : 14} days</span>
+                        on{' '}
+                        <span className="font-bold text-white">
+                          {formBudget || 0} {formToken}
+                        </span>{' '}
+                        over{' '}
+                        <span className="font-bold text-white">
+                          {formDeadline
+                            ? Math.max(
+                                1,
+                                Math.ceil(
+                                  (new Date(formDeadline).getTime() - Date.now()) / 86400000
+                                )
+                              )
+                            : 14}{' '}
+                          days
+                        </span>
                       </div>
                     </div>
 
@@ -1101,11 +1357,15 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                         <div className="space-y-1 text-[#9ca3af]">
                           <div className="flex justify-between">
                             <span>📈 70% Blend Yield Pool:</span>
-                            <span className="font-bold text-emerald-400">${formBudget ? (Number(formBudget) * 0.7).toFixed(2) : '0.00'}</span>
+                            <span className="font-bold text-emerald-400">
+                              ${formBudget ? (Number(formBudget) * 0.7).toFixed(2) : '0.00'}
+                            </span>
                           </div>
                           <div className="flex justify-between">
                             <span>🛡️ 30% Instant Reserve:</span>
-                            <span className="font-bold text-blue-400">${formBudget ? (Number(formBudget) * 0.3).toFixed(2) : '0.00'}</span>
+                            <span className="font-bold text-blue-400">
+                              ${formBudget ? (Number(formBudget) * 0.3).toFixed(2) : '0.00'}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1133,7 +1393,8 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     </div>
 
                     <p className="text-[11px] text-[#a1a1aa] italic">
-                      ℹ️ 30% reserve is liquid for instant dispute payouts. The 70% in Blend is withdrawn upon milestone completion or resolution.
+                      ℹ️ 30% reserve is liquid for instant dispute payouts. The 70% in Blend is
+                      withdrawn upon milestone completion or resolution.
                     </p>
                   </div>
                 )}
@@ -1145,15 +1406,15 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   Attachments
                 </label>
                 <label className="relative border-2 border-dashed border-[#3f3f46] hover:border-[#52525b] rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#1c1c20]/50 hover:bg-[#232326]/50">
-                  <input
-                    type="file"
-                    multiple
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
+                  <input type="file" multiple onChange={handleFileUpload} className="hidden" />
                   <div className="w-8 h-8 mb-2 flex items-center justify-center text-[#a1a1aa]">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.5"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                      />
                     </svg>
                   </div>
                   <span className="text-xs sm:text-sm font-medium text-[#a1a1aa]">
@@ -1165,17 +1426,32 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   <div className="pt-3 space-y-2">
                     <div className="flex items-center justify-between text-xs text-[#a1a1aa] font-semibold">
                       <span>Attached Files ({formAttachments.length})</span>
-                      <span className="text-[11px] text-[#71717a]">Click image to preview • Click ✕ to remove</span>
+                      <span className="text-[11px] text-[#71717a]">
+                        Click image to preview • Click ✕ to remove
+                      </span>
                     </div>
 
                     <div className="flex flex-wrap gap-2.5">
                       {formAttachments.map((fileItem, idx) => {
                         const isObj = typeof fileItem === 'object' && fileItem !== null;
-                        const fileName = isObj ? (fileItem.name || fileItem.file_name || 'Attachment') : String(fileItem);
-                        const fileUrl = isObj ? (fileItem.url || fileItem.file_url || fileItem.name) : String(fileItem);
-                        const fileType = isObj ? (fileItem.type || fileItem.file_type) : (fileName.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ? 'image' : 'file');
-                        const fileSize = isObj && fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : null;
-                        const isImage = fileType === 'image' || (typeof fileUrl === 'string' && (fileUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) || fileUrl.startsWith('data:image')));
+                        const fileName = isObj
+                          ? fileItem.name || fileItem.file_name || 'Attachment'
+                          : String(fileItem);
+                        const fileUrl = isObj
+                          ? fileItem.url || fileItem.file_url || fileItem.name
+                          : String(fileItem);
+                        const fileType = isObj
+                          ? fileItem.type || fileItem.file_type
+                          : fileName.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)
+                            ? 'image'
+                            : 'file';
+                        const fileSize =
+                          isObj && fileItem.size ? `${(fileItem.size / 1024).toFixed(1)} KB` : null;
+                        const isImage =
+                          fileType === 'image' ||
+                          (typeof fileUrl === 'string' &&
+                            (fileUrl.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
+                              fileUrl.startsWith('data:image')));
 
                         return (
                           <div
@@ -1202,27 +1478,46 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                                 className="relative w-9 h-9 rounded-lg overflow-hidden border border-[#3f3f46] shrink-0 cursor-pointer group/img bg-[#18181b]"
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={fileUrl} alt={fileName} className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-200" />
+                                <img
+                                  src={fileUrl}
+                                  alt={fileName}
+                                  className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-200"
+                                />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 flex items-center justify-center text-[9px] text-white font-semibold transition-opacity">
                                   🔍
                                 </div>
                               </div>
                             ) : (
                               <div className="w-9 h-9 rounded-lg bg-[#18181b] border border-[#3f3f46] flex items-center justify-center shrink-0 text-blue-400">
-                                <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                <svg
+                                  className="w-4.5 h-4.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="1.5"
+                                    d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                                  />
                                 </svg>
                               </div>
                             )}
 
                             {/* File Info */}
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold text-white truncate" title={fileName}>
+                              <p
+                                className="text-xs font-semibold text-white truncate"
+                                title={fileName}
+                              >
                                 {fileName}
                               </p>
                               <div className="flex items-center space-x-1.5 text-[9px] text-[#a1a1aa] mt-0.5">
                                 <span className="uppercase font-mono px-1 py-0.2 rounded bg-[#18181b] border border-[#27272a]">
-                                  {isImage ? 'IMG' : (fileName.split('.').pop()?.toUpperCase() || 'FILE')}
+                                  {isImage
+                                    ? 'IMG'
+                                    : fileName.split('.').pop()?.toUpperCase() || 'FILE'}
                                 </span>
                                 {fileSize && <span>{fileSize}</span>}
                               </div>
@@ -1253,7 +1548,10 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 <div className="space-y-2.5">
                   {formMilestones.length === 0 ? (
                     <div className="text-center py-6 bg-[#1c1c20]/50 border border-dashed border-[#333338] rounded-xl">
-                      <p className="text-xs text-[#a1a1aa]">No milestones added yet. Click &quot;+ Add milestone&quot; to define project milestones.</p>
+                      <p className="text-xs text-[#a1a1aa]">
+                        No milestones added yet. Click &quot;+ Add milestone&quot; to define project
+                        milestones.
+                      </p>
                     </div>
                   ) : (
                     formMilestones.map((m, idx) => (
@@ -1266,9 +1564,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                             <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                               #{idx + 1}
                             </span>
-                            <span className="text-sm font-bold text-white">
-                              {m.title}
-                            </span>
+                            <span className="text-sm font-bold text-white">{m.title}</span>
                           </div>
                           <div className="flex items-center space-x-3">
                             <span className="text-sm font-extrabold text-[#22c55e]">
@@ -1280,17 +1576,25 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                               className="text-[#71717a] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
                               title="Remove milestone"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M6 18L18 6M6 6l12 12"
+                                />
                               </svg>
                             </button>
                           </div>
                         </div>
 
                         {m.description && (
-                          <p className="text-xs text-[#a1a1aa] line-clamp-2">
-                            {m.description}
-                          </p>
+                          <p className="text-xs text-[#a1a1aa] line-clamp-2">{m.description}</p>
                         )}
 
                         <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-[#71717a]">
@@ -1308,6 +1612,13 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                     ))
                   )}
                 </div>
+              </div>
+
+              {/* Network Gas & Soroban Fee Estimator */}
+              <div className="pt-2">
+                <GasFeeEstimatorWidget
+                  onFeeSelected={(fee) => setConfiguredFeeStroops(fee)}
+                />
               </div>
 
               {/* Save Project Button */}
@@ -1352,7 +1663,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 <select
                   value={selectedProjectForApplicants?.id || ''}
                   onChange={(e) => {
-                    const p = projects.find(proj => proj.id === e.target.value);
+                    const p = projects.find((proj) => proj.id === e.target.value);
                     if (p) setSelectedProjectForApplicants(p);
                   }}
                   className="px-3.5 py-2 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
@@ -1367,13 +1678,33 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
             </div>
 
             <div className="space-y-4">
-              {selectedProjectForApplicants?.applicants && selectedProjectForApplicants.applicants.length > 0 ? (
+              {selectedProjectForApplicants?.applicants &&
+              selectedProjectForApplicants.applicants.length > 0 ? (
                 selectedProjectForApplicants.applicants.map((applicant) => (
                   <ApplicantCard
                     key={applicant.id}
                     applicant={applicant}
                     onAccept={(id) => handleAcceptProposal(id)}
                     onDeny={(id) => handleDenyProposal(id)}
+                    onOpenProfile={() => setProfileApplicant(applicant)}
+                    projectBudget={selectedProjectForApplicants?.budget}
+                    tokenSymbol={selectedProjectForApplicants?.token || 'USDC'}
+                    counterOfferSubmitting={counterOfferSubmitting}
+                    onCounterOffer={(target) => setCounterOfferTarget(target)}
+                    onRespondToCounterOffer={handleRespondToCounterOffer}
+                    isStarred={isStarred(applicant.stellar_address || applicant.freelancer_address || '')}
+                    onToggleStar={(a) => {
+                      const addr = a.stellar_address || a.freelancer_address || '';
+                      if (!addr) {
+                        toast.error('This applicant has no wallet address to save.');
+                        return;
+                      }
+                      toggleStarred({
+                        address: addr,
+                        name: a.name,
+                        lastProjectTitle: selectedProjectForApplicants?.title,
+                      });
+                    }}
                     onOpenChat={(freelancerAddr) => {
                       if (!address) {
                         toast.error('Please connect your Stellar wallet first');
@@ -1392,13 +1723,36 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                 ))
               ) : (
                 <div className="text-center py-12 bg-[#1c1c20]/40 rounded-xl border border-[#27272a]">
-                  <p className="text-sm text-[#a1a1aa]">No applicants submitted yet for this project.</p>
+                  <p className="text-sm text-[#a1a1aa]">
+                    No applicants submitted yet for this project.
+                  </p>
                 </div>
               )}
             </div>
           </div>
         )}
 
+        {/* VIEW 4: SAVED CONTRACTORS (#255) */}
+        {activeTab === 'saved' && (
+          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+            <div className="pb-4 border-b border-[#27272a]">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Saved Contractors</h2>
+              <p className="text-xs sm:text-sm text-[#a1a1aa] mt-1">
+                Freelancers you have starred, with private notes only you can see.
+              </p>
+            </div>
+            <StarredFreelancersList
+              starred={starred}
+              onUnstar={(addr) => toggleStarred({ address: addr })}
+              onSaveNotes={setStarredNotes}
+              onInvite={(f) => {
+                setFormFreelancerAddress(f.address);
+                setActiveTab('create');
+                toast.success(`Escrow form pre-filled for ${f.name || 'your saved contractor'}.`);
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Modal for adding a new milestone with all backend fields */}
@@ -1430,9 +1784,7 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-[#e4e4e7]">
-                  Description
-                </label>
+                <label className="block text-xs font-semibold text-[#e4e4e7]">Description</label>
                 <textarea
                   rows={2}
                   value={newMilestoneDescription}
@@ -1450,16 +1802,16 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   <input
                     type="number"
                     value={newMilestoneAmount}
-                    onChange={(e) => setNewMilestoneAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) =>
+                      setNewMilestoneAmount(e.target.value === '' ? '' : Number(e.target.value))
+                    }
                     placeholder="300"
                     className="w-full px-3.5 py-2.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-[#e4e4e7]">
-                    Due Date
-                  </label>
+                  <label className="block text-xs font-semibold text-[#e4e4e7]">Due Date</label>
                   <input
                     type="date"
                     min={todayStr}
@@ -1543,6 +1895,17 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
         recipientRoleLabel={chatModalState.recipientRoleLabel}
       />
 
+      <FreelancerProfileModal
+        applicant={profileApplicant}
+        onClose={() => setProfileApplicant(null)}
+      />
+
+      <NotificationScheduleModal
+        project={reminderProject}
+        isOpen={Boolean(reminderProject)}
+        onClose={() => setReminderProject(null)}
+      />
+
       {auditProject && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-3 backdrop-blur-md sm:p-6"
@@ -1562,6 +1925,43 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
           </div>
         </div>
       )}
+
+      {/* Proposal counter-offer negotiation modal (#150) */}
+      <ProposalCounterOfferModal
+        key={counterOfferTarget?.id || 'closed-counter-offer'}
+        isOpen={Boolean(counterOfferTarget)}
+        proposal={
+          counterOfferTarget
+            ? {
+                id: counterOfferTarget.id,
+                project_title: selectedProjectForApplicants?.title,
+                freelancer_address:
+                  counterOfferTarget.freelancer_address || counterOfferTarget.stellar_address,
+                budget: selectedProjectForApplicants?.budget,
+                counter_offer: counterOfferTarget.counter_offer,
+              }
+            : null
+        }
+        originalMilestones={(selectedProjectForApplicants?.milestones || []).map(
+          (milestone) => ({
+            milestone_index: milestone.milestone_index,
+            title: milestone.title,
+            amount: milestone.amount,
+            due_date: milestone.due_date,
+          })
+        )}
+        tokenSymbol={selectedProjectForApplicants?.token || 'USDC'}
+        isSubmitting={counterOfferSubmitting}
+        onClose={() => setCounterOfferTarget(null)}
+        onSubmit={handleSubmitCounterOffer}
+      />
+
+      {/* Enterprise Accounts Payable Export Modal */}
+      <AccountsPayableExportModal
+        isOpen={showApExportModal}
+        onClose={() => setShowApExportModal(false)}
+        projects={projects}
+      />
     </div>
   );
 }

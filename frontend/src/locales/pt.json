@@ -1,0 +1,82 @@
+{
+  "nav": {
+    "howItWorks": "Como Funciona",
+    "features": "Recursos",
+    "testimonials": "Depoimentos",
+    "connectWallet": "Conectar Carteira",
+    "faq": "Perguntas Frequentes",
+    "launchDashboard": "Abrir Painel"
+  },
+  "hero": {
+    "badge": "Custódia Stellar de Nova Geração",
+    "title": "Custódia Descentralizada para Freelancers na Stellar",
+    "description": "Bloqueie fundos em contratos inteligentes Soroban. Libere pagamentos por etapas com segurança, proteção por arbitragem dupla e taxas de rede irrisórias.",
+    "createProject": "Criar Projeto de Custódia",
+    "browseProjects": "Explorar Projetos",
+    "statsVolume": "+$2.4M",
+    "statsVolumeLabel": "Volume em Custódia",
+    "statsSpeed": "< 3s",
+    "statsSpeedLabel": "Velocidade de Liquidação",
+    "statsFee": "< $0.001",
+    "statsFeeLabel": "Taxa Média de Rede"
+  },
+  "buttons": {
+    "submit": "Enviar",
+    "cancel": "Cancelar",
+    "next": "Próximo Passo",
+    "back": "Voltar",
+    "saveDraft": "Salvar Rascunho",
+    "restoreDraft": "Restaurar Rascunho",
+    "createProject": "Criar Projeto",
+    "depositEscrow": "Confirmar e Depositar Custódia",
+    "markAllRead": "Marcar tudo como lido",
+    "filter": "Filtrar",
+    "close": "Fechar",
+    "resolveDispute": "Resolver Disputa"
+  },
+  "status": {
+    "active": "Ativo",
+    "completed": "Concluído",
+    "disputed": "Em Disputa",
+    "pending": "Pendente",
+    "approved": "Aprovado",
+    "draft": "Rascunho"
+  },
+  "wizard": {
+    "step1Title": "Visão Geral e Categoria",
+    "step1Desc": "Defina o título, categoria e escopo do projeto",
+    "step2Title": "Etapas e Prazos",
+    "step2Desc": "Defina orçamento, datas de entrega e tarefas",
+    "step3Title": "Seleção de Token e Rendimento",
+    "step3Desc": "Selecione o token de custódia e ative rendimento",
+    "step4Title": "Revisão na Rede e Depósito",
+    "step4Desc": "Revise os parâmetros do projeto e bloqueie os fundos",
+    "stepIndicator": "Passo {current} de {total}"
+  },
+  "notifications": {
+    "title": "Notificações",
+    "all": "Todas",
+    "escrow": "Custódia",
+    "proposals": "Propostas",
+    "disputes": "Disputas",
+    "system": "Sistema",
+    "noNotifications": "Nenhuma notificação",
+    "soundSettings": "Alertas Sonoros",
+    "mute": "Silenciar Sons",
+    "unmute": "Ativar Sons"
+  },
+  "dispute": {
+    "title": "Mediação de Disputas",
+    "stepperDisputeRaised": "Disputa Aberta",
+    "stepperStatementFiled": "Declaração Registrada",
+    "stepperCounterEvidence": "Contraprovas",
+    "stepperArbiterReview": "Revisão do Árbitro",
+    "scopeTitle": "Escopo Original do Projeto",
+    "deliverablesTitle": "Entregas e Evidências",
+    "arbiterVerdict": "Veredito do Árbitro",
+    "clientRefund": "Reembolso ao Cliente",
+    "freelancerPayout": "Pagamento ao Freelancer",
+    "executeRuling": "Executar Decisão na Rede",
+    "privateNotes": "Notas Privadas do Árbitro (Restrito)"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "nav": {
+    "howItWorks": "How It Works",
+    "features": "Features",
+    "testimonials": "Testimonials",
+    "connectWallet": "Connect Wallet",
+    "faq": "FAQ",
+    "launchDashboard": "Launch Dashboard"
+  },
+  "hero": {
+    "badge": "Next-Gen Stellar Escrow",
+    "title": "Decentralized Escrow for Trustless Stellar Freelancing",
+    "description": "Lock funds in Soroban smart contracts. Release milestone payments securely with dual-arbitration dispute protection and sub-cent transaction fees.",
+    "createProject": "Create Escrow Project",
+    "browseProjects": "Browse Projects",
+    "statsVolume": "$2.4M+",
+    "statsVolumeLabel": "Escrow Volume",
+    "statsSpeed": "< 3s",
+    "statsSpeedLabel": "Settlement Speed",
+    "statsFee": "< $0.001",
+    "statsFeeLabel": "Avg Network Fee"
+  },
+  "buttons": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "next": "Next Step",
+    "back": "Back",
+    "saveDraft": "Save Draft",
+    "restoreDraft": "Restore Draft",
+    "createProject": "Create Project",
+    "depositEscrow": "Confirm & Deposit Escrow",
+    "markAllRead": "Mark all as read",
+    "filter": "Filter",
+    "close": "Close",
+    "resolveDispute": "Resolve Dispute"
+  },
+  "status": {
+    "active": "Active",
+    "completed": "Completed",
+    "disputed": "Disputed",
+    "pending": "Pending",
+    "approved": "Approved",
+    "draft": "Draft"
+  },
+  "wizard": {
+    "step1Title": "Overview & Category",
+    "step1Desc": "Define project title, category, and scope",
+    "step2Title": "Milestones & Deadlines",
+    "step2Desc": "Set budget, delivery dates, and milestone tasks",
+    "step3Title": "Token & Yield Selection",
+    "step3Desc": "Select escrow token and enable yield generation",
+    "step4Title": "On-Chain Review & Deposit",
+    "step4Desc": "Review project parameters and lock escrow funds",
+    "stepIndicator": "Step {current} of {total}"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "all": "All",
+    "escrow": "Escrow",
+    "proposals": "Proposals",
+    "disputes": "Disputes",
+    "system": "System",
+    "noNotifications": "No notifications yet",
+    "soundSettings": "Sound Alerts",
+    "mute": "Mute Sounds",
+    "unmute": "Enable Sounds"
+  },
+  "dispute": {
+    "title": "Dispute Mediation",
+    "stepperDisputeRaised": "Dispute Raised",
+    "stepperStatementFiled": "Statement Filed",
+    "stepperCounterEvidence": "Counter-Evidence",
+    "stepperArbiterReview": "Arbiter Review",
+    "scopeTitle": "Original Project Scope",
+    "deliverablesTitle": "Delivered Artifacts & Evidence",
+    "arbiterVerdict": "Arbiter Settlement Verdict",
+    "clientRefund": "Client Refund Amount",
+    "freelancerPayout": "Freelancer Payout Amount",
+    "executeRuling": "Execute Settlement On-Chain",
+    "privateNotes": "Arbiter Private Notes (Restricted)"
+  }
+}

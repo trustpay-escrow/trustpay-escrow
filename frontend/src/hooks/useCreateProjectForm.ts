@@ -1,12 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
-import { projectSchema, ProjectFormData } from '@/lib/validators';
+import {
+  projectSchema,
+  step1OverviewSchema,
+  step2MilestonesSchema,
+  step3TokenYieldSchema,
+  ProjectFormData,
+} from '@/lib/validators';
 import { z } from 'zod';
 import { useWalletStore } from '@/store/walletStore';
 import { useRouter } from 'next/navigation';
 
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import { HORIZON_URL } from '@/lib/soroban';
+
+export const DRAFT_STORAGE_KEY = 'trustpay_project_draft';
 
 interface HorizonBalanceLine {
   asset_type: string;
@@ -106,36 +114,71 @@ export function useTokenBalance(address: string | null | undefined, token: strin
   return { balance, loading, error, refresh };
 }
 
+const defaultInitialData: ProjectFormData = {
+  title: '',
+  description: '',
+  category: 'Development',
+  custom_category: '',
+  budget: 0,
+  token: 'USDC',
+  token_address: SUPPORTED_TOKENS.USDC.issuerOrContractAddress,
+  deadline: '',
+  visibility: 'Public',
+  attachments: [],
+  client_address: '',
+  yield_enabled: false,
+  estimated_yield: 0,
+};
+
 export function useCreateProjectForm() {
   const router = useRouter();
   const { address } = useWalletStore();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof ProjectFormData, string>>>({});
-  
-  const [formData, setFormData] = useState<ProjectFormData>({
-    title: '',
-    description: '',
-    category: 'Development',
-    custom_category: '',
-    budget: 0,
-    token: 'USDC',
-    token_address: SUPPORTED_TOKENS.USDC.issuerOrContractAddress,
-    deadline: '',
-    visibility: 'Public',
-    attachments: [],
-    client_address: address || '',
-    yield_enabled: false,
-    estimated_yield: 0,
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  // Auto-funding after a fiat deposit: idle -> waiting (refresh requested) -> reloading -> submit/give up
+  const autoFundRef = useRef<'idle' | 'waiting' | 'reloading'>('idle');
+
+  const [formData, setFormData] = useState<ProjectFormData>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return { ...defaultInitialData, ...parsed, client_address: address || parsed.client_address || '' };
+        }
+      } catch (e) {
+        console.warn('Failed to parse draft from localStorage', e);
+      }
+    }
+    return { ...defaultInitialData, client_address: address || '' };
   });
+
   const walletBalance = useTokenBalance(address, formData.token);
+  const refreshBalance = walletBalance.refresh;
   const balanceShortfall = getBalanceShortfall(walletBalance.balance, formData.budget);
   const hasSufficientBalance = isBalanceSufficient(walletBalance.balance, formData.budget);
 
+  // Address sync
   useEffect(() => {
     if (address && formData.client_address !== address) {
-      setFormData(prev => ({ ...prev, client_address: address }));
+      setFormData((prev) => ({ ...prev, client_address: address }));
     }
   }, [address]);
+
+  // Auto-save draft to localStorage whenever relevant fields change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (formData.title || formData.description || formData.budget > 0) {
+      try {
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData));
+        setDraftSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      } catch (e) {
+        console.warn('Could not auto-save draft', e);
+      }
+    }
+  }, [formData]);
 
   // Recalculate estimated yield whenever budget, deadline, or yield_enabled changes
   useEffect(() => {
@@ -144,33 +187,94 @@ export function useCreateProjectForm() {
       // 70% of budget into Blend pool earning ~4.5% APY
       const blendAmount = formData.budget * 0.70;
       const estYield = (blendAmount * 0.045 * days) / 365;
-      setFormData(prev => ({ ...prev, estimated_yield: Number(estYield.toFixed(2)) }));
+      setFormData((prev) => ({ ...prev, estimated_yield: Number(estYield.toFixed(2)) }));
     } else {
-      setFormData(prev => ({ ...prev, estimated_yield: 0 }));
+      setFormData((prev) => ({ ...prev, estimated_yield: 0 }));
     }
   }, [formData.budget, formData.deadline, formData.yield_enabled]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    const newValue = name === 'budget' ? Number(value) : value;
-    setFormData(prev => ({ ...prev, [name]: newValue }));
-    
+    let newValue: any = value;
+    if (name === 'budget') newValue = Number(value);
+    if (name === 'token') {
+      const tokenConfig = SUPPORTED_TOKENS[value as keyof typeof SUPPORTED_TOKENS];
+      setFormData((prev) => ({
+        ...prev,
+        token: value as any,
+        token_address: tokenConfig?.issuerOrContractAddress || '',
+      }));
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: newValue }));
+
     // Clear error for this field when user types
     if (errors[name as keyof ProjectFormData]) {
-      setErrors(prev => ({ ...prev, [name]: undefined }));
+      setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
   };
 
   const toggleYield = (enabled: boolean) => {
-    setFormData(prev => ({ ...prev, yield_enabled: enabled }));
+    setFormData((prev) => ({ ...prev, yield_enabled: enabled }));
   };
 
   const handleFileUploadMock = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const fileNames = Array.from(e.target.files).map(f => f.name);
-      setFormData(prev => ({ ...prev, attachments: [...(prev.attachments || []), ...fileNames] }));
+      const fileNames = Array.from(e.target.files).map((f) => f.name);
+      setFormData((prev) => ({ ...prev, attachments: [...(prev.attachments || []), ...fileNames] }));
       toast.success(`${fileNames.length} file(s) attached (mock)`);
     }
+  };
+
+  const validateStep = (stepNumber: number): boolean => {
+    try {
+      if (stepNumber === 1) {
+        step1OverviewSchema.parse(formData);
+      } else if (stepNumber === 2) {
+        step2MilestonesSchema.parse(formData);
+      } else if (stepNumber === 3) {
+        step3TokenYieldSchema.parse(formData);
+      } else if (stepNumber === 4) {
+        projectSchema.parse(formData);
+      }
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Partial<Record<keyof ProjectFormData, string>> = {};
+        error.issues.forEach((err) => {
+          if (err.path[0]) {
+            newErrors[err.path[0] as keyof ProjectFormData] = err.message;
+          }
+        });
+        setErrors(newErrors);
+        const errorMessages = error.issues.map((err) => err.message).join(' • ');
+        toast.error(`Step ${stepNumber} validation failed: ${errorMessages}`);
+      }
+      return false;
+    }
+  };
+
+  const nextStep = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep((prev) => Math.min(prev + 1, 4));
+    }
+  };
+
+  const prevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      setFormData({ ...defaultInitialData, client_address: address || '' });
+      setDraftSavedAt(null);
+      setErrors({});
+      setCurrentStep(1);
+      toast.info('Draft cleared');
+    } catch (e) {}
   };
 
   const validateForm = (): boolean => {
@@ -181,24 +285,22 @@ export function useCreateProjectForm() {
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Partial<Record<keyof ProjectFormData, string>> = {};
-        error.issues.forEach(err => {
+        error.issues.forEach((err) => {
           if (err.path[0]) {
             newErrors[err.path[0] as keyof ProjectFormData] = err.message;
           }
         });
         setErrors(newErrors);
-        
-        // Show specific error messages in the toast
-        const errorMessages = error.issues.map(err => err.message).join(' • ');
+        const errorMessages = error.issues.map((err) => err.message).join(' • ');
         toast.error(`Validation failed: ${errorMessages}`);
       }
       return false;
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
     if (!validateForm()) {
       return;
     }
@@ -222,36 +324,24 @@ export function useCreateProjectForm() {
 
       if (!res.ok) {
         if (data.details) {
-            // Zod error from backend
-            console.error('Backend validation details:', data.details);
-            throw new Error(data.error || 'Backend validation failed');
+          console.error('Backend validation details:', data.details);
+          throw new Error(data.error || 'Backend validation failed');
         }
         throw new Error(data.error || 'Failed to create project');
       }
 
-      toast.success('Project created successfully!');
-      
-      // Redirect to milestones creation page
+      toast.success('Project created and escrow initialized successfully!');
+      // Clear draft on successful submission
+      try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {}
+
       if (data.project && data.project.id) {
         router.push(`/projects/${data.project.id}/milestones/create`);
       } else {
-        // Fallback reset if no ID returned (shouldn't happen)
-        setFormData({
-          title: '',
-          description: '',
-          category: 'Development',
-          custom_category: '',
-          budget: 0,
-          token: 'USDC',
-          token_address: SUPPORTED_TOKENS.USDC.issuerOrContractAddress,
-          deadline: '',
-          visibility: 'Public',
-          attachments: [],
-          client_address: address || '',
-          yield_enabled: false,
-          estimated_yield: 0,
-        });
+        setFormData({ ...defaultInitialData, client_address: address || '' });
         setErrors({});
+        setCurrentStep(1);
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -260,10 +350,58 @@ export function useCreateProjectForm() {
     }
   };
 
+  /** Called once a fiat on-ramp deposit lands: refreshes the balance, then funds the escrow automatically. */
+  const handleFiatDepositDetected = useCallback(
+    (result: { amount: number }) => {
+      toast.success(`${result.amount} USDC received. Funding your escrow…`);
+      autoFundRef.current = 'waiting';
+      refreshBalance();
+    },
+    [refreshBalance]
+  );
+
+  /** Called after a DEX path-payment swap lands USDC in the wallet so the balance check updates. */
+  const handlePathSwapComplete = useCallback(
+    (result: { received: number; token: string }) => {
+      toast.success(`Received at least ${result.received} ${result.token}. Balance updated.`);
+      refreshBalance();
+    },
+    [refreshBalance]
+  );
+
+  useEffect(() => {
+    const phase = autoFundRef.current;
+    if (phase === 'waiting' && walletBalance.loading) {
+      autoFundRef.current = 'reloading';
+    } else if (phase === 'reloading' && !walletBalance.loading) {
+      autoFundRef.current = 'idle';
+      if (hasSufficientBalance && !loading) {
+        // Defer so the submit runs after this render commits, with the refreshed balance.
+        setTimeout(() => void handleSubmit(), 0);
+      } else {
+        toast.info(
+          `Deposit received, but your ${formData.token} balance is still short. Add more funds or lower the budget.`
+        );
+      }
+    }
+    // handleSubmit intentionally omitted: it closes over the latest form state on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletBalance.loading]);
+
   return {
     formData,
+    setFormData,
+    handleFiatDepositDetected,
+    handlePathSwapComplete,
     loading,
     errors,
+    currentStep,
+    setCurrentStep,
+    nextStep,
+    prevStep,
+    validateStep,
+    draftSavedAt,
+    clearDraft,
     handleChange,
     toggleYield,
     handleFileUploadMock,
@@ -278,7 +416,7 @@ export function useCreateProjectForm() {
 }
 
 export function calculateDaysFromDeadline(deadlineStr: string): number {
-  if (!deadlineStr) return 14; // Default fallback duration 14 days
+  if (!deadlineStr) return 14;
   const deadlineDate = new Date(deadlineStr);
   const now = new Date();
   const diffMs = deadlineDate.getTime() - now.getTime();

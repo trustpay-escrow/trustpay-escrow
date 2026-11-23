@@ -7,6 +7,11 @@ import {
   isGitHubPullRequestUrl,
   verifyGitHubPullRequest,
   deliverableSubmissionSchema,
+  proposalSchema,
+  deliverableSchema,
+  httpsUrlSchema,
+  validateProposal,
+  validateDeliverable,
 } from './validators';
 
 describe('Frontend Form Validators', () => {
@@ -58,6 +63,67 @@ describe('Frontend Form Validators', () => {
     expect(milestoneSchema.safeParse(validMilestone).success).toBe(true);
     expect(milestoneArraySchema.safeParse([validMilestone]).success).toBe(true);
     expect(milestoneArraySchema.safeParse([]).success).toBe(false); // At least 1 required
+  });
+});
+
+describe('HTTPS URL Validation', () => {
+  it('accepts valid HTTPS URLs for deliverables and portfolios', () => {
+    expect(httpsUrlSchema.safeParse('https://github.com/stellar/soroban').success).toBe(true);
+    expect(httpsUrlSchema.safeParse('https://figma.com/@designer/prototype').success).toBe(true);
+    expect(httpsUrlSchema.safeParse('https://demo.app.com/preview').success).toBe(true);
+  });
+
+  it('rejects non-HTTPS, relative or malformed URLs', () => {
+    expect(httpsUrlSchema.safeParse('http://insecure.site').success).toBe(false);
+    expect(httpsUrlSchema.safeParse('javascript:alert(1)').success).toBe(false);
+    expect(httpsUrlSchema.safeParse('/relative/path').success).toBe(false);
+    expect(httpsUrlSchema.safeParse('not-a-url').success).toBe(false);
+  });
+});
+
+describe('Proposal and Deliverable Client-Side Zod Schemas', () => {
+  it('validates proposal with >= 20 char cover notes, positive bid, and valid links', () => {
+    const validProposal = {
+      coverNote: 'I have extensive experience with Rust and Stellar Soroban smart contracts.',
+      bidAmount: 1500,
+      estimatedDays: 14,
+      portfolioLinks: ['https://github.com/freelancer', 'https://figma.com/designs'],
+    };
+    expect(proposalSchema.safeParse(validProposal).success).toBe(true);
+    expect(validateProposal(validProposal)).toEqual({});
+  });
+
+  it('rejects proposal cover note shorter than 20 characters', () => {
+    const shortProposal = {
+      coverNote: 'Too short note',
+      bidAmount: 100,
+      estimatedDays: 2,
+    };
+    const res = proposalSchema.safeParse(shortProposal);
+    expect(res.success).toBe(false);
+
+    const errors = validateProposal(shortProposal);
+    expect(errors.coverNote).toContain('at least 20 characters');
+  });
+
+  it('validates deliverable with >= 10 char notes and valid deliverable links', () => {
+    const validDeliverable = {
+      notes: 'Completed all Soroban contracts and frontend integration.',
+      deliverableLinks: ['https://github.com/trustpay-escrow/trustpay-escrow/pull/100'],
+    };
+    expect(deliverableSchema.safeParse(validDeliverable).success).toBe(true);
+    expect(validateDeliverable(validDeliverable)).toEqual({});
+  });
+
+  it('rejects deliverable notes shorter than 10 characters', () => {
+    const shortDeliverable = {
+      notes: 'Done!',
+    };
+    const res = deliverableSchema.safeParse(shortDeliverable);
+    expect(res.success).toBe(false);
+
+    const errors = validateDeliverable(shortDeliverable);
+    expect(errors.notes).toContain('at least 10 characters');
   });
 });
 

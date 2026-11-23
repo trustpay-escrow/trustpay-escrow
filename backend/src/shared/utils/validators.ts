@@ -19,6 +19,7 @@ export const projectSchema = z.object({
   yield_enabled: z.boolean().optional().default(false),
   estimated_yield: z.number().optional().default(0),
   blend_pool_address: z.string().optional(),
+  retainer_config: z.any().optional(),
   milestones: z.array(z.any()).optional()
 });
 
@@ -29,6 +30,8 @@ export const milestoneSchema = z.object({
   description: z.string().optional(),
   amount: z.number().positive('Amount must be greater than 0'),
   due_date: z.string().optional(),
+  start_date: z.string().optional(),
+  depends_on: z.array(z.number().int().nonnegative()).optional(),
   milestone_index: z.number().int().nonnegative('Order must be a non-negative integer').optional(),
   revision_limit: z.number().int().nonnegative('Revision limit must be non-negative').optional().default(0),
   deliverable_type: z.string().optional(),
@@ -74,7 +77,35 @@ export type UpdateMilestoneStatusData = z.infer<typeof updateMilestoneStatusSche
 
 export const requestRevisionSchema = z.object({
   revision_note: z.string().min(3, 'Revision note must be at least 3 characters'),
+  revision_checklist: z.array(z.string().min(1)).max(12).optional(),
+  revision_attachments: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        size: z.number().nonnegative().optional(),
+        type: z.string().optional(),
+        url: z.string().min(1),
+      })
+    )
+    .max(3)
+    .optional(),
   actor_address: z.string().optional(),
 });
 
 export type RequestRevisionData = z.infer<typeof requestRevisionSchema>;
+
+export const counterOfferMilestoneSchema = z.object({
+  milestone_index: z.number().int().nonnegative(),
+  title: z.string().min(1).max(200).optional(),
+  amount: z.number().positive('Counter-offer amounts must be greater than 0'),
+  due_date: z.string().optional(),
+});
+
+export const counterOfferSchema = z.object({
+  action: z.enum(['counter', 'accept', 'decline']),
+  milestones: z.array(counterOfferMilestoneSchema).min(1).max(60).optional(),
+  note: z.string().max(2000).optional(),
+  actor_address: z.string().optional(),
+});
+
+export type CounterOfferData = z.infer<typeof counterOfferSchema>;

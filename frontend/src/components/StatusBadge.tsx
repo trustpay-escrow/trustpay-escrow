@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 
 export type MilestoneStatus =
   | 'pending'
@@ -168,6 +168,10 @@ export function StatusBadge({
   showDot = true,
   tooltip,
 }: StatusBadgeProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const tooltipId = useId();
+
   const normalized = (status || '').toLowerCase().trim();
   const config = statusConfigs[normalized] || {
     text: label || status,
