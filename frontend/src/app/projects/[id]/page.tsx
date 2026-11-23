@@ -4,15 +4,19 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { nativeToScVal, xdr } from '@stellar/stellar-sdk';
 
 import { Milestone, Project } from '@/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { ProjectDetailSkeleton } from '@/components/skeletons';
 import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
+import { ContractSecurityModal } from '@/components/ContractSecurityModal';
+import { MutualCancellationModal } from '@/components/MutualCancellationModal';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
 import { CryptoId } from '@/components/ui/CryptoId';
+
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import {
@@ -29,6 +33,9 @@ import {
   DEFAULT_ARBITER_ADDRESS,
   TxStage,
 } from '@/lib/soroban';
+import { useSep07Signer } from '@/hooks/useSep07Signer';
+import { DeliverableDiffViewer } from '@/components/DeliverableDiffViewer';
+import { SorobanEventStreamDrawer } from '@/components/SorobanEventStreamDrawer';
 
 export default function ProjectDetailsPage() {
   const params = useParams();
@@ -73,6 +80,12 @@ export default function ProjectDetailsPage() {
 
   const [showFundEscrowModal, setShowFundEscrowModal] = useState(false);
   const [fundFreelancerAddress, setFundFreelancerAddress] = useState('');
+  const [showDeliverableDiff, setShowDeliverableDiff] = useState(false);
+
+  const { signWithSep07, sep07Modal } = useSep07Signer();
+
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [showMutualCancelModal, setShowMutualCancelModal] = useState(false);
 
   // Escape mirrors each modal's own Cancel button.
   useEscapeKey(() => {
@@ -594,6 +607,64 @@ export default function ProjectDetailsPage() {
     }
   };
 
+  // 5b. Arbiter Action: Resolve Dispute via SEP-0007 mobile wallet QR signing
+  const handleResolveDisputeSep07 = async () => {
+    if (!address) {
+      toast.error('Please connect the arbiter wallet first.');
+      return;
+    }
+
+    const cAmt = Number(resolveClientAmount) || 0;
+    const fAmt = Number(resolveFreelancerAmount) || 0;
+    if (cAmt + fAmt <= 0) {
+      toast.error('Please enter non-zero settlement amounts.');
+      return;
+    }
+
+    const onChainId = project.project_id_onchain ?? 1;
+    const args: xdr.ScVal[] = [
+      nativeToScVal(BigInt(onChainId), { type: 'u64' }),
+      nativeToScVal(BigInt(Math.round(cAmt * 10_000_000)), { type: 'i128' }),
+      nativeToScVal(BigInt(Math.round(fAmt * 10_000_000)), { type: 'i128' }),
+      xdr.ScVal.scvVoid(),
+    ];
+
+    setTxState({
+      isOpen: true,
+      stage: 'signing',
+      message: 'Preparing SEP-0007 QR code for mobile wallet signing…',
+    });
+
+    try {
+      const res = await signWithSep07({
+        callerAddress: address,
+        functionName: 'resolve_dispute',
+        args,
+      });
+
+      setTxState((prev) => ({
+        ...prev,
+        stage: 'success',
+        txHash: res.txHash,
+        message: 'Dispute settlement signed via mobile wallet and broadcast on Stellar!',
+      }));
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await authFetch(`${apiUrl}/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      });
+
+      toast.success('Dispute resolved via mobile wallet!');
+      setActiveResolveModal(false);
+      await fetchProject();
+    } catch (err: any) {
+      setTxState((prev) => ({ ...prev, isOpen: false }));
+      toast.error(`Mobile signing failed: ${err?.message || err}`);
+    }
+  };
+
   const handleDisputeTimeout = async (split5050: boolean) => {
     if (!address) {
       toast.error('Please connect your wallet first.');
@@ -700,6 +771,26 @@ export default function ProjectDetailsPage() {
             </span>
 
             <CalendarExportButton project={project} />
+
+            <button
+              onClick={() => setShowSecurityModal(true)}
+              className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700/80 hover:text-white transition-all flex items-center gap-1.5"
+              title="Inspect deployed contract WASM hash & security checklist"
+            >
+              <span>🔒</span>
+              <span>Contract Security</span>
+            </button>
+
+            {(isClient || isFreelancer) && project.status === 'in_progress' && (
+              <button
+                onClick={() => setShowMutualCancelModal(true)}
+                className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-all flex items-center gap-1.5"
+                title="Negotiate a mutual refund split without arbitration"
+              >
+                <span>🤝</span>
+                <span>Mutual Cancellation</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -983,6 +1074,12 @@ export default function ProjectDetailsPage() {
                         </div>
                       )}
 
+                      {m.deliverable_notes && (
+                        <div className="pl-10 pt-1">
+                          <DeliverableChecksums notes={m.deliverable_notes} />
+                        </div>
+                      )}
+
                       {m.revision_note && m.status === 'in_revision' && (
                         <div className="pl-10 pt-2 text-xs text-amber-300/90 bg-amber-950/30 p-3 rounded-xl border border-amber-500/30">
                           <strong className="text-amber-400 block mb-0.5 flex items-center gap-1">
@@ -1150,6 +1247,28 @@ export default function ProjectDetailsPage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
                 />
               </div>
+
+              {(activeDeliverableModal.deliverable_notes || deliverableNotes) && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeliverableDiff((v) => !v)}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 underline font-semibold"
+                  >
+                    {showDeliverableDiff ? 'Hide revision diff' : 'Compare with previous submission'}
+                  </button>
+                  {showDeliverableDiff && (
+                    <div className="mt-2">
+                      <DeliverableDiffViewer
+                        previousText={activeDeliverableModal.deliverable_notes || ''}
+                        currentText={deliverableNotes}
+                        previousLabel="Previous deliverable"
+                        currentLabel="New submission"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
@@ -1160,6 +1279,7 @@ export default function ProjectDetailsPage() {
                   setDeliverableHash('');
                   setDeliverableUrl('');
                   setDeliverableNotes('');
+                  setShowDeliverableDiff(false);
                 }}
                 className="border-slate-800 text-slate-300 hover:bg-slate-800 rounded-xl text-xs"
               >
@@ -1439,10 +1559,21 @@ export default function ProjectDetailsPage() {
               >
                 Execute Ruling on Stellar ↗
               </Button>
+              <Button
+                onClick={handleResolveDisputeSep07}
+                variant="outline"
+                className="border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10 rounded-xl text-xs font-bold px-5"
+                title="Sign with a mobile wallet via SEP-0007 QR code — no browser extension needed"
+              >
+                Sign via Mobile QR
+              </Button>
             </div>
           </div>
         </div>
       )}
+
+      {sep07Modal}
+      {project.contract_id && <SorobanEventStreamDrawer contractId={project.contract_id} />}
 
       {/* TRANSACTION PROGRESS OVERLAY MODAL */}
       {txState.isOpen && (
@@ -1506,6 +1637,21 @@ export default function ProjectDetailsPage() {
           onClose={() => setLightboxImage(null)}
         />
       )}
+
+      {/* Contract Transparency & Security Inspector */}
+      <ContractSecurityModal
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+        contractId={project.contract_id || DEFAULT_ESCROW_CONTRACT_ID}
+      />
+
+      {/* Mutual Cancellation & Refund Split Negotiation */}
+      <MutualCancellationModal
+        isOpen={showMutualCancelModal}
+        onClose={() => setShowMutualCancelModal(false)}
+        project={project}
+        onUpdated={fetchProject}
+      />
     </div>
   );
 }

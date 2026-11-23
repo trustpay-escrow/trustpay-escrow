@@ -8,7 +8,6 @@ import { ArbiterDashboard } from './ArbiterDashboard';
 import { RoleSwitcher } from './RoleSwitcher';
 import WalletConnect from './WalletConnect';
 import NotificationBell from './NotificationBell';
-import { OrgWalletSwitcher } from './OrgWalletSwitcher';
 import { CryptoId } from '@/components/ui/CryptoId';
 
 export function DashboardRouter() {
@@ -54,7 +53,7 @@ export function DashboardRouter() {
           <span className="text-[#52525b]">|</span>
           <span className="text-[#a1a1aa]">Wallet:</span>
           <CryptoId
-            value={activeWalletAddress ?? ''}
+            value={address}
             head={6}
             tail={4}
             className="font-semibold text-white bg-[#27272a] px-2.5 py-0.5 rounded-md border border-[#3f3f46]"

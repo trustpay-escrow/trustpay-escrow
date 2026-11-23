@@ -44,6 +44,18 @@ export function ThemeToggle() {
         🌙
       </button>
       <button
+        onClick={() => setTheme('oled')}
+        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+          theme === 'oled'
+            ? 'bg-var(--card-border) text-var(--foreground) shadow-sm'
+            : 'text-var(--foreground)/60 hover:text-var(--foreground)'
+        }`}
+        aria-label="OLED Black theme"
+        title="OLED Black"
+      >
+        OLED
+      </button>
+      <button
         onClick={() => setTheme('system')}
         className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
           theme === 'system'

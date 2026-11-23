@@ -16,6 +16,7 @@ export interface Milestone {
   deliverable_url?: string;
   deliverable_notes?: string;
   deliverable_type?: string;
+  revision_count?: number;
 }
 
 export interface Project {
@@ -36,6 +37,8 @@ export interface Project {
   freelancer_address?: string;
   arbiter_id?: string;
   arbiter_address?: string;
+  arbiter_addresses?: string[];
+  dispute_reason?: string;
   contract_id?: string;
   project_id_onchain?: number | string | bigint;
   tx_hash?: string;
@@ -60,6 +63,7 @@ export interface Applicant {
   pitch: string;
   cover_note?: string;
   portfolio_url?: string;
+  demo_url?: string;
   status?: 'pending' | 'accepted' | 'denied' | 'granted' | 'rejected';
   granted?: boolean;
   created_at?: string;
@@ -133,4 +137,16 @@ export interface ProjectReview {
   average_rating: number;
   testimonial: string;
   created_at: string;
+}
+
+/** A freelancer the client has starred, with private notes (#255). */
+export interface StarredFreelancer {
+  /** Stellar address, the stable identifier. */
+  address: string;
+  name?: string;
+  /** Private to the client; never sent to the freelancer. */
+  notes: string;
+  starredAt: string;
+  /** Project the freelancer applied to or worked on, for context. */
+  lastProjectTitle?: string;
 }

@@ -166,6 +166,59 @@ export const deliverableFileSchema = z.object({
   type: z.string(),
 });
 
+export const HTTPS_URL_PATTERN = /^https:\/\/[A-Za-z0-9_.-]+(?:\.[A-Za-z0-9_.-]+)+(?:\/[^\s]*)?$/i;
+
+export const httpsUrlSchema = z.string().trim().regex(
+  HTTPS_URL_PATTERN,
+  'URL must be a valid external HTTPS link (e.g., https://github.com/..., https://figma.com/...)'
+);
+
+export const proposalSchema = z.object({
+  coverNote: z.string().trim().min(20, 'Proposal cover note must be at least 20 characters'),
+  bidAmount: z.number().positive('Bid amount must be greater than 0'),
+  estimatedDays: z.number().int().positive('Estimated days must be a positive integer'),
+  portfolioLinks: z.array(httpsUrlSchema).optional().default([]),
+});
+
+export const ProposalSchema = proposalSchema;
+export type ProposalFormData = z.infer<typeof proposalSchema>;
+
+export const deliverableSchema = z.object({
+  notes: z.string().trim().min(10, 'Deliverable notes must be at least 10 characters'),
+  deliverableLinks: z.array(httpsUrlSchema).optional().default([]),
+  githubPrUrls: z.array(githubPrUrlSchema).max(10, 'At most 10 pull request links are allowed').optional().default([]),
+  files: z.array(deliverableFileSchema).max(20, 'At most 20 files are allowed').optional(),
+});
+
+export const DeliverableSchema = deliverableSchema;
+export type DeliverableFormData = z.infer<typeof deliverableSchema>;
+
+export function validateProposal(data: Partial<ProposalFormData>): Record<string, string> {
+  const result = proposalSchema.safeParse(data);
+  if (result.success) return {};
+  const errors: Record<string, string> = {};
+  for (const issue of result.error.issues) {
+    const field = issue.path[0];
+    if (field && !errors[String(field)]) {
+      errors[String(field)] = issue.message;
+    }
+  }
+  return errors;
+}
+
+export function validateDeliverable(data: Partial<DeliverableFormData>): Record<string, string> {
+  const result = deliverableSchema.safeParse(data);
+  if (result.success) return {};
+  const errors: Record<string, string> = {};
+  for (const issue of result.error.issues) {
+    const field = issue.path[0];
+    if (field && !errors[String(field)]) {
+      errors[String(field)] = issue.message;
+    }
+  }
+  return errors;
+}
+
 export const deliverableSubmissionSchema = z.object({
   notes: z.string().trim().min(20, 'Add a summary of at least 20 characters'),
   githubPrUrls: z.array(githubPrUrlSchema).max(10, 'At most 10 pull request links are allowed'),

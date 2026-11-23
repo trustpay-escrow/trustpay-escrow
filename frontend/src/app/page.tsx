@@ -1,3 +1,4 @@
+import Accordion from '@/components/Accordion';
 'use client';
 
 import React, { useState } from 'react';
@@ -126,16 +127,34 @@ export default function Home() {
         </p>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 mb-16 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16 w-full sm:w-auto">
+          {/* Primary Hero CTA with ambient radial gradient pulse & particle glow shimmer */}
+          <div className="relative group/cta w-full sm:w-auto">
+            <div
+              className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 opacity-70 blur-lg animate-hero-glow group-hover/cta:opacity-100 group-hover/cta:scale-105 transition-all duration-500 pointer-events-none"
+              aria-hidden="true"
+            />
+            <Link
+              href="/projects/create"
+              data-testid="hero-create-escrow-cta"
+              className="relative flex items-center justify-center space-x-2 w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-blue-600/30 border border-blue-400/40 transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] text-center"
+            >
+              <span>Create Escrow</span>
+              <span className="text-blue-200 text-xs font-semibold px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-sm">
+                Instant V1
+              </span>
+            </Link>
+          </div>
+
           <Link
             href="/projects"
-            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-blue-600/25 border border-blue-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] text-center"
+            className="w-full sm:w-auto px-8 py-4 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm rounded-2xl border border-[#27272a] hover:border-[#3f3f46] transition-all hover:scale-[1.01] active:scale-[0.98] text-center"
           >
-            Explore Projects Portal 🚀
+            Explore Projects Portal ↗
           </Link>
           <a
             href="#how-it-works"
-            className="w-full sm:w-auto px-8 py-4 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm rounded-2xl border border-[#27272a] hover:border-[#3f3f46] transition-all text-center"
+            className="w-full sm:w-auto px-8 py-4 text-[#a1a1aa] hover:text-white font-semibold text-sm transition-colors text-center"
           >
             How It Works ↓
           </a>
@@ -340,28 +359,14 @@ export default function Home() {
             </h2>
           </div>
 
-          <div className="space-y-4">
-            {faqs.map((faq, idx) => (
-              <div
-                key={idx}
-                className="bg-[#18181b]/80 border border-[#27272a] rounded-2xl overflow-hidden transition-colors"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                  className="w-full px-6 py-5 flex items-center justify-between text-left font-bold text-white hover:text-blue-400 transition-colors cursor-pointer"
-                >
-                  <span className="text-sm sm:text-base">{faq.q}</span>
-                  <span className="text-xl text-[#71717a]">{openFaq === idx ? "−" : "+"}</span>
-                </button>
-                {openFaq === idx && (
-                  <div className="px-6 pb-5 text-xs sm:text-sm text-[#a1a1aa] leading-relaxed border-t border-[#27272a]/40 pt-4">
-                    {faq.a}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <Accordion
+            items={faqs.map((faq, idx) => ({
+              id: aq-,
+              title: faq.q,
+              content: faq.a,
+            }))}
+            type="single"
+          />
         </div>
       </section>
 

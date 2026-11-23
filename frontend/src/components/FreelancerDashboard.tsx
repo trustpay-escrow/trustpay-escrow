@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import NumberRoll from './NumberRoll';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useWalletStore, canSubmitProposal } from '@/store/walletStore';
@@ -15,11 +16,17 @@ import { ProjectCardSkeletonList, ProposalSkeletonList } from '@/components/skel
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
 import { ProjectFilterBar } from '@/components/ProjectFilterBar';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { usePersistentTab, usePersistentFilter } from '@/hooks/usePersistentTab';
 
 export function FreelancerDashboard() {
   const router = useRouter();
-  const { address, activeRole } = useWalletStore();
-  const [activeTab, setActiveTab] = useState<'explore' | 'proposals' | 'jobs'>('explore');
+  const { address } = useWalletStore();
+  const [activeTab, setActiveTab] = usePersistentTab<'explore' | 'proposals' | 'jobs'>({
+    key: 'freelancer_active_tab',
+    defaultTab: 'explore',
+    allowedTabs: ['explore', 'proposals', 'jobs'] as const,
+    walletAddress: address,
+  });
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -55,9 +62,9 @@ export function FreelancerDashboard() {
   // Milestone submission modal state
   const [submittingMilestone, setSubmittingMilestone] = useState<{ project: Project; milestone: Milestone } | null>(null);
 
-  // Search and Category filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  // Search and Category filters (persisted in sessionStorage)
+  const [searchQuery, setSearchQuery] = usePersistentFilter<string>('freelancer_search', '', address);
+  const [selectedCategory, setSelectedCategory] = usePersistentFilter<string>('freelancer_category', 'All', address);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -436,7 +443,7 @@ export function FreelancerDashboard() {
                   : 'text-[#a1a1aa] hover:text-white hover:bg-[#27272a]/50'
               }`}
             >
-              My Proposals ({proposals.length})
+              My Proposals (<NumberRoll value={proposals.length} />)
             </button>
           </div>
         </div>
@@ -445,11 +452,38 @@ export function FreelancerDashboard() {
         {activeTab === 'explore' && (
           <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 sm:p-6 md:p-8 shadow-2xl space-y-5 sm:space-y-6">
             
+            {/* Dashboard Statistic Cards with Smooth NumberRoll Counter */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Total Volume</div>
+                <div className="text-xl sm:text-2xl font-black text-white mt-1">
+                  <NumberRoll
+                    value={projects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0)}
+                    prefix="$"
+                    decimals={0}
+                  />
+                </div>
+              </div>
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Active Escrows</div>
+                <div className="text-xl sm:text-2xl font-black text-indigo-400 mt-1">
+                  <NumberRoll value={projects.length} />
+                </div>
+              </div>
+              <div className="bg-[#121214] border border-[#27272a] rounded-xl p-4">
+                <div className="text-xs text-[#a1a1aa] font-medium">Submitted Proposals</div>
+                <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
+                  <NumberRoll value={proposals.length} />
+                </div>
+              </div>
+            </div>
+
             {/* Header & Filter Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-white">
-                  Available Projects
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-1.5">
+                  <span>Available Projects</span>
+                  <span className="text-xs font-normal text-[#a1a1aa]">(<NumberRoll value={filteredProjects.length} />)</span>
                 </h2>
                 <p className="text-[11px] sm:text-xs md:text-sm text-[#a1a1aa] mt-0.5">
                   Apply for open escrows and submit your milestones.
