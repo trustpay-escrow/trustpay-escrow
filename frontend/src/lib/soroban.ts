@@ -326,6 +326,148 @@ export async function invokeSorobanMethod(options: {
   throw new Error(`Transaction timed out while awaiting ledger inclusion (tx: ${txHash}). Please verify on Stellar.Expert.`);
 }
 
+export interface SorobanBatchCall {
+  functionName: string;
+  args: xdr.ScVal[];
+  contractAddress?: string;
+}
+
+/**
+ * invokeSorobanBatch (#308)
+ *
+ * Executes several contract invocations inside a single Stellar transaction so
+ * enterprise clients approve/fund multiple milestones with one wallet prompt.
+ * All operations share one signature and one network fee; Soroban atomicity
+ * means either every milestone release lands or none of them do.
+ */
+export async function invokeSorobanBatch(options: {
+  callerAddress: string;
+  calls: SorobanBatchCall[];
+  onStatusUpdate?: TxStatusCallback;
+  baseFee?: number | string;
+}): Promise<SorobanTxResult> {
+  const { callerAddress, calls, onStatusUpdate } = options;
+
+  if (!calls.length) {
+    throw new Error('Batch invocation requires at least one contract call.');
+  }
+  if (!(await isConnected())) {
+    throw new Error('Freighter wallet extension is not detected. Please install and unlock Freighter.');
+  }
+
+  const perOperationFee = BigInt(options.baseFee ?? getSorobanBaseFee() ?? DEFAULT_SOROBAN_BASE_FEE);
+
+  onStatusUpdate?.('preparing', 'Validating wallet connection and account status...');
+  await ensureAccountExists(callerAddress);
+
+  const server = getSorobanRpcServer();
+  const sourceAccount = await server.getAccount(callerAddress);
+
+  const functionNames = Array.from(new Set(calls.map((call) => call.functionName)));
+  onStatusUpdate?.(
+    'simulating',
+    calls.length === 1
+      ? `Simulating contract call '${functionNames[0]}'...`
+      : `Simulating ${calls.length} batched contract calls (${functionNames.join(', ')})...`
+  );
+
+  const builder = new TransactionBuilder(sourceAccount, {
+    // TransactionBuilder multiplies this per-operation fee by the number of operations.
+    fee: perOperationFee.toString(),
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  });
+
+  calls.forEach((call) => {
+    builder.addOperation(
+      Operation.invokeContractFunction({
+        contract: call.contractAddress || DEFAULT_ESCROW_CONTRACT_ID,
+        function: call.functionName,
+        args: call.args,
+      })
+    );
+  });
+
+  const baseTx = builder.setTimeout(180).build();
+
+  let preparedTx: any;
+  try {
+    preparedTx = await server.prepareTransaction(baseTx);
+  } catch (simErr: any) {
+    const errorMsg = simErr?.message || String(simErr);
+    throw new Error(`Contract simulation failed for batched call: ${errorMsg}`);
+  }
+
+  onStatusUpdate?.('signing', 'Awaiting authorization signature in Freighter wallet...');
+
+  let signResult: any;
+  try {
+    signResult = await signTransaction(preparedTx.toXDR(), {
+      networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+    });
+  } catch (signErr: any) {
+    throw new Error(`Wallet signing cancelled or rejected: ${signErr.message || signErr}`);
+  }
+
+  let signedXdr = '';
+  if (typeof signResult === 'string') {
+    signedXdr = signResult;
+  } else if (signResult && typeof signResult === 'object') {
+    if (signResult.error) {
+      throw new Error(
+        typeof signResult.error === 'string'
+          ? signResult.error
+          : signResult.error.message || 'Freighter rejected signature'
+      );
+    }
+    signedXdr = signResult.signedTxXdr || signResult.signedTransaction || '';
+  }
+
+  if (!signedXdr) {
+    throw new Error('Transaction signing was rejected or returned empty XDR.');
+  }
+
+  onStatusUpdate?.('submitting', 'Broadcasting transaction to Stellar network...');
+
+  const signedTx = TransactionBuilder.fromXDR(signedXdr, STELLAR_NETWORK_PASSPHRASE);
+  const sendRes = await server.sendTransaction(signedTx);
+
+  if (sendRes.status === 'ERROR') {
+    const detail = sendRes.errorResult ? JSON.stringify(sendRes.errorResult) : sendRes.status;
+    throw new Error(`Transaction rejected by Stellar RPC: ${detail}`);
+  }
+
+  const txHash = sendRes.hash;
+  onStatusUpdate?.('polling', `Transaction submitted (tx: ${txHash.slice(0, 8)}...). Awaiting confirmation...`);
+
+  let attempts = 0;
+  const maxAttempts = 35;
+  while (attempts < maxAttempts) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const txStatus = await server.getTransaction(txHash);
+
+    if (txStatus.status === 'SUCCESS') {
+      let parsedReturn: any = null;
+      if (txStatus.returnValue) {
+        try {
+          parsedReturn = scValToNative(txStatus.returnValue);
+        } catch {
+          parsedReturn = txStatus.returnValue;
+        }
+      }
+      onStatusUpdate?.('success', 'Transaction successfully confirmed on Stellar!');
+      return { success: true, txHash, returnValue: parsedReturn };
+    }
+
+    if (txStatus.status === 'FAILED') {
+      throw new Error(`Soroban transaction failed during ledger execution (tx: ${txHash})`);
+    }
+
+    attempts++;
+  }
+
+  throw new Error(`Transaction timed out while awaiting ledger inclusion (tx: ${txHash}). Please verify on Stellar.Expert.`);
+}
+
 /**
  * Creates an on-chain escrow project and locks the milestone funds into the Soroban contract.
  */

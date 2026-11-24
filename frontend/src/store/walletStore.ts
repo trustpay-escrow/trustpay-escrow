@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { clearPersistedDashboardState } from '@/hooks/usePersistentTab';
 
 // Safe storage resolver that handles browser localStorage and falls back gracefully in tests/SSR
 const getStorageProvider = () => {
@@ -155,6 +156,8 @@ export const useWalletStore = create<WalletState>()(
         } catch {
           // ignore network error on logout
         }
+        // Drop persisted tab/filter context so the next wallet starts clean (#177)
+        clearPersistedDashboardState();
         set({
           address: null,
           walletName: null,

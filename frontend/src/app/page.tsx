@@ -361,7 +361,7 @@ export default function Home() {
 
           <Accordion
             items={faqs.map((faq, idx) => ({
-              id: aq-,
+              id: `faq-${idx}`,
               title: faq.q,
               content: faq.a,
             }))}

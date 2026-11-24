@@ -18,6 +18,8 @@ import { authFetch } from '@/lib/api';
 import { CryptoId } from '@/components/ui/CryptoId';
 
 import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useA11yAnnouncer } from '@/components/A11yLiveAnnouncer';
+import { MilestoneCertificateButton } from '@/components/MilestoneCertificateButton';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import {
   createProjectOnChain,
@@ -49,6 +51,7 @@ export default function ProjectDetailsPage() {
   const projectId = params.id as string;
 
   const { address, activeRole } = useWalletStore();
+  const { announce } = useA11yAnnouncer();
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +91,15 @@ export default function ProjectDetailsPage() {
   const [showDeliverableDiff, setShowDeliverableDiff] = useState(false);
 
   const { signWithSep07, sep07Modal } = useSep07Signer();
+
+  // Announce async blockchain state changes to screen readers (#309)
+  useEffect(() => {
+    if (!txState.isOpen || !txState.message) return;
+    announce(
+      `Escrow transaction ${txState.stage}: ${txState.message}`,
+      txState.stage === 'error' ? 'assertive' : 'polite'
+    );
+  }, [txState.isOpen, txState.stage, txState.message, txState.error, announce]);
 
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showMutualCancelModal, setShowMutualCancelModal] = useState(false);
@@ -1212,9 +1224,12 @@ export default function ProjectDetailsPage() {
                         )}
 
                         {m.status === 'approved' && (
-                          <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex items-center gap-1.5">
-                            <span>✓</span> Released On-Chain
-                          </span>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 flex items-center gap-1.5">
+                              <span>✓</span> Released On-Chain
+                            </span>
+                            <MilestoneCertificateButton project={project} milestone={m} txHash={project.tx_hash} />
+                          </div>
                         )}
                       </div>
                     </div>

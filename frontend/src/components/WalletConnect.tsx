@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useWalletStore } from "@/store/walletStore";
 import { CryptoId } from "@/components/ui/CryptoId";
 import { useRouter } from "next/navigation";
-import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useWalletEventListener } from "@/hooks/useWalletEventListener";
 
 const getErrorMessage = (err: any, prefix = ""): string => {
@@ -53,11 +53,17 @@ export default function WalletConnect() {
   const [tempSignedXdr, setTempSignedXdr] = useState("");
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
-  useEscapeKey(() => {
-    setShowEmailModal(false);
-    setIsConnecting(false);
-  }, showEmailModal);
-  useEscapeKey(() => setShowXBullModal(false), showXBullModal);
+  const emailDialogRef = useFocusTrap<HTMLDivElement>({
+    active: showEmailModal,
+    onEscape: () => {
+      setShowEmailModal(false);
+      setIsConnecting(false);
+    },
+  });
+  const xBullDialogRef = useFocusTrap<HTMLDivElement>({
+    active: showXBullModal,
+    onEscape: () => setShowXBullModal(false),
+  });
   const router = useRouter();
 
   useEffect(() => {
@@ -327,7 +333,14 @@ export default function WalletConnect() {
   // Email registration modal for first-time connected users
   const emailModalContent = showEmailModal ? (
     <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-      <div className="bg-[#18181b] border border-[#3f3f46] rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto animate-fadeIn">
+      <div
+        ref={emailDialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wallet-email-title"
+        tabIndex={-1}
+        className="bg-[#18181b] border border-[#3f3f46] rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto animate-fadeIn"
+      >
         <div className="absolute -top-12 -right-12 w-36 h-36 bg-blue-500/20 rounded-full blur-2xl pointer-events-none"></div>
 
         <div className="flex flex-col items-center text-center space-y-3 pt-2">
@@ -337,7 +350,7 @@ export default function WalletConnect() {
             </svg>
           </div>
 
-          <h3 className="text-2xl font-extrabold text-white tracking-tight">
+          <h3 id="wallet-email-title" className="text-2xl font-extrabold text-white tracking-tight">
             Welcome to TrustPay
           </h3>
 
@@ -386,13 +399,20 @@ export default function WalletConnect() {
   // xBull Helper Modal when extension is not detected
   const xBullModalContent = showXBullModal ? (
     <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-      <div className="bg-[#18181b] border border-[#3f3f46] rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto animate-fadeIn">
+      <div
+        ref={xBullDialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wallet-xbull-title"
+        tabIndex={-1}
+        className="bg-[#18181b] border border-[#3f3f46] rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto animate-fadeIn"
+      >
         <div className="flex flex-col items-center text-center space-y-3 pt-2">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25 text-2xl font-black">
             🐂
           </div>
 
-          <h3 className="text-2xl font-extrabold text-white tracking-tight">
+          <h3 id="wallet-xbull-title" className="text-2xl font-extrabold text-white tracking-tight">
             xBull Wallet Options
           </h3>
 

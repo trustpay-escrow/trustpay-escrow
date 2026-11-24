@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useA11yAnnouncer } from './A11yLiveAnnouncer';
 import { submitMilestoneOnChain, type TxStage } from '@/lib/soroban';
 import {
   deliverableSubmissionSchema,
@@ -105,9 +106,22 @@ export function MilestoneSubmitModal({
     objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  useEscapeKey(() => {
-    if (!submitting) onClose();
-  }, isOpen);
+  const { announce } = useA11yAnnouncer();
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    active: isOpen,
+    onEscape: () => {
+      if (!submitting) onClose();
+    },
+  });
+
+  useEffect(() => {
+    if (txStatus?.message) {
+      announce(
+        `${txStatus.stage === 'error' ? 'Submission failed' : 'Milestone submission'} ${txStatus.stage}: ${txStatus.message}`,
+        txStatus.stage === 'error' ? 'assertive' : 'polite'
+      );
+    }
+  }, [txStatus, announce]);
 
   if (!isOpen) return null;
 
@@ -296,10 +310,17 @@ export function MilestoneSubmitModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-[#18181b] border border-[#27272a] rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="milestone-submit-title"
+        tabIndex={-1}
+        className="bg-[#18181b] border border-[#27272a] rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar shadow-2xl"
+      >
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[#27272a] bg-[#18181b]/95 px-5 py-4">
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-white">Submit Milestone Deliverable</h2>
+            <h2 id="milestone-submit-title" className="text-lg sm:text-xl font-bold text-white">Submit Milestone Deliverable</h2>
             <p className="text-[11px] sm:text-xs text-[#a1a1aa] mt-0.5">
               {milestone.title} &middot; {project.title} &middot; {milestone.amount} {project.token || 'USDC'}
             </p>

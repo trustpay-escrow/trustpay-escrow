@@ -16,6 +16,26 @@ export interface PersistentTabOptions<T extends string = string> {
  * Automatically clears or resets when the wallet address disconnects or changes.
  * Falls back to defaultTab if the stored value is invalid or corrupted.
  */
+/**
+ * Removes every dashboard tab/filter key from sessionStorage. Called on
+ * wallet logout so a different account never inherits stale UI state (#177).
+ */
+export function clearPersistedDashboardState(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < sessionStorage.length; index++) {
+      const key = sessionStorage.key(index);
+      if (key && (key.startsWith('trustpay_tab_') || key.startsWith('trustpay_filter_'))) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    // Private-mode storage can throw; logout must still succeed.
+  }
+}
+
 export function usePersistentTab<T extends string = string>({
   key,
   defaultTab,
