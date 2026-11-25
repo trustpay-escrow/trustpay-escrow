@@ -1,24 +1,19 @@
-'use client';
+"use client";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { isConnected, requestAccess, getNetworkDetails, setAllowed, signTransaction } from "@stellar/freighter-api";
+import { toast } from "sonner";
+import { useWalletStore } from "@/store/walletStore";
+import { CryptoId } from "@/components/ui/CryptoId";
+import { useRouter } from "next/navigation";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { useWalletEventListener } from "@/hooks/useWalletEventListener";
+import { authenticateWithSep10, signChallengeWithFreighter } from "@/lib/sep10-auth";
+import PasskeyWalletModal from "@/components/PasskeyWalletModal";
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { toast } from 'sonner';
-import { useWalletStore } from '@/store/walletStore';
-import { useRouter } from 'next/navigation';
-import {
-  WalletAdapter,
-  SupportedWalletId,
-  getWalletAdapter,
-  signWithWallet,
-} from '@/lib/wallet-adapters';
-import { WalletConnectModal } from '@/components/WalletConnectModal';
-import { CryptoId } from '@/components/ui/CryptoId';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
-import { useWalletEventListener } from '@/hooks/useWalletEventListener';
-
-const getErrorMessage = (err: any, prefix = ''): string => {
-  let msg = 'An unknown error occurred';
-  if (typeof err === 'string') {
+const getErrorMessage = (err: any, prefix = ""): string => {
+  let msg = "An unknown error occurred";
+  if (typeof err === "string") {
     try {
       const parsed = JSON.parse(err);
       msg = parsed?.message || err;
@@ -57,11 +52,13 @@ export default function WalletConnect() {
   const [showModal, setShowModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showXBullModal, setShowXBullModal] = useState(false);
-  const [emailValue, setEmailValue] = useState('');
-  const [tempAddress, setTempAddress] = useState('');
-  const [tempWalletName, setTempWalletName] = useState('Freighter');
-  const [tempWalletType, setTempWalletType] = useState<SupportedWalletId>('freighter');
-  const [tempSignedXdr, setTempSignedXdr] = useState('');
+  const [showPasskeyModal, setShowPasskeyModal] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualAddress, setManualAddress] = useState("");
+  const [emailValue, setEmailValue] = useState("");
+  const [tempAddress, setTempAddress] = useState("");
+  const [tempWalletName, setTempWalletName] = useState("Freighter");
+  const [tempSignedXdr, setTempSignedXdr] = useState("");
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -378,6 +375,35 @@ export default function WalletConnect() {
       ) : (
         /* Multi-Wallet Selection Trigger & Quick Connect */
         <div className="w-full flex flex-col gap-2.5 mt-1 z-10">
+          {/* Passkey (WebAuthn) Wallet — no seed phrase (#302) */}
+          <button
+            type="button"
+            onClick={() => setShowPasskeyModal(true)}
+            disabled={isConnecting}
+            className="w-full p-3.5 rounded-2xl bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-emerald-500/50 text-white font-bold transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 text-left flex items-center justify-between group cursor-pointer disabled:opacity-60"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-[#064e3b] border border-emerald-500/30 flex items-center justify-center text-lg shadow-sm">
+                🔐
+              </div>
+              <div>
+                <div className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
+                  Passkey Wallet
+                </div>
+                <div className="text-[11px] text-[#a1a1aa] font-medium">
+                  TouchID, FaceID or Windows Hello — no seed phrase
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                New
+              </span>
+              <span className="text-sm font-bold text-emerald-400">Connect →</span>
+            </div>
+          </button>
+
+          {/* 1. Freighter Wallet */}
           <button
             type="button"
             onClick={() => setShowModal(true)}
@@ -465,16 +491,13 @@ export default function WalletConnect() {
         </div>
       )}
 
-      {/* Multi-Wallet Modal Dialog */}
-      <WalletConnectModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        onConnectWallet={handleConnectAdapter}
-        onManualConnect={handleManualConnect}
-        isConnecting={isConnecting}
+      {/* Render Modals via React Portal */}
+      <PasskeyWalletModal
+        isOpen={showPasskeyModal}
+        onClose={() => setShowPasskeyModal(false)}
+        onFallback={() => setShowPasskeyModal(false)}
       />
 
-      {/* Email Registration Portal */}
       {mounted && emailModalContent && createPortal(emailModalContent, document.body)}
     </div>
   );

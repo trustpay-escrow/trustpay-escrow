@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useCallback } from 'react';
 import Link from 'next/link';
 import { useTokenRates } from '../hooks/useTokenRates';
 
@@ -16,8 +16,8 @@ export interface PriceAlert {
 
 export const STORAGE_KEY = 'trustpay_price_alerts';
 
-export function evaluatePriceAlert(alert: PriceAlert, currentPrice: number): boolean {
-  if (!alert.isActive) return false;
+export function evaluatePriceAlert(alert: PriceAlert, currentPrice: number | undefined): boolean {
+  if (!alert.isActive || currentPrice === undefined || !Number.isFinite(currentPrice)) return false;
   if (alert.condition === 'ABOVE') {
     return currentPrice >= alert.threshold;
   }
@@ -25,6 +25,22 @@ export function evaluatePriceAlert(alert: PriceAlert, currentPrice: number): boo
     return currentPrice <= alert.threshold;
   }
   return false;
+}
+
+/** Rejects malformed persisted alerts so one corrupt entry cannot break the widget. */
+function isPriceAlert(value: unknown): value is PriceAlert {
+  const alert = value as PriceAlert;
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof alert.id === 'string' &&
+    (alert.token === 'XLM' || alert.token === 'USDC' || alert.token === 'EURC') &&
+    (alert.condition === 'ABOVE' || alert.condition === 'BELOW') &&
+    typeof alert.threshold === 'number' &&
+    Number.isFinite(alert.threshold) &&
+    alert.threshold > 0 &&
+    typeof alert.isActive === 'boolean'
+  );
 }
 
 export function TokenPriceAlertWidget() {
@@ -44,7 +60,8 @@ export function TokenPriceAlertWidget() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setAlerts(JSON.parse(stored));
+        const parsed: unknown = JSON.parse(stored);
+        setAlerts(Array.isArray(parsed) ? parsed.filter(isPriceAlert) : []);
       }
     } catch (e) {
       console.warn('Could not read price alerts from storage:', e);
@@ -52,14 +69,14 @@ export function TokenPriceAlertWidget() {
   }, []);
 
   // 2. Persist alerts to localStorage
-  const saveAlerts = (updated: PriceAlert[]) => {
+  const saveAlerts = useCallback((updated: PriceAlert[]) => {
     setAlerts(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch (e) {
       console.warn('Could not save price alerts to storage:', e);
     }
-  };
+  }, []);
 
   // 3. Request browser notification permission
   const requestNotificationPermission = async () => {
@@ -73,23 +90,37 @@ export function TokenPriceAlertWidget() {
     }
   };
 
-  // 4. Evaluate breaches against live rates
+  // 4. Evaluate breaches against live rates. Each alert fires a notification
+  // exactly once per crossing: the timestamp is persisted with the alert so a
+  // long-running call does not re-notify on every 60s rate poll (regression
+  // from #294).
   useEffect(() => {
-    const breaches: string[] = [];
-    alerts.forEach((alert) => {
+    const breached = alerts.filter((alert) => evaluatePriceAlert(alert, rates[alert.token]));
+    setActiveBreaches(breached.map((alert) => alert.id));
+
+    const newlyTriggered = breached.filter((alert) => !alert.triggeredAt);
+    if (newlyTriggered.length === 0) return;
+
+    const canNotify =
+      typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+    if (!canNotify) return;
+
+    const triggeredAt = new Date().toISOString();
+    const triggeredIds = new Set(newlyTriggered.map((alert) => alert.id));
+
+    newlyTriggered.forEach((alert) => {
       const currentPrice = rates[alert.token];
-      if (evaluatePriceAlert(alert, currentPrice)) {
-        breaches.push(alert.id);
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification(`TrustPay Price Alert: ${alert.token}`, {
-            body: `${alert.token} is now $${currentPrice.toFixed(4)} (${alert.condition.toLowerCase()} target $${alert.threshold}). Optimal funding window open!`,
-            icon: '/favicon.ico',
-          });
-        }
-      }
+      if (currentPrice === undefined) return;
+      new Notification(`TrustPay Price Alert: ${alert.token}`, {
+        body: `${alert.token} is now $${currentPrice.toFixed(4)} (${alert.condition.toLowerCase()} target $${alert.threshold.toFixed(4)}). Optimal funding window open!`,
+        icon: '/favicon.ico',
+      });
     });
-    setActiveBreaches(breaches);
-  }, [rates, alerts]);
+
+    saveAlerts(
+      alerts.map((alert) => (triggeredIds.has(alert.id) ? { ...alert, triggeredAt } : alert))
+    );
+  }, [rates, alerts, saveAlerts]);
 
   // 5. Add Alert Handler
   const handleAddAlert = (e: React.FormEvent) => {
@@ -118,7 +149,12 @@ export function TokenPriceAlertWidget() {
   // 7. Toggle Alert Active Status
   const handleToggleActive = (id: string) => {
     saveAlerts(
-      alerts.map((a) => (a.id === id ? { ...a, isActive: !a.isActive } : a))
+      alerts.map((a) =>
+        a.id === id
+          ? // Re-enabling re-arms the alert so a future crossing notifies again.
+            { ...a, isActive: !a.isActive, triggeredAt: undefined }
+          : a
+      )
     );
   };
 

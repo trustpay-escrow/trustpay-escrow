@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import {
   TokenPriceAlertWidget,
   evaluatePriceAlert,
@@ -128,6 +128,73 @@ describe('TokenPriceAlertWidget & Evaluation Logic (#253)', () => {
 
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
       expect(stored[0].isActive).toBe(false);
+    });
+
+    it('notifies only once per price crossing instead of on every rate poll', async () => {
+      const notifications: Array<{ title: string; body?: string }> = [];
+      class MockNotification {
+        static permission = 'granted';
+        static requestPermission = vi.fn().mockResolvedValue('granted');
+        constructor(title: string, options?: { body?: string }) {
+          notifications.push({ title, body: options?.body });
+        }
+      }
+      vi.stubGlobal('Notification', MockNotification);
+
+      const initialAlerts: PriceAlert[] = [
+        {
+          id: 'once-alert',
+          token: 'XLM',
+          condition: 'ABOVE',
+          threshold: 0.10,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        },
+      ];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialAlerts));
+
+      const { rerender } = render(<TokenPriceAlertWidget />);
+
+      await waitFor(() => expect(notifications).toHaveLength(1));
+      expect(notifications[0].title).toContain('XLM');
+
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      expect(stored[0].triggeredAt).toBeDefined();
+
+      rerender(<TokenPriceAlertWidget />);
+      await waitFor(() => expect(screen.getByTestId('price-breach-banner')).toBeInTheDocument());
+      expect(notifications).toHaveLength(1);
+
+      vi.unstubAllGlobals();
+    });
+
+    it('re-arms an alert when it is toggled back on', () => {
+      const initialAlerts: PriceAlert[] = [
+        {
+          id: 'rearm-alert',
+          token: 'XLM',
+          condition: 'ABOVE',
+          threshold: 0.10,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          triggeredAt: new Date().toISOString(),
+        },
+      ];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialAlerts));
+
+      render(<TokenPriceAlertWidget />);
+      fireEvent.click(screen.getByTestId('toggle-alert-rearm-alert'));
+      fireEvent.click(screen.getByTestId('toggle-alert-rearm-alert'));
+
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      expect(stored[0].isActive).toBe(true);
+      expect(stored[0].triggeredAt).toBeUndefined();
+    });
+
+    it('ignores corrupt or malformed persisted alerts', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([{ id: 1 }, { id: 'bad', token: 'DOGE' }]));
+      render(<TokenPriceAlertWidget />);
+      expect(screen.getByText(/Configured Thresholds/i)).toHaveTextContent(/0/);
     });
 
     it('renders the Fund Escrow Now quick action link when a threshold is breached', () => {
