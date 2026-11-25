@@ -10,6 +10,8 @@ import { Milestone, Project } from '@/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
 import { ProjectDetailSkeleton } from '@/components/skeletons';
 import { ProjectAuditLog } from '@/components/ProjectAuditLog';
+import { EscrowLifecycleGraph } from '@/components/EscrowLifecycleGraph';
+import { MilestoneReviewCallModal } from '@/components/MilestoneReviewCallModal';
 import { CalendarExportButton } from '@/components/CalendarExportButton';
 import { ContractSecurityModal } from '@/components/ContractSecurityModal';
 import { MutualCancellationModal } from '@/components/MutualCancellationModal';
@@ -103,6 +105,7 @@ export default function ProjectDetailsPage() {
 
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showMutualCancelModal, setShowMutualCancelModal] = useState(false);
+  const [showReviewCall, setShowReviewCall] = useState(false);
 
   // Escape mirrors each modal's own Cancel button.
   useEscapeKey(() => {
@@ -217,6 +220,7 @@ export default function ProjectDetailsPage() {
 
   const hasOnChainEscrow = Boolean(project.project_id_onchain !== undefined && project.project_id_onchain !== null);
   const tokenSymbol = project.token || 'USDC';
+  const canStartReviewCall = Boolean(project.client_address && project.freelancer_address);
 
   // 1. Client Action: Fund Escrow on Soroban
   const handleFundEscrowOnChain = async () => {
@@ -821,6 +825,19 @@ export default function ProjectDetailsPage() {
               <span>Contract Security</span>
             </button>
 
+            <button
+              onClick={() => setShowReviewCall(true)}
+              className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20 transition-all flex items-center gap-1.5"
+              title={
+                canStartReviewCall
+                  ? 'Start an encrypted WebRTC audio and screen-share review session'
+                  : 'Both a client and freelancer wallet must be assigned before a live review can start'
+              }
+            >
+              <span>🎧</span>
+              <span>Live Review Call</span>
+            </button>
+
             {(isClient || isFreelancer) && project.status === 'in_progress' && (
               <button
                 onClick={() => setShowMutualCancelModal(true)}
@@ -1008,6 +1025,11 @@ export default function ProjectDetailsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Escrow Lifecycle Visual State Machine (#303) */}
+        <div className="mb-8">
+          <EscrowLifecycleGraph project={project} />
         </div>
 
         {/* Milestones Section */}
@@ -1641,6 +1663,14 @@ export default function ProjectDetailsPage() {
           </div>
         </div>
       )}
+
+      {/* Encrypted P2P Milestone Review Call (#304) */}
+      <MilestoneReviewCallModal
+        isOpen={showReviewCall}
+        onClose={() => setShowReviewCall(false)}
+        project={project}
+        localAddress={address}
+      />
 
       {lightboxImage && (
         <ImageLightboxModal

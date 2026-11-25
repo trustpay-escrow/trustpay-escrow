@@ -5,8 +5,9 @@ import { Project } from '@/types';
 import { fetchProjectAuditEvents, ProjectAuditEventRecord } from '@/lib/api';
 import { getStellarExplorerUrl } from '@/lib/soroban';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { loadReviewSessions, reviewSessionsToAuditEvents } from '@/lib/review-sessions';
 
-export type AuditEventType = 'project' | 'milestone' | 'proposal' | 'dispute';
+export type AuditEventType = 'project' | 'milestone' | 'proposal' | 'dispute' | 'session';
 export type AuditFilter = 'all' | AuditEventType;
 
 export interface AuditEvent {
@@ -32,6 +33,7 @@ const FILTERS: Array<{ value: AuditFilter; label: string }> = [
   { value: 'milestone', label: 'Milestone' },
   { value: 'proposal', label: 'Proposal' },
   { value: 'dispute', label: 'Dispute' },
+  { value: 'session', label: 'Review Call' },
 ];
 
 const EVENT_ICONS: Record<AuditEventType, string> = {
@@ -39,6 +41,7 @@ const EVENT_ICONS: Record<AuditEventType, string> = {
   milestone: '📦',
   proposal: '🤝',
   dispute: '⚖️',
+  session: '🎧',
 };
 
 const AVATAR_STYLES = [
@@ -51,7 +54,7 @@ const AVATAR_STYLES = [
 ];
 
 function toAuditEvent(record: ProjectAuditEventRecord): AuditEvent {
-  const type = (['project', 'milestone', 'proposal', 'dispute'].includes(record.type)
+  const type = (['project', 'milestone', 'proposal', 'dispute', 'session'].includes(record.type)
     ? record.type
     : 'project') as AuditEventType;
   return {
@@ -190,6 +193,12 @@ export function ProjectAuditLog({ project, events, className = '' }: ProjectAudi
     const byId = new Map<string, AuditEvent>();
     derived.forEach((event) => byId.set(event.id, event));
     provided.forEach((event) => byId.set(event.id, event));
+    // Review-call sessions are stored locally (#304) and merged into the log.
+    if (project) {
+      reviewSessionsToAuditEvents(loadReviewSessions(project.id)).forEach((event) =>
+        byId.set(event.id, event)
+      );
+    }
     return Array.from(byId.values()).sort(
       (a, b) => (Date.parse(a.timestamp) || 0) - (Date.parse(b.timestamp) || 0)
     );
@@ -252,8 +261,10 @@ export function ProjectAuditLog({ project, events, className = '' }: ProjectAudi
                       ? 'border-red-500/40 bg-red-500/15'
                       : event.type === 'milestone'
                       ? 'border-indigo-500/40 bg-indigo-500/15'
-                      : event.type === 'proposal'
+                      :                     event.type === 'proposal'
                       ? 'border-emerald-500/40 bg-emerald-500/15'
+                      : event.type === 'session'
+                      ? 'border-violet-500/40 bg-violet-500/15'
                       : 'border-slate-600 bg-slate-800'
                   }`}
                   aria-hidden="true"
