@@ -40,6 +40,8 @@ import { DeliverableDiffViewer } from '@/components/DeliverableDiffViewer';
 import { SorobanEventStreamDrawer } from '@/components/SorobanEventStreamDrawer';
 import { MilestoneGanttChart } from '@/components/MilestoneGanttChart';
 import { DeliverableChecksums } from '@/components/FileChecksumBadge';
+import { TransactionSpeedUpModal } from '@/components/TransactionSpeedUpModal';
+import type { PendingSorobanTransaction } from '@/lib/transaction-speedup';
 import {
   RequestRevisionModal,
   type RevisionRequestPayload,
@@ -64,11 +66,24 @@ export default function ProjectDetailsPage() {
     message: string;
     txHash?: string;
     error?: string;
+    pendingTransaction?: PendingSorobanTransaction;
   }>({
     isOpen: false,
     stage: 'preparing',
     message: '',
   });
+  const updateTxStatus = (
+    stage: TxStage,
+    message: string,
+    pendingTransaction?: PendingSorobanTransaction
+  ) => {
+    setTxState((previous) => ({
+      ...previous,
+      stage,
+      message,
+      pendingTransaction: pendingTransaction ?? previous.pendingTransaction,
+    }));
+  };
 
   // Modal states for milestone actions
   const [activeDeliverableModal, setActiveDeliverableModal] = useState<Milestone | null>(null);
@@ -249,9 +264,7 @@ export default function ProjectDetailsPage() {
         tokenAddress: project.token_address || tokenConfig.issuerOrContractAddress,
         milestoneAmounts,
         yieldEnabled: Boolean(project.yield_enabled),
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       const onChainId = res.onChainProjectId ? Number(res.onChainProjectId) : 1;
@@ -309,9 +322,7 @@ export default function ProjectDetailsPage() {
         projectIdOnChain: onChainId,
         milestoneIndex: activeDeliverableModal.milestone_index,
         deliverableHash: finalHash,
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       setTxState((prev) => ({
@@ -368,9 +379,7 @@ export default function ProjectDetailsPage() {
         clientAddress: address,
         projectIdOnChain: onChainId,
         milestoneIndex: activeRevisionModal.milestone_index,
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       setTxState((prev) => ({
@@ -452,9 +461,7 @@ export default function ProjectDetailsPage() {
         clientAddress: address,
         projectIdOnChain: onChainId,
         milestoneIndex: activeApproveModal.milestone_index,
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       setTxState((prev) => ({
@@ -505,9 +512,7 @@ export default function ProjectDetailsPage() {
         callerAddress: address,
         projectIdOnChain: onChainId,
         milestoneIndex: milestone.milestone_index,
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       setTxState((prev) => ({
@@ -555,9 +560,7 @@ export default function ProjectDetailsPage() {
       const res = await raiseDisputeOnChain({
         callerAddress: address,
         projectIdOnChain: onChainId,
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       setTxState((prev) => ({
@@ -616,9 +619,7 @@ export default function ProjectDetailsPage() {
         projectIdOnChain: onChainId,
         clientAmount: cAmt,
         freelancerAmount: fAmt,
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       setTxState((prev) => ({
@@ -726,9 +727,7 @@ export default function ProjectDetailsPage() {
         callerAddress: address,
         projectIdOnChain: onChainId,
         split5050,
-        onStatusUpdate: (stage, message) => {
-          setTxState((prev) => ({ ...prev, stage, message }));
-        },
+        onStatusUpdate: updateTxStatus,
       });
 
       setTxState((prev) => ({
@@ -1628,6 +1627,19 @@ export default function ProjectDetailsPage() {
               >
                 View on Stellar.Expert (<CryptoId value={txState.txHash} head={8} tail={0} />) ↗
               </a>
+            )}
+
+            {txState.stage === 'polling' && txState.pendingTransaction && address && (
+              <TransactionSpeedUpModal
+                pendingTransaction={txState.pendingTransaction}
+                feeSource={address}
+                onIncluded={(txHash) =>
+                  setTxState((previous) => ({
+                    ...previous,
+                    message: `Fee-bump transaction submitted (${txHash.slice(0, 8)}...). Waiting for confirmation...`,
+                  }))
+                }
+              />
             )}
 
             {(txState.stage === 'success' || txState.stage === 'error') && (

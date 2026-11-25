@@ -15,6 +15,12 @@ import {
 import { signTransaction, isConnected } from '@stellar/freighter-api';
 import { SUPPORTED_TOKENS } from '@/config/tokens';
 import { parseFeeStats, type HorizonFeeStats, type NetworkFees } from '@/lib/fee-estimator';
+import {
+  isFeeBumpRequested,
+  clearFeeBumpReplacements,
+  getFeeBumpReplacements,
+  type PendingSorobanTransaction,
+} from '@/lib/transaction-speedup';
 
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
@@ -158,7 +164,11 @@ export async function ensureAccountExists(accountAddress: string): Promise<void>
 }
 
 export type TxStage = 'preparing' | 'simulating' | 'signing' | 'submitting' | 'polling' | 'success' | 'error';
-export type TxStatusCallback = (stage: TxStage, message: string) => void;
+export type TxStatusCallback = (
+  stage: TxStage,
+  message: string,
+  pendingTransaction?: PendingSorobanTransaction
+) => void;
 
 export interface SorobanTxResult {
   success: boolean;
@@ -290,39 +300,62 @@ export async function invokeSorobanMethod(options: {
   }
 
   const txHash = sendRes.hash;
-  onStatusUpdate?.('polling', `Transaction submitted (tx: ${txHash.slice(0, 8)}...). Awaiting confirmation...`);
+  const pendingTransaction: PendingSorobanTransaction = {
+    xdr: signedTx.toXDR(),
+    hash: txHash,
+    submittedAt: Date.now(),
+  };
+  onStatusUpdate?.(
+    'polling',
+    `Transaction submitted (tx: ${txHash.slice(0, 8)}...). Awaiting confirmation...`,
+    pendingTransaction
+  );
 
   // 7. Poll for ledger finality
   let attempts = 0;
-  const maxAttempts = 35; // 35 * 1.5s ~ 50 seconds
-  while (attempts < maxAttempts) {
+  const normalMaxAttempts = 35; // 35 * 1.5s ~ 50 seconds
+  const speedUpMaxAttempts = 80; // Keep tracking while a requested fee bump is submitted.
+  while (
+    attempts < normalMaxAttempts ||
+    (isFeeBumpRequested(txHash) && attempts < speedUpMaxAttempts)
+  ) {
     await new Promise((r) => setTimeout(r, 1500));
-    const txStatus = await server.getTransaction(txHash);
+    const hashesToCheck = [txHash, ...getFeeBumpReplacements(txHash)];
+    let originalTransactionFailed = false;
+    for (const hash of hashesToCheck) {
+      const txStatus = await server.getTransaction(hash);
 
-    if (txStatus.status === 'SUCCESS') {
-      let parsedReturn: any = null;
-      if (txStatus.returnValue) {
-        try {
-          parsedReturn = scValToNative(txStatus.returnValue);
-        } catch {
-          parsedReturn = txStatus.returnValue;
+      if (txStatus.status === 'SUCCESS') {
+        let parsedReturn: any = null;
+        if (txStatus.returnValue) {
+          try {
+            parsedReturn = scValToNative(txStatus.returnValue);
+          } catch {
+            parsedReturn = txStatus.returnValue;
+          }
         }
+        clearFeeBumpReplacements(txHash);
+        onStatusUpdate?.('success', 'Transaction successfully confirmed on Stellar!');
+        return {
+          success: true,
+          txHash: hash,
+          returnValue: parsedReturn,
+        };
       }
-      onStatusUpdate?.('success', 'Transaction successfully confirmed on Stellar!');
-      return {
-        success: true,
-        txHash,
-        returnValue: parsedReturn,
-      };
-    }
 
-    if (txStatus.status === 'FAILED') {
+      if (hash === txHash && txStatus.status === 'FAILED') {
+        originalTransactionFailed = true;
+      }
+    }
+    if (originalTransactionFailed) {
+      clearFeeBumpReplacements(txHash);
       throw new Error(`Soroban transaction failed during ledger execution (tx: ${txHash})`);
     }
 
     attempts++;
   }
 
+  clearFeeBumpReplacements(txHash);
   throw new Error(`Transaction timed out while awaiting ledger inclusion (tx: ${txHash}). Please verify on Stellar.Expert.`);
 }
 

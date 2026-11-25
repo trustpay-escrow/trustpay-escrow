@@ -55,6 +55,7 @@ import {
 } from '@/components/MultisigApprovalModal';
 import type { PendingMultisigRequest } from '@/store/walletStore';
 import { ProjectActionsDropdown } from '@/components/ProjectActionsDropdown';
+import { MilestoneBuilderCanvas } from '@/components/MilestoneBuilderCanvas';
 
 export interface ClientDashboardProps {
   defaultTab?: 'projects' | 'create' | 'applicants' | 'saved';
@@ -404,7 +405,11 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
 
   // Remove Milestone
   const handleRemoveMilestone = (id: string) => {
-    setFormMilestones((prev) => prev.filter((m) => m.id !== id));
+    setFormMilestones((prev) =>
+      prev
+        .filter((milestone) => milestone.id !== id)
+        .map((milestone, index) => ({ ...milestone, milestone_index: index }))
+    );
     toast.info('Milestone removed');
   };
 
@@ -1754,73 +1759,12 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
-                  {formMilestones.length === 0 ? (
-                    <div className="text-center py-6 bg-[#1c1c20]/50 border border-dashed border-[#333338] rounded-xl">
-                      <p className="text-xs text-[#a1a1aa]">
-                        No milestones added yet. Click &quot;+ Add milestone&quot; to define project
-                        milestones.
-                      </p>
-                    </div>
-                  ) : (
-                    formMilestones.map((m, idx) => (
-                      <div
-                        key={m.id}
-                        className="bg-[#1c1c20] border border-[#27272a] rounded-xl p-4 space-y-2 group transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                              #{idx + 1}
-                            </span>
-                            <span className="text-sm font-bold text-white">{m.title}</span>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <span className="text-sm font-extrabold text-[#22c55e]">
-                              {m.amount} {selectedProjectForApplicants?.token || 'USDC'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMilestone(m.id)}
-                              className="text-[#71717a] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                              title="Remove milestone"
-                            >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-
-                        {m.description && (
-                          <p className="text-xs text-[#a1a1aa] line-clamp-2">{m.description}</p>
-                        )}
-
-                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-[#71717a]">
-                          {m.deliverable_type && (
-                            <span className="bg-[#232326] px-2 py-0.5 rounded border border-[#333338] text-[#e4e4e7]">
-                              📦 {m.deliverable_type}
-                            </span>
-                          )}
-                          <span>• Revisions: {m.revision_limit ?? 0}</span>
-                          {m.due_date && (
-                            <span>• Due: {new Date(m.due_date).toLocaleDateString()}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <MilestoneBuilderCanvas
+                  milestones={formMilestones}
+                  token={formToken}
+                  onReorder={setFormMilestones}
+                  onRemove={handleRemoveMilestone}
+                />
               </div>
 
               {/* Network Gas & Soroban Fee Estimator */}

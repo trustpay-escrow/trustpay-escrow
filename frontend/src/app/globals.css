@@ -225,4 +225,14 @@ button {
   .animate-badge-pop {
     animation: none;
   }
+
+  .milestone-reorder-item,
+  .milestone-reorder-card {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .milestone-drop-indicator {
+    animation: none !important;
+  }
 }
