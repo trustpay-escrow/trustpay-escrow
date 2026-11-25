@@ -15,11 +15,12 @@ import { MilestoneSubmitModal } from './MilestoneSubmitModal';
 import { ProjectChatModal } from './ProjectChatModal';
 import { ProjectCardSkeletonList, ProposalSkeletonList } from '@/components/skeletons';
 import { DownloadReceiptButton } from '@/components/DownloadReceiptButton';
-import { MilestoneCertificateButton } from '@/components/MilestoneCertificateButton';
+import { ShareMilestoneButton } from '@/components/ShareableMilestoneCard';
 import { ProjectFilterBar } from '@/components/ProjectFilterBar';
 import { CryptoId } from '@/components/ui/CryptoId';
 import { ProjectActionsDropdown } from '@/components/ProjectActionsDropdown';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { CurrencyConverterWidget } from '@/components/CurrencyConverterWidget';
 import { usePersistentTab, usePersistentFilter } from '@/hooks/usePersistentTab';
 import {
   CounterOfferSummary,
@@ -27,6 +28,7 @@ import {
 } from '@/components/ProposalCounterOfferModal';
 import type { CounterOffer } from '@/lib/counter-offer';
 import { TaxExportModal } from '@/components/TaxExportModal';
+import { CurrencyConverterWidget } from '@/components/CurrencyConverterWidget';
 
 export function FreelancerDashboard() {
   const router = useRouter();
@@ -216,6 +218,7 @@ export function FreelancerDashboard() {
               />
             )}
             <DownloadReceiptButton project={proj} />
+            <ShareMilestoneButton project={proj} />
             <span className={isModal 
               ? "px-5 py-2.5 bg-[#052e16] text-[#22c55e] border border-[#14532d] text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md"
               : "px-3.5 py-1.5 bg-[#052e16] text-[#22c55e] border border-[#14532d] text-xs font-bold rounded-xl flex items-center gap-1"
@@ -552,6 +555,7 @@ export function FreelancerDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
+          <CurrencyConverterWidget portfolioItems={projects.map((p) => ({ amount: p.budget || 0, token: p.token || 'USDC' }))} />
           <button
             onClick={() => setShowTaxExport(true)}
             className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#18181b] border border-[#27272a] text-[#e4e4e7] hover:bg-[#27272a] transition-all"
@@ -613,6 +617,9 @@ export function FreelancerDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Multi-Currency Portfolio Tracker (#307) */}
+            <CurrencyConverterWidget />
 
             {/* Header & Filter Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">

@@ -8,6 +8,8 @@ import { nativeToScVal, xdr } from '@stellar/stellar-sdk';
 
 import { Milestone, Project } from '@/types';
 import { ImageLightboxModal } from '@/components/ImageLightboxModal';
+import { DisputeEvidenceAttachments } from '@/components/DisputeEvidenceAttachments';
+import { downloadBlob } from '@/lib/share-card';
 import { ProjectDetailSkeleton } from '@/components/skeletons';
 import { ProjectAuditLog } from '@/components/ProjectAuditLog';
 import { EscrowLifecycleGraph } from '@/components/EscrowLifecycleGraph';
@@ -42,10 +44,12 @@ import { DeliverableDiffViewer } from '@/components/DeliverableDiffViewer';
 import { SorobanEventStreamDrawer } from '@/components/SorobanEventStreamDrawer';
 import { MilestoneGanttChart } from '@/components/MilestoneGanttChart';
 import { DeliverableChecksums } from '@/components/FileChecksumBadge';
+import { GitRepoMilestoneConnector, GitDeliverableBadge } from '@/components/GitRepoMilestoneConnector';
 import {
   RequestRevisionModal,
   type RevisionRequestPayload,
 } from '@/components/RequestRevisionModal';
+import { ProjectReviewModal } from '@/components/ProjectReviewModal';
 
 export default function ProjectDetailsPage() {
   const params = useParams();
@@ -87,6 +91,82 @@ export default function ProjectDetailsPage() {
   const [activeResolveModal, setActiveResolveModal] = useState(false);
   const [resolveClientAmount, setResolveClientAmount] = useState<number | ''>('');
   const [resolveFreelancerAmount, setResolveFreelancerAmount] = useState<number | ''>('');
+
+  // Drag-and-drop reorder state for milestone cards (#314)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduceMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReduceMotion(e.matches);
+    mq.addEventListener?.('change', handler);
+    return () => mq.removeEventListener?.('change', handler);
+  }, []);
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    if (!editableMilestones) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+    setDraggedIndex(index);
+    e.currentTarget.style.opacity = reduceMotion ? '1' : '0.4';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    if (!editableMilestones || draggedIndex === null || draggedIndex === index) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
+    if (!editableMilestones || draggedIndex === null || draggedIndex === targetIndex) return;
+    e.preventDefault();
+    const fromIndex = draggedIndex;
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+
+    // Reorder locally first for instant feedback
+    const milestones = [...(project.milestones || [])].sort((a, b) => a.milestone_index - b.milestone_index);
+    const [removed] = milestones.splice(fromIndex, 1);
+    milestones.splice(targetIndex, 0, removed);
+    const reordered = milestones.map((m, i) => ({ ...m, milestone_index: i }));
+    setProject((prev) => prev ? { ...prev, milestones: reordered } : prev);
+
+    // Persist to backend
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await Promise.all(
+        reordered.map((m, i) =>
+          authFetch(`${apiUrl}/api/milestones/${m.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ milestone_index: i }),
+          })
+        )
+      );
+      toast.success('Milestone order updated');
+    } catch (err: any) {
+      toast.error(`Failed to persist order: ${err.message || err}`);
+      await fetchProject(); // Revert on error
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+    e.currentTarget.style.opacity = '1';
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Only allow reorder on draft projects for the client
+  const editableMilestones = project?.status === 'draft' && isClient;
 
   const [showFundEscrowModal, setShowFundEscrowModal] = useState(false);
   const [fundFreelancerAddress, setFundFreelancerAddress] = useState('');
@@ -173,6 +253,52 @@ export default function ProjectDetailsPage() {
     if (!projectId) return;
     fetchProject();
   }, [projectId]);
+
+  // Prompt for review when project is completed (#312)
+  useEffect(() => {
+    if (!project || project.status !== 'completed' || !address) return;
+    
+    const isClientUser = Boolean(
+      address && (
+        (project.client_address && address.toUpperCase() === project.client_address.toUpperCase()) ||
+        activeRole === 'client'
+      )
+    );
+    const isFreelancerUser = Boolean(
+      address && (
+        (project.freelancer_address && address.toUpperCase() === project.freelancer_address.toUpperCase()) ||
+        activeRole === 'freelancer'
+      )
+    );
+
+    // Check if user has already reviewed (would need API call in real implementation)
+    // For now, show prompt if user is a participant and project is completed
+    if (isClientUser || isFreelancerUser) {
+      const reviewedKey = `reviewed-${projectId}-${address}`;
+      const hasReviewed = window.localStorage.getItem(reviewedKey);
+      
+      if (!hasReviewed) {
+        // Small delay to let UI settle
+        const timer = setTimeout(() => {
+          if (isClientUser) {
+            setReviewContext({
+              revieweeAddress: project.freelancer_address || '',
+              revieweeRole: 'freelancer',
+              reviewerRole: 'client',
+            });
+          } else if (isFreelancerUser) {
+            setReviewContext({
+              revieweeAddress: project.client_address || '',
+              revieweeRole: 'client',
+              reviewerRole: 'freelancer',
+            });
+          }
+          setShowReviewModal(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [project, address, activeRole, projectId]);
 
   if (loading) {
     return <ProjectDetailSkeleton />;
@@ -1053,30 +1179,72 @@ export default function ProjectDetailsPage() {
             )}
           </div>
 
-          {project.milestones && project.milestones.length > 0 && (
-            <MilestoneGanttChart
-              milestones={project.milestones}
-              projectStart={project.created_at?.slice(0, 10)}
-              projectEnd={project.deadline}
-              tokenSymbol={tokenSymbol}
-              editable={project.status === 'draft'}
-              onReschedule={handleRescheduleMilestone}
-            />
-          )}
+          {/* Active Timelock Countdown Banners for Submitted Milestones */}
+          {project.milestones
+            ?.filter((m) => m.status === 'submitted')
+            .map((submittedM) => (
+              <TimelockCountdownBanner
+                key={`timelock-${submittedM.id}`}
+                milestone={submittedM}
+                project={project}
+                onApprove={(m) => setActiveApproveModal(m)}
+                onRequestRevision={(m) => {
+                  setActiveRevisionModal(m);
+                  setRevisionNote('');
+                }}
+              />
+            ))}
 
           {!project.milestones || project.milestones.length === 0 ? (
             <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-10 text-center flex flex-col items-center justify-center">
               <p className="text-slate-300 font-medium">No milestones created for this project.</p>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-4 relative">
               {project.milestones
                 .sort((a, b) => a.milestone_index - b.milestone_index)
                 .map((m, idx) => (
-                  <div
-                    key={m.id || idx}
-                    className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-all shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-6"
-                  >
+                  <>
+                    {/* Drop indicator line above card when dragging over */}
+                    {editableMilestones && dragOverIndex === idx && draggedIndex !== null && draggedIndex !== idx && (
+                      <div
+                        className="absolute left-0 right-0 h-2 -top-1 pointer-events-none"
+                        style={{ zIndex: 50 }}
+                        aria-hidden="true"
+                      >
+                        <div
+                          className="h-full w-full rounded-t-xl"
+                          style={{
+                            background: 'linear-gradient(90deg, transparent, #3b82f6, transparent)',
+                            boxShadow: '0 0 12px 2px #3b82f6, 0 0 24px 4px #3b82f640',
+                            opacity: reduceMotion ? 1 : 0.9,
+                            transform: reduceMotion ? 'none' : 'scaleY(1.5)',
+                            transition: reduceMotion ? 'none' : 'transform 120ms ease-out, opacity 120ms ease-out',
+                          }}
+                        />
+                      </div>
+                    )}
+                    {/* Milestone card with drag-and-drop */}
+                    <div
+                      key={m.id || idx}
+                      draggable={editableMilestones}
+                      onDragStart={(e) => handleDragStart(e, idx)}
+                      onDragOver={(e) => handleDragOver(e, idx)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, idx)}
+                      onDragEnd={handleDragEnd}
+                      className={`bg-slate-900/80 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-all shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative ${
+                        editableMilestones && draggedIndex === idx && !reduceMotion
+                          ? 'scale-[1.02] shadow-[0_0_24px_#3b82f680] ring-1 ring-blue-500/40 z-10'
+                          : ''
+                      }`}
+                      style={{
+                        transition: editableMilestones && !reduceMotion
+                          ? 'transform 150ms ease-out, box-shadow 150ms ease-out, border-color 150ms ease-out'
+                          : 'none',
+                        opacity: editableMilestones && draggedIndex !== null && draggedIndex !== idx && !reduceMotion ? 0.6 : 1,
+                      }}
+                    >
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-3 flex-wrap">
                         <span className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-bold flex items-center justify-center">
@@ -1134,16 +1302,19 @@ export default function ProjectDetailsPage() {
                       )}
 
                       {m.deliverable_url && (
-                        <div className="pl-10 pt-0.5 text-xs text-indigo-400 flex items-center gap-2">
-                          <span className="text-slate-500 font-medium">Deliverable Link:</span>
-                          <a
-                            href={m.deliverable_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:text-indigo-300 truncate max-w-xs font-mono text-[11px]"
-                          >
-                            {m.deliverable_url}
-                          </a>
+                        <div className="pl-10 pt-1 flex flex-wrap items-center gap-2">
+                          <div className="text-xs text-indigo-400 flex items-center gap-2">
+                            <span className="text-slate-500 font-medium">Deliverable Link:</span>
+                            <a
+                              href={m.deliverable_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-indigo-300 truncate max-w-xs font-mono text-[11px]"
+                            >
+                              {m.deliverable_url}
+                            </a>
+                          </div>
+                          <GitDeliverableBadge url={m.deliverable_url} commitHash={m.deliverable_hash} />
                         </div>
                       )}
 
@@ -1256,7 +1427,7 @@ export default function ProjectDetailsPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                </>)}
             </div>
           )}
         </div>
@@ -1303,13 +1474,14 @@ export default function ProjectDetailsPage() {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1.5">Deliverable URL / Repository PR / IPFS Gateway</label>
-                <input
-                  type="text"
-                  value={deliverableUrl}
-                  onChange={(e) => setDeliverableUrl(e.target.value)}
-                  placeholder="https://github.com/organization/repo/pull/1 or https://ipfs.io/ipfs/..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+                <GitRepoMilestoneConnector
+                  initialUrl={deliverableUrl}
+                  onConnectorChange={({ url, metadata, isValid }) => {
+                    setDeliverableUrl(url);
+                    if (isValid && metadata) {
+                      setDeliverableHash(metadata.latestCommitHash);
+                    }
+                  }}
                 />
               </div>
 
@@ -1522,6 +1694,7 @@ export default function ProjectDetailsPage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-red-500"
                 />
               </div>
+              <DisputeEvidenceAttachments />
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
@@ -1660,6 +1833,27 @@ export default function ProjectDetailsPage() {
                 Close
               </Button>
             )}
+
+            {txState.stage === 'polling' && txState.txHash && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // In a real implementation, we'd retrieve the innerTxXdr from storage
+                  // For now, we'll use a placeholder that would be replaced with actual XDR
+                  const stalledTx = {
+                    id: `speedup-${txState.txHash}`,
+                    innerTxXdr: txState.txHash, // Placeholder - actual implementation would store XDR
+                    description: 'Pending Transaction',
+                    submittedAt: new Date(Date.now() - 20000).toISOString(),
+                    projectId: projectId,
+                  };
+                  setStalledTransaction(stalledTx);
+                }}
+                className="mt-2 w-full border-rose-500/30 text-rose-400 hover:bg-rose-500/10 rounded-xl text-xs py-2"
+              >
+                ⚡ Speed Up Transaction
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -1677,6 +1871,10 @@ export default function ProjectDetailsPage() {
           imageUrl={lightboxImage.url}
           imageAlt={lightboxImage.name}
           onClose={() => setLightboxImage(null)}
+          onAnnotatedExport={({ blob, filename }) => {
+            downloadBlob(blob, filename);
+            toast.success('Sanitized copy downloaded');
+          }}
         />
       )}
 
@@ -1693,6 +1891,30 @@ export default function ProjectDetailsPage() {
         onClose={() => setShowMutualCancelModal(false)}
         project={project}
         onUpdated={fetchProject}
+      />
+
+      {/* Project Review Modal (#312) */}
+      <ProjectReviewModal
+        isOpen={showReviewModal}
+        onClose={() => { setShowReviewModal(false); setReviewContext(null); }}
+        projectId={projectId}
+        projectTitle={project?.title || ''}
+        revieweeAddress={reviewContext?.revieweeAddress || ''}
+        revieweeRole={reviewContext?.revieweeRole || 'freelancer'}
+        reviewerRole={reviewContext?.reviewerRole || 'client'}
+        onSubmit={async (review) => {
+          // In a real implementation, this would call the API
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+          await fetch(`${apiUrl}/api/projects/${projectId}/reviews`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(review),
+          });
+          setShowReviewModal(false);
+          setReviewContext(null);
+          toast.success('Review submitted successfully!');
+          void fetchProject();
+        }}
       />
     </div>
   );

@@ -220,3 +220,28 @@ export interface BlendYieldSummary {
   /** Interest retained by the platform under the yield split. */
   platformShare: number;
 }
+
+/** One payout tranche in a DAO escrow proposal. */
+export interface DaoProposalMilestone {
+  title: string;
+  amount: number;
+  due_date?: string;
+}
+
+/** Escrow terms plus governance settings used to generate a DAO proposal. */
+export interface DaoProposalInput {
+  proposalTitle: string;
+  projectTitle: string;
+  description: string;
+  category?: string;
+  token: string;
+  tokenAddress: string;
+  /** DAO treasury account that funds and authorises the escrow (the contract's `client`). */
+  treasuryAddress: string;
+  freelancerAddress?: string;
+  arbiterAddress?: string;
+  milestones: DaoProposalMilestone[];
+  yieldEnabled: boolean;
+  deadline?: string;
+  votingPeriodDays: number;
+}

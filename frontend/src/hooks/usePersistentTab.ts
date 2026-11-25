@@ -153,13 +153,19 @@ export function usePersistentFilter<T>(
 
   const [filterValue, setFilterValueState] = useState<T>(getInitialValue);
 
+  const prevAddressRef = useRef(walletAddress);
   useEffect(() => {
-    if (!walletAddress) {
+    const addressChanged = prevAddressRef.current !== walletAddress;
+    if (addressChanged || !walletAddress) {
       try {
-        sessionStorage.removeItem(storageKey);
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem(storageKey);
+        }
       } catch {}
+      setFilterValueState(defaultValue);
     }
-  }, [walletAddress, storageKey]);
+    prevAddressRef.current = walletAddress;
+  }, [walletAddress, storageKey, defaultValue]);
 
   const setFilterValue = useCallback(
     (val: T | ((prev: T) => T)) => {

@@ -29,22 +29,27 @@ const getErrorMessage = (err: any, prefix = ""): string => {
 // Stellar Ed25519 Public Key regex (starts with G, 56 chars base32)
 const STELLAR_PUBKEY_REGEX = /^G[A-Z2-7]{55}$/;
 
-type WalletType = "freighter" | "xbull" | "albedo" | "rabet" | "manual";
-
-interface WalletOption {
-  id: WalletType;
-  name: string;
-  tagline: string;
-  badge?: string;
-  badgeColor?: string;
-}
-
 export default function WalletConnect() {
-  const { address, activeRole, walletName, setWalletInfo, disconnect } = useWalletStore();
-  // Initialize wallet event listeners for account/network changes
+  const {
+    address,
+    activeRole,
+    walletName,
+    walletType,
+    setWalletInfo,
+    disconnect,
+    isConnecting: storeIsConnecting,
+    setIsConnecting: setStoreIsConnecting,
+  } = useWalletStore();
+
   useWalletEventListener();
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [connectingWallet, setConnectingWallet] = useState<WalletType | null>(null);
+
+  const [isConnecting, setIsConnectingState] = useState(false);
+  const setIsConnecting = (val: boolean) => {
+    setIsConnectingState(val);
+    setStoreIsConnecting?.(val);
+  };
+
+  const [showModal, setShowModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showXBullModal, setShowXBullModal] = useState(false);
   const [showPasskeyModal, setShowPasskeyModal] = useState(false);
@@ -56,6 +61,7 @@ export default function WalletConnect() {
   const [tempSignedXdr, setTempSignedXdr] = useState("");
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
+
   const emailDialogRef = useFocusTrap<HTMLDivElement>({
     active: showEmailModal,
     onEscape: () => {
@@ -63,28 +69,31 @@ export default function WalletConnect() {
       setIsConnecting(false);
     },
   });
+
   const xBullDialogRef = useFocusTrap<HTMLDivElement>({
     active: showXBullModal,
     onEscape: () => setShowXBullModal(false),
   });
+
   const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Restore connection or verify existing session on page refresh
   useEffect(() => {
-    // If already connected, redirect to projects portal
-    if (address) {
-      router.push("/projects");
+    if (address && walletType) {
+      console.log(`Active session restored for ${address} (${walletName || walletType})`);
     }
-  }, [address, router]);
+  }, [address, walletType, walletName]);
 
   // Unified cryptographic SEP-0010 Web Auth login handler
   const finishWalletLogin = async (
     userAddress: string,
-    selectedWallet: string,
-    customSigner?: (challengeXdr: string) => Promise<string>
+    selectedWalletName: string,
+    customSigner?: (challengeXdr: string) => Promise<string>,
+    selectedWalletType: SupportedWalletId = 'freighter'
   ) => {
     if (!STELLAR_PUBKEY_REGEX.test(userAddress)) {
       toast.error("Invalid Stellar public key format. Must start with 'G' and be 56 characters.");
@@ -92,233 +101,122 @@ export default function WalletConnect() {
     }
 
     try {
-      // 1-3. Request challenge, sign it with the wallet, exchange it for a time-bound JWT
-      toast.info(`Please sign the authentication challenge in ${selectedWallet}...`);
-      const result = await authenticateWithSep10({
-        account: userAddress,
-        signer: customSigner
-          ? (challengeXdr) => customSigner(challengeXdr)
-          : selectedWallet.includes("Freighter")
-            ? signChallengeWithFreighter
-            : async (challengeXdr) => challengeXdr,
-      });
-      const signedXdr = result.signedXdr;
-      toast.info("Verifying cryptographic signature on backend...");
-      const verifyRes = { status: result.status, ok: result.ok };
-      const data = { token: result.token, error: result.error };
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      toast.info('Requesting SEP-0010 authentication challenge...');
 
-      if (result.requiresRegistration) {
+      // 1. Fetch challenge XDR from backend
+      const challengeRes = await fetch(`${apiUrl}/api/auth/challenge?account=${userAddress}`);
+      if (!challengeRes.ok) {
+        const errData = await challengeRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to retrieve authentication challenge');
+      }
+      const { transaction: challengeXdr, network } = await challengeRes.json();
+
+      let signedXdr = challengeXdr;
+
+      // 2. Prompt wallet for cryptographic signature
+      if (customSigner) {
+        toast.info(`Please sign the challenge in ${selectedWalletName}...`);
+        signedXdr = await customSigner(challengeXdr);
+      } else {
+        toast.info(`Please sign the challenge in ${selectedWalletName}...`);
+        signedXdr = await signWithWallet(selectedWalletType, challengeXdr, {
+          networkPassphrase:
+            network === 'PUBLIC'
+              ? 'Public Global Stellar Network ; September 2015'
+              : 'Test SDF Network ; September 2015',
+        });
+      }
+
+      // 3. Submit signed challenge to /api/auth/verify
+      toast.info('Verifying cryptographic signature on backend...');
+      const verifyRes = await fetch(`${apiUrl}/api/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ transaction: signedXdr }),
+      });
+      const data = await verifyRes.json().catch(() => ({}));
+
+      if (verifyRes.status === 404 && data.requiresRegistration) {
         setTempAddress(userAddress);
-        setTempWalletName(selectedWallet);
+        setTempWalletName(selectedWalletName);
+        setTempWalletType(selectedWalletType);
         setTempSignedXdr(signedXdr);
         setShowEmailModal(true);
       } else if (verifyRes.ok) {
-        setWalletInfo(userAddress, true, true, selectedWallet, data.token);
-        toast.success(`Cryptographically verified via SEP-0010! Connected via ${selectedWallet}.`);
-        router.push("/projects");
+        setWalletInfo(userAddress, true, true, selectedWalletName, data.token, selectedWalletType);
+        toast.success(`Cryptographically verified via SEP-0010! Connected via ${selectedWalletName}.`);
+        setShowModal(false);
       } else {
-        toast.error(data.error || "Failed to verify authentication signature");
+        toast.error(data.error || 'Failed to verify authentication signature');
       }
     } catch (e: any) {
-      toast.error(getErrorMessage(e, "SEP-0010 Authentication Error"));
-      console.error("Backend error:", e);
+      toast.error(getErrorMessage(e, 'Authentication Error'));
+      console.error('Wallet connect error:', e);
     }
   };
 
-  // 1. Freighter Wallet
-  const connectFreighter = async () => {
+  const handleConnectAdapter = async (adapter: WalletAdapter) => {
     setIsConnecting(true);
-    setConnectingWallet("freighter");
     try {
-      if (await isConnected()) {
-        try {
-          const networkDetails = await getNetworkDetails();
-          if (networkDetails.network !== "TESTNET" && networkDetails.network !== "PUBLIC") {
-            toast.error("Please open Freighter, click the gear icon, and switch your network to Testnet or Mainnet.");
-            return;
-          }
-
-          await setAllowed();
-          const response = await requestAccess();
-          if (response.error) {
-            toast.error(getErrorMessage(response.error));
-          } else if (response.address) {
-            await finishWalletLogin(response.address, "Freighter");
-          }
-        } catch (error: any) {
-          toast.error(getErrorMessage(error));
-        }
-      } else {
-        toast.error("Freighter wallet not installed. Please install the Freighter browser extension or select another wallet.");
+      const conn = await adapter.connect();
+      if (!conn || !conn.address) {
+        throw new Error(`${adapter.name} connection was not authorized.`);
       }
-    } finally {
-      setIsConnecting(false);
-      setConnectingWallet(null);
-    }
-  };
 
-  // 2. xBull Wallet
-  const connectXBull = async () => {
-    setIsConnecting(true);
-    setConnectingWallet("xbull");
-    try {
-      if (typeof window !== "undefined" && (window as any).xBullSDK) {
-        const xBull = (window as any).xBullSDK;
-        const pubKey = await xBull.getPublicKey();
-        if (pubKey) {
-          await finishWalletLogin(pubKey, "xBull Wallet");
-        } else {
-          toast.error("xBull did not return a public key.");
-        }
-      } else {
-        // xBull extension not detected - display friendly options modal
-        setShowXBullModal(true);
-      }
-    } catch (error: any) {
-      toast.error(getErrorMessage(error, "xBull Connection Error"));
-    } finally {
-      setIsConnecting(false);
-      setConnectingWallet(null);
-    }
-  };
-
-  // 3. Albedo Web Intent (No extension needed, works anywhere)
-  const connectAlbedo = async () => {
-    setIsConnecting(true);
-    setConnectingWallet("albedo");
-
-    try {
-      const width = 450;
-      const height = 660;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-
-      const popup = window.open(
-        "https://albedo.link/intent/public_key",
-        "albedo-intent",
-        `width=${width},height=${height},left=${left},top=${top},status=0,menubar=0,toolbar=0`
+      await finishWalletLogin(
+        conn.address,
+        adapter.name,
+        async (xdr) => {
+          return await adapter.signTransaction(xdr);
+        },
+        adapter.id
       );
-
-      if (!popup) {
-        toast.error("Popup was blocked by your browser. Please allow popups for Albedo authentication.");
-        setIsConnecting(false);
-        setConnectingWallet(null);
-        return;
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const timer = setInterval(() => {
-          if (popup.closed) {
-            clearInterval(timer);
-            window.removeEventListener("message", messageHandler);
-            reject(new Error("Albedo window closed without completing login"));
-          }
-        }, 800);
-
-        const messageHandler = async (event: MessageEvent) => {
-          if (event.origin !== "https://albedo.link") return;
-          const data = event.data;
-          if (data && data.pubkey) {
-            clearInterval(timer);
-            window.removeEventListener("message", messageHandler);
-            try {
-              popup.close();
-            } catch {}
-            await finishWalletLogin(data.pubkey, "Albedo");
-            resolve();
-          } else if (data && data.error) {
-            clearInterval(timer);
-            window.removeEventListener("message", messageHandler);
-            try {
-              popup.close();
-            } catch {}
-            reject(new Error(data.error.message || "Albedo authentication rejected"));
-          }
-        };
-
-        window.addEventListener("message", messageHandler);
-      });
-    } catch (error: any) {
-      toast.error(getErrorMessage(error));
+    } catch (err: any) {
+      toast.error(getErrorMessage(err, `${adapter.name} Error`));
     } finally {
       setIsConnecting(false);
-      setConnectingWallet(null);
     }
   };
 
-  // 4. Rabet Wallet
-  const connectRabet = async () => {
+  const handleManualConnect = async (pubkey: string) => {
     setIsConnecting(true);
-    setConnectingWallet("rabet");
     try {
-      if (typeof window !== "undefined" && (window as any).rabet) {
-        const rabet = (window as any).rabet;
-        const res = await rabet.connect();
-        if (res && res.publicKey) {
-          await finishWalletLogin(res.publicKey, "Rabet");
-        } else {
-          toast.error("Rabet connection was not authorized.");
-        }
-      } else {
-        toast.error("Rabet wallet not installed. Please install the Rabet browser extension.");
-      }
-    } catch (error: any) {
-      toast.error(getErrorMessage(error, "Rabet Error"));
+      await finishWalletLogin(pubkey, 'Manual / Custom Key', undefined, 'manual');
     } finally {
       setIsConnecting(false);
-      setConnectingWallet(null);
-    }
-  };
-
-  // 5. Manual Stellar Public Key
-  const handleManualConnect = async () => {
-    const trimmed = manualAddress.trim();
-    if (!trimmed) {
-      toast.error("Please enter a Stellar public key");
-      return;
-    }
-    if (!STELLAR_PUBKEY_REGEX.test(trimmed)) {
-      toast.error("Invalid Stellar public key format. Must start with 'G' and have 56 characters.");
-      return;
-    }
-
-    setIsConnecting(true);
-    setConnectingWallet("manual");
-    try {
-      await finishWalletLogin(trimmed, "Manual / Custom Wallet");
-    } finally {
-      setIsConnecting(false);
-      setConnectingWallet(null);
     }
   };
 
   const handleEmailSubmit = async () => {
-    if (!emailValue.includes("@")) {
-      toast.error("Please enter a valid email address");
+    if (!emailValue.includes('@')) {
+      toast.error('Please enter a valid email address');
       return;
     }
 
     setIsConnecting(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const apiRes = await fetch(`${apiUrl}/api/auth/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ transaction: tempSignedXdr, email: emailValue }),
       });
 
       const data = await apiRes.json();
       if (apiRes.ok) {
-        setWalletInfo(tempAddress, true, true, tempWalletName, data.token);
+        setWalletInfo(tempAddress, true, true, tempWalletName, data.token, tempWalletType);
         setShowEmailModal(false);
         toast.success(`Registration complete! Connected via ${tempWalletName}.`);
-        router.push("/projects");
+        setShowModal(false);
+        router.push('/projects');
       } else {
-        toast.error(data.error || "Failed to register user");
+        toast.error(data.error || 'Failed to register user');
       }
     } catch (e: any) {
-      toast.error(getErrorMessage(e, "Backend error"));
+      toast.error(getErrorMessage(e, 'Registration error'));
     } finally {
       setIsConnecting(false);
     }
@@ -328,7 +226,7 @@ export default function WalletConnect() {
     if (address) {
       navigator.clipboard.writeText(address);
       setCopied(true);
-      toast.success("Stellar address copied to clipboard!");
+      toast.success('Stellar address copied to clipboard!');
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -338,189 +236,107 @@ export default function WalletConnect() {
     <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
       <div
         ref={emailDialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="wallet-email-title"
-        tabIndex={-1}
         className="bg-[#18181b] border border-[#3f3f46] rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto animate-fadeIn"
       >
-        <div className="absolute -top-12 -right-12 w-36 h-36 bg-blue-500/20 rounded-full blur-2xl pointer-events-none"></div>
-
         <div className="flex flex-col items-center text-center space-y-3 pt-2">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/25">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-7 h-7">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.75}
+              stroke="currentColor"
+              className="w-7 h-7"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"
+              />
             </svg>
           </div>
-
-          <h3 id="wallet-email-title" className="text-2xl font-extrabold text-white tracking-tight">
-            Welcome to TrustPay
-          </h3>
-
-          <p className="text-xs sm:text-sm text-[#a1a1aa] leading-relaxed px-2">
-            First time connecting with this Stellar wallet? Please enter your email to receive milestone and escrow notifications.
-          </p>
+          <div>
+            <h3 className="text-xl font-bold text-white tracking-tight">Complete Registration</h3>
+            <p className="text-xs text-[#a1a1aa] mt-1 max-w-xs">
+              This Stellar public key is newly connected. Please add your email address to register.
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-xs font-bold text-[#e4e4e7] uppercase tracking-wider">
-            Email Address
-          </label>
-          <input
-            type="email"
-            value={emailValue}
-            onChange={(e) => setEmailValue(e.target.value)}
-            placeholder="name@example.com"
-            className="w-full px-4 py-3.5 bg-[#232326] border border-[#3f3f46] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-medium"
-          />
+        <div className="bg-[#121214] p-3.5 rounded-2xl border border-[#27272a] space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[#a1a1aa]">Wallet:</span>
+            <span className="text-white font-semibold">{tempWalletName}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[#a1a1aa]">Address:</span>
+            <span className="font-mono text-[11px] text-[#71717a] truncate max-w-[210px]">
+              {tempAddress}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-[#a1a1aa]">Auth:</span>
+            <span className="text-emerald-400 font-medium">SEP-0010 Signature Verified ✓</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-4 border-t border-[#27272a]">
-          <button
-            type="button"
-            onClick={() => {
-              setShowEmailModal(false);
-              setIsConnecting(false);
-            }}
-            className="flex-1 py-3.5 px-4 bg-[#27272a] hover:bg-[#3f3f46] text-white font-bold text-xs sm:text-sm rounded-xl border border-[#3f3f46] transition-all cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleEmailSubmit}
-            disabled={isConnecting}
-            className="flex-1 py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-blue-600/30 border border-blue-500/30 transition-all cursor-pointer disabled:opacity-50"
-          >
-            {isConnecting ? "Registering..." : "Complete Setup 🚀"}
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
-
-  // xBull Helper Modal when extension is not detected
-  const xBullModalContent = showXBullModal ? (
-    <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-      <div
-        ref={xBullDialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="wallet-xbull-title"
-        tabIndex={-1}
-        className="bg-[#18181b] border border-[#3f3f46] rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto animate-fadeIn"
-      >
-        <div className="flex flex-col items-center text-center space-y-3 pt-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25 text-2xl font-black">
-            🐂
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#e4e4e7] mb-2">
+              Email Address <span className="text-blue-400">*</span>
+            </label>
+            <input
+              type="email"
+              placeholder="developer@example.com"
+              value={emailValue}
+              onChange={(e) => setEmailValue(e.target.value)}
+              className="w-full px-4 py-3 bg-[#121214] border border-[#27272a] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-blue-500 transition-colors"
+              autoFocus
+            />
           </div>
 
-          <h3 id="wallet-xbull-title" className="text-2xl font-extrabold text-white tracking-tight">
-            xBull Wallet Options
-          </h3>
-
-          <p className="text-xs sm:text-sm text-[#a1a1aa] leading-relaxed">
-            The xBull browser extension was not detected in this window. How would you like to connect?
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <a
-            href="https://xbull.app/app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-between p-3.5 rounded-xl bg-[#232326] hover:bg-[#2a2a2f] border border-[#3f3f46] text-white text-sm font-semibold transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🌐</span>
-              <div className="text-left">
-                <div>Open xBull Web App</div>
-                <div className="text-xs text-[#a1a1aa] font-normal">Use xBull in your browser</div>
-              </div>
-            </div>
-            <span className="text-[#a1a1aa] group-hover:text-white transition-colors">↗</span>
-          </a>
-
-          <a
-            href="https://xbull.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-between p-3.5 rounded-xl bg-[#232326] hover:bg-[#2a2a2f] border border-[#3f3f46] text-white text-sm font-semibold transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🧩</span>
-              <div className="text-left">
-                <div>Install xBull Extension</div>
-                <div className="text-xs text-[#a1a1aa] font-normal">Chrome, Firefox, Brave, Edge</div>
-              </div>
-            </div>
-            <span className="text-[#a1a1aa] group-hover:text-white transition-colors">↗</span>
-          </a>
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowXBullModal(false);
-              setShowManualInput(true);
-            }}
-            className="w-full flex items-center justify-between p-3.5 rounded-xl bg-[#232326] hover:bg-[#2a2a2f] border border-[#3f3f46] text-white text-sm font-semibold transition-all group cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🔑</span>
-              <div className="text-left">
-                <div>Paste xBull Public Key</div>
-                <div className="text-xs text-[#a1a1aa] font-normal">Fast manual connection</div>
-              </div>
-            </div>
-            <span className="text-[#a1a1aa] group-hover:text-white transition-colors">→</span>
-          </button>
-        </div>
-
-        <div className="pt-2 border-t border-[#27272a] flex justify-end">
-          <button
-            type="button"
-            onClick={() => setShowXBullModal(false)}
-            className="w-full py-3 px-4 bg-[#27272a] hover:bg-[#3f3f46] text-white font-bold text-xs sm:text-sm rounded-xl border border-[#3f3f46] transition-all cursor-pointer"
-          >
-            Close
-          </button>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowEmailModal(false);
+                setIsConnecting(false);
+              }}
+              className="flex-1 py-3 px-4 bg-[#27272a] hover:bg-[#3f3f46] text-[#a1a1aa] hover:text-white font-bold text-xs rounded-xl border border-[#3f3f46] transition-all cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleEmailSubmit}
+              disabled={isConnecting || !emailValue.trim()}
+              className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isConnecting ? 'Registering...' : 'Confirm & Connect'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   ) : null;
 
   return (
-    <div className="flex flex-col items-center gap-5 p-6 sm:p-8 rounded-3xl border border-[#27272a] shadow-2xl bg-[#18181b]/95 backdrop-blur-2xl max-w-lg w-full mx-auto relative overflow-hidden group/card">
-      {/* Background Glow */}
-      <div className="absolute -top-16 -right-16 w-52 h-52 bg-blue-500/15 rounded-full blur-3xl pointer-events-none group-hover/card:bg-blue-500/25 transition-all duration-500"></div>
-      <div className="absolute -bottom-16 -left-16 w-52 h-52 bg-purple-500/15 rounded-full blur-3xl pointer-events-none group-hover/card:bg-purple-500/25 transition-all duration-500"></div>
-
-      {/* Header Icon */}
-      <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/20 transform transition-transform group-hover/card:scale-105 duration-300">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-7 h-7">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 0 0-2.25-2.25H15a3 3 0 1 1-6 0H5.25A2.25 2.25 0 0 0 3 12m18 0v6a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 9m18 0V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v3" />
-        </svg>
-      </div>
-
-      {/* Card Info */}
-      <div className="text-center z-10 space-y-1.5 w-full">
-        <h3 className="text-2xl font-extrabold text-white tracking-tight">
-          Connect Stellar Wallet
-        </h3>
-        <p className="text-xs sm:text-sm text-[#a1a1aa] font-medium leading-relaxed">
-          {address
-            ? `Authenticated via ${walletName || "Stellar Wallet"}.`
-            : "Select any Stellar-supported wallet below to access your escrow portal."}
-        </p>
+    <div className="flex flex-col items-center gap-2">
+      <div className="flex items-center gap-3">
+        {/* Stellar Network Indicator Badge */}
+        <span className="text-[11px] font-bold px-2.5 py-1 bg-[#1c1917] text-[#fdba74] rounded-full border border-[#442c1d] flex items-center gap-1.5 shadow-sm">
+          <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+          Stellar Testnet
+        </span>
       </div>
 
       {/* Connected State View */}
       {address ? (
         <div className="w-full mt-2 p-4 rounded-2xl bg-[#232326] border border-[#333338] flex flex-col items-center gap-3 transition-all z-10">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold text-white uppercase tracking-wider">
-              {walletName || "Stellar Wallet"} Connected
+              {walletName || 'Stellar Wallet'} Connected
             </span>
           </div>
 
@@ -531,7 +347,7 @@ export default function WalletConnect() {
               onClick={copyAddress}
               className="text-xs text-[#a1a1aa] hover:text-white transition-colors px-2 py-1 bg-[#27272a] rounded-md cursor-pointer"
             >
-              {copied ? "Copied! ✓" : "Copy"}
+              {copied ? 'Copied! ✓' : 'Copy'}
             </button>
           </div>
 
@@ -542,7 +358,7 @@ export default function WalletConnect() {
           <div className="w-full pt-2 flex gap-2">
             <button
               type="button"
-              onClick={() => router.push("/projects")}
+              onClick={() => router.push('/projects')}
               className="flex-1 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
             >
               Go to Projects →
@@ -557,7 +373,7 @@ export default function WalletConnect() {
           </div>
         </div>
       ) : (
-        /* Multi-Wallet Selection Options */
+        /* Multi-Wallet Selection Trigger & Quick Connect */
         <div className="w-full flex flex-col gap-2.5 mt-1 z-10">
           {/* Passkey (WebAuthn) Wallet — no seed phrase (#302) */}
           <button
@@ -590,162 +406,87 @@ export default function WalletConnect() {
           {/* 1. Freighter Wallet */}
           <button
             type="button"
-            onClick={connectFreighter}
-            disabled={isConnecting}
-            className="w-full p-3.5 rounded-2xl bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-blue-500/50 text-white font-bold transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 text-left flex items-center justify-between group cursor-pointer disabled:opacity-60"
+            onClick={() => setShowModal(true)}
+            className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-blue-600/25 border border-blue-500/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-between cursor-pointer"
           >
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-[#1e1b4b] border border-indigo-500/30 flex items-center justify-center text-lg shadow-sm">
-                🪐
-              </div>
-              <div>
-                <div className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">
-                  Freighter Wallet
-                </div>
-                <div className="text-[11px] text-[#a1a1aa] font-medium">
-                  Official SDF browser extension
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                Official
-              </span>
-              <span className="text-sm font-bold text-blue-400">
-                {connectingWallet === "freighter" ? "..." : "Connect Freighter Wallet →"}
-              </span>
-            </div>
+            <span className="flex items-center gap-2">
+              <span>🪐</span>
+              <span>Open Multi-Wallet Hub</span>
+            </span>
+            <span className="text-xs opacity-90">Freighter, Lobstr, xBull & more →</span>
           </button>
 
-          {/* 2. xBull Wallet */}
-          <button
-            type="button"
-            onClick={connectXBull}
-            disabled={isConnecting}
-            className="w-full p-3.5 rounded-2xl bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-amber-500/50 text-white font-bold transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 text-left flex items-center justify-between group cursor-pointer disabled:opacity-60"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-[#3f200c] border border-amber-500/30 flex items-center justify-center text-lg shadow-sm">
-                🐂
-              </div>
-              <div>
-                <div className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">
-                  xBull Wallet
-                </div>
-                <div className="text-[11px] text-[#a1a1aa] font-medium">
-                  DeFi & Soroban browser extension / Web
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                Popular
-              </span>
-              <span className="text-sm font-bold text-amber-400">
-                {connectingWallet === "xbull" ? "..." : "Connect xBull Wallet →"}
-              </span>
-            </div>
-          </button>
-
-          {/* 3. Albedo (No installation required) */}
-          <button
-            type="button"
-            onClick={connectAlbedo}
-            disabled={isConnecting}
-            className="w-full p-3.5 rounded-2xl bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-emerald-500/50 text-white font-bold transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 text-left flex items-center justify-between group cursor-pointer disabled:opacity-60"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-[#064e3b] border border-emerald-500/30 flex items-center justify-center text-lg shadow-sm">
-                ⚡
-              </div>
-              <div>
-                <div className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
-                  Albedo (Instant Web)
-                </div>
-                <div className="text-[11px] text-[#a1a1aa] font-medium">
-                  No extension needed • Mobile & Desktop
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                No Install
-              </span>
-              <span className="text-sm font-bold text-emerald-400">
-                {connectingWallet === "albedo" ? "..." : "Connect with Albedo →"}
-              </span>
-            </div>
-          </button>
-
-          {/* 4. Rabet Wallet */}
-          <button
-            type="button"
-            onClick={connectRabet}
-            disabled={isConnecting}
-            className="w-full p-3.5 rounded-2xl bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-purple-500/50 text-white font-bold transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0 text-left flex items-center justify-between group cursor-pointer disabled:opacity-60"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-[#3b0764] border border-purple-500/30 flex items-center justify-center text-lg shadow-sm">
-                🐰
-              </div>
-              <div>
-                <div className="text-sm font-bold text-white group-hover:text-purple-400 transition-colors">
-                  Rabet Wallet
-                </div>
-                <div className="text-[11px] text-[#a1a1aa] font-medium">
-                  Lightweight Stellar browser extension
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-purple-400">
-                {connectingWallet === "rabet" ? "..." : "Connect Rabet →"}
-              </span>
-            </div>
-          </button>
-
-          {/* 5. Manual Stellar Address Toggle */}
-          <div className="pt-2 border-t border-[#27272a] mt-1">
-            {!showManualInput ? (
-              <button
-                type="button"
-                onClick={() => setShowManualInput(true)}
-                className="w-full py-2.5 px-3 text-xs text-[#a1a1aa] hover:text-white font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <span>🔑</span>
-                <span>Or connect with Stellar Public Key (Lobstr / Custom)</span>
-              </button>
-            ) : (
-              <div className="space-y-2 p-3 bg-[#1f1f23] rounded-xl border border-[#333338] animate-fadeIn">
-                <div className="flex justify-between items-center">
-                  <label className="text-[11px] font-bold text-[#e4e4e7] uppercase tracking-wider">
-                    Stellar Public Key (G...)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowManualInput(false)}
-                    className="text-[11px] text-[#a1a1aa] hover:text-white cursor-pointer"
+          {/* Quick Connect Direct Options */}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => handleConnectAdapter(getWalletAdapter('freighter'))}
+              disabled={isConnecting}
+              data-testid="connect-freighter-button"
+              className="p-3 bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-blue-500/50 rounded-xl text-left transition-all cursor-pointer group"
+            >
+              <div className="text-lg mb-1">
+                {isConnecting ? (
+                  <svg
+                    className="animate-spin w-5 h-5 text-blue-400"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    data-testid="wallet-spinner"
                   >
-                    Hide
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={manualAddress}
-                  onChange={(e) => setManualAddress(e.target.value.trim())}
-                  placeholder="GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-                  className="w-full px-3 py-2 bg-[#18181b] border border-[#3f3f46] rounded-lg text-white font-mono tracking-tight text-xs placeholder-[#71717a] focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleManualConnect}
-                  disabled={isConnecting || !manualAddress.trim()}
-                  className="w-full py-2 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isConnecting ? "Connecting..." : "Connect Key →"}
-                </button>
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                ) : (
+                  '🪐'
+                )}
               </div>
-            )}
+              <div className="text-xs font-bold text-white group-hover:text-blue-400">Freighter</div>
+              <div className="text-[10px] text-[#a1a1aa]">Browser extension</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleConnectAdapter(getWalletAdapter('albedo'))}
+              disabled={isConnecting}
+              className="p-3 bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-emerald-500/50 rounded-xl text-left transition-all cursor-pointer group"
+            >
+              <div className="text-lg mb-1">⚡</div>
+              <div className="text-xs font-bold text-white group-hover:text-emerald-400">Albedo</div>
+              <div className="text-[10px] text-[#a1a1aa]">Instant Web Intent</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleConnectAdapter(getWalletAdapter('xbull'))}
+              disabled={isConnecting}
+              className="p-3 bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-amber-500/50 rounded-xl text-left transition-all cursor-pointer group"
+            >
+              <div className="text-lg mb-1">🐂</div>
+              <div className="text-xs font-bold text-white group-hover:text-amber-400">xBull</div>
+              <div className="text-[10px] text-[#a1a1aa]">Extension & Web</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              className="p-3 bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-purple-500/50 rounded-xl text-left transition-all cursor-pointer group"
+            >
+              <div className="text-lg mb-1">🦞</div>
+              <div className="text-xs font-bold text-white group-hover:text-purple-400">Lobstr & QR</div>
+              <div className="text-[10px] text-[#a1a1aa]">Mobile scan connect</div>
+            </button>
           </div>
         </div>
       )}
@@ -758,7 +499,6 @@ export default function WalletConnect() {
       />
 
       {mounted && emailModalContent && createPortal(emailModalContent, document.body)}
-      {mounted && xBullModalContent && createPortal(xBullModalContent, document.body)}
     </div>
   );
 }

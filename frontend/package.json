@@ -13,6 +13,7 @@
   "dependencies": {
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^15.1.0",
+    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lib0": "0.2.85",
     "next": "^16.2.10",

@@ -3,9 +3,10 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from 'next-themes';
+import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { NetworkMismatchBanner } from '@/components/NetworkMismatchBanner';
 import { CommandPalette } from '@/components/CommandPalette';
-import { A11yLiveAnnouncer } from '@/components/A11yLiveAnnouncer';
+import { PerformanceTelemetryButton } from '@/components/PerformanceTelemetryModal';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -91,7 +92,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col pb-16 md:pb-0" suppressHydrationWarning>
         <ThemeProvider
           attribute="data-theme"
           defaultTheme="system"
@@ -99,12 +100,12 @@ export default function RootLayout({
           themes={['light', 'dark', 'oled', 'system']}
           storageKey="theme"
         >
-          <A11yLiveAnnouncer>
-            <NetworkMismatchBanner />
-            {children}
-            <Toaster />
-            <CommandPalette />
-          </A11yLiveAnnouncer>
+          <NetworkMismatchBanner />
+          {children}
+          <MobileBottomNav />
+          <Toaster />
+          <CommandPalette />
+          <PerformanceTelemetryButton />
         </ThemeProvider>
       </body>
     </html>

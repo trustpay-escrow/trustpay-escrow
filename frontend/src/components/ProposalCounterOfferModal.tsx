@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { CurrencyAmountInput } from '@/components/CurrencyAmountInput';
 import type { CounterOffer, CounterOfferAuthor, MilestoneTerms } from '@/lib/counter-offer';
 import {
   buildCounterOfferDiff,
@@ -187,17 +188,18 @@ export function ProposalCounterOfferModal({
                     >
                       Revised amount ({tokenSymbol})
                     </label>
-                    <input
+                    <CurrencyAmountInput
                       id={`counter-amount-${index}`}
-                      type="number"
+                      token={tokenSymbol}
                       min={0}
                       step="0.01"
                       value={Number.isFinite(term.amount) ? term.amount : ''}
-                      onChange={(event) =>
-                        updateTerm(index, { amount: Number(event.target.value) })
+                      onValueChange={(parsed) =>
+                        updateTerm(index, { amount: parsed === '' ? 0 : parsed })
                       }
                       data-testid={`counter-amount-${index}`}
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      badgeTestId={`counter-amount-prefix-${index}`}
+                      inputClassName="w-full rounded-xl border border-slate-800 bg-slate-950 pr-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
                     />
                   </div>
                   <div>

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useCreateProjectForm } from '@/hooks/useCreateProjectForm';
+import { CurrencyAmountInput } from '@/components/CurrencyAmountInput';
 import { TokenSelector } from '@/components/TokenSelector';
 import { BalanceWarningBadge } from '@/components/BalanceWarningBadge';
 import { useWalletStore } from '@/store/walletStore';
@@ -14,6 +15,7 @@ export function CreateProjectWizard() {
   const [showSwap, setShowSwap] = useState(false);
   const {
     formData,
+    currencyPrefix,
     loading,
     errors,
     currentStep,
@@ -240,23 +242,21 @@ export function CreateProjectWizard() {
                 <label className="block text-xs font-bold text-[#d4d4d8] uppercase tracking-wider mb-2">
                   Total Budget Amount <span className="text-red-400">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    name="budget"
-                    min="1"
-                    step="any"
-                    value={formData.budget === 0 ? '' : formData.budget}
-                    onChange={handleChange}
-                    placeholder="e.g. 2500"
-                    className={`w-full px-4 py-3 rounded-xl bg-[#18181c] border ${
-                      errors.budget ? 'border-red-500' : 'border-[#27272a]'
-                    } text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 pr-16`}
-                  />
-                  <span className="absolute right-4 top-3 text-xs font-bold text-blue-400">
-                    {formData.token}
-                  </span>
-                </div>
+                <CurrencyAmountInput
+                  token={formData.token}
+                  name="budget"
+                  min="1"
+                  step="any"
+                  value={formData.budget === 0 ? '' : formData.budget}
+                  onChange={handleChange}
+                  placeholder="e.g. 2500"
+                  data-testid="wizard-budget-input"
+                  badgeTestId="wizard-budget-prefix"
+                  aria-label={`Total Budget Amount (${currencyPrefix})`}
+                  inputClassName={`w-full pr-4 py-3 rounded-xl bg-[#18181c] border ${
+                    errors.budget ? 'border-red-500' : 'border-[#27272a]'
+                  } text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                />
                 {errors.budget && <p className="text-xs text-red-400 mt-1">{errors.budget}</p>}
               </div>
 

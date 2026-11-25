@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { CurrencyAmountInput } from '@/components/CurrencyAmountInput';
 import { Project } from '@/types';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
@@ -220,26 +221,26 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
               <label className="block text-slate-300 font-semibold mb-1.5">
                 Refund to Client ({tokenSymbol})
               </label>
-              <input
-                type="number"
+              <CurrencyAmountInput
+                token={tokenSymbol}
                 min={0}
                 value={refundInput}
-                onChange={(e) => setRefundInput(e.target.value === '' ? '' : Number(e.target.value))}
+                onValueChange={setRefundInput}
                 placeholder="Amount returned to client"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
+                inputClassName="w-full bg-slate-950 border border-slate-800 rounded-xl pr-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
               <label className="block text-slate-300 font-semibold mb-1.5">
                 Compensate Freelancer ({tokenSymbol})
               </label>
-              <input
-                type="number"
+              <CurrencyAmountInput
+                token={tokenSymbol}
                 min={0}
                 value={compInput}
-                onChange={(e) => setCompInput(e.target.value === '' ? '' : Number(e.target.value))}
+                onValueChange={setCompInput}
                 placeholder="Amount paid to freelancer"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
+                inputClassName="w-full bg-slate-950 border border-slate-800 rounded-xl pr-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
               />
             </div>
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">

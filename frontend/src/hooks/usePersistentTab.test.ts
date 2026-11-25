@@ -201,5 +201,36 @@ describe('usePersistentTab & usePersistentFilter', () => {
 
       expect(mockStorage['trustpay_filter_search_test']).toBeUndefined();
     });
+
+    it('clears persisted filter and resets value when switching wallet address', () => {
+      let wallet: string | null = 'WALLET_A';
+      mockStorage['trustpay_filter_search_test'] = JSON.stringify('old wallet query');
+
+      const { result, rerender } = renderHook(() =>
+        usePersistentFilter('search_test', '', wallet)
+      );
+      expect(result.current[0]).toBe('old wallet query');
+
+      wallet = 'WALLET_B';
+      rerender();
+
+      expect(result.current[0]).toBe('');
+      expect(mockStorage['trustpay_filter_search_test']).toBeUndefined();
+    });
+
+    it('restores persisted filter after a remount on the same wallet', () => {
+      const first = renderHook(() =>
+        usePersistentFilter('search_test', '', 'WALLET_A')
+      );
+      act(() => {
+        first.result.current[1]('stellar escrow');
+      });
+      first.unmount();
+
+      const second = renderHook(() =>
+        usePersistentFilter('search_test', '', 'WALLET_A')
+      );
+      expect(second.result.current[0]).toBe('stellar escrow');
+    });
   });
 });
