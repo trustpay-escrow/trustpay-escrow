@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Milestone, Project } from '@/types';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 import {
   buildGoogleCalendarUrl,
   buildMilestoneCalendarEvents,
@@ -26,11 +27,22 @@ export function CalendarExportButton({
 }: CalendarExportButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+  const nextHeadingId = useId();
+  const allHeadingId = useId();
 
   const events = useMemo(
     () => buildMilestoneCalendarEvents(project, milestones || project.milestones || []),
     [project, milestones]
   );
+
+  const menuOpen = isOpen && events.length > 0;
+
+  useEscapeKey(() => {
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  }, menuOpen);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -49,10 +61,12 @@ export function CalendarExportButton({
   return (
     <div className={`relative ${className}`} ref={containerRef} onClick={(event) => event.stopPropagation()}>
       <button
+        ref={triggerRef}
         type="button"
         data-testid="calendar-export-button"
         aria-haspopup="menu"
-        aria-expanded={isOpen}
+        aria-expanded={menuOpen}
+        aria-controls={menuOpen ? menuId : undefined}
         onClick={() => setIsOpen((value) => !value)}
         disabled={events.length === 0}
         className={`inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800/70 font-semibold text-slate-200 transition-colors hover:border-indigo-500/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -64,15 +78,17 @@ export function CalendarExportButton({
         <span aria-hidden="true">▾</span>
       </button>
 
-      {isOpen && events.length > 0 && (
+      {menuOpen && (
         <div
+          id={menuId}
           role="menu"
+          aria-label="Calendar export options"
           data-testid="calendar-export-menu"
           className="absolute right-0 z-40 mt-2 w-72 rounded-2xl border border-slate-700 bg-slate-900 p-2 shadow-2xl"
         >
           {nextEvent && (
-            <div className="space-y-1 border-b border-slate-800 pb-2">
-              <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <div role="group" aria-labelledby={nextHeadingId} className="space-y-1 border-b border-slate-800 pb-2">
+              <p id={nextHeadingId} role="presentation" className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 Next deadline
               </p>
               <a
@@ -110,28 +126,32 @@ export function CalendarExportButton({
             </div>
           )}
 
-          <div className="pt-2">
-            <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <div role="group" aria-labelledby={allHeadingId} className="pt-2">
+            <p id={allHeadingId} role="presentation" className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
               All milestones ({events.length})
             </p>
-            <div className="max-h-56 space-y-0.5 overflow-y-auto">
+            <div role="none" className="max-h-56 space-y-0.5 overflow-y-auto">
               {events.map((event) => (
-                <div key={event.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-800">
-                  <span className="min-w-0 flex-1 truncate text-[11px] text-slate-300" title={event.title}>
+                <div key={event.id} role="none" className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-800">
+                  <span role="presentation" className="min-w-0 flex-1 truncate text-[11px] text-slate-300" title={event.title}>
                     {event.title}
                   </span>
                   <a
+                    role="menuitem"
                     href={buildGoogleCalendarUrl(event)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={`Add ${event.title} to Google Calendar`}
                     className="text-[10px] font-bold text-indigo-400 hover:underline"
                   >
                     Google
                   </a>
                   <a
+                    role="menuitem"
                     href={buildOutlookCalendarUrl(event)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={`Add ${event.title} to Outlook`}
                     className="text-[10px] font-bold text-sky-400 hover:underline"
                   >
                     Outlook

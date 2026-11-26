@@ -13,7 +13,11 @@ interface BalanceItem {
   rate: FXRate | null;
 }
 
-export function CurrencyConverterWidget() {
+export interface CurrencyConverterWidgetProps {
+  portfolioItems?: Array<{ amount: number; token: string }>;
+}
+
+export function CurrencyConverterWidget({ portfolioItems }: CurrencyConverterWidgetProps = {}) {
   const {
     displayCurrency,
     fxRates,
@@ -35,17 +39,27 @@ export function CurrencyConverterWidget() {
 
   // Compute balance items with fiat conversion
   const balanceItems: BalanceItem[] = useMemo(() => {
+    if (portfolioItems && portfolioItems.length > 0) {
+      return portfolioItems.map((item) => {
+        const crypto = (item.token || 'USDC') as CryptoCurrency;
+        const safeBalance = item.amount ?? 0;
+        const fiatValue = convertCryptoToDisplayCurrency(safeBalance, crypto);
+        const rate = fxRates[crypto]?.[displayCurrency] ?? null;
+        return { symbol: crypto, balance: safeBalance, fiatValue, rate };
+      });
+    }
     if (!balances || balancesLoading) return [];
 
     return Object.entries(balances)
       .filter(([symbol]) => SUPPORTED_TOKENS[symbol as TokenSymbol])
       .map(([symbol, balance]) => {
         const crypto = symbol as CryptoCurrency;
-        const fiatValue = convertCryptoToDisplayCurrency(balance, crypto);
+        const safeBalance = balance ?? 0;
+        const fiatValue = convertCryptoToDisplayCurrency(safeBalance, crypto);
         const rate = fxRates[crypto]?.[displayCurrency] ?? null;
-        return { symbol: crypto, balance, fiatValue, rate };
+        return { symbol: crypto, balance: safeBalance, fiatValue, rate };
       });
-  }, [balances, balancesLoading, fxRates, displayCurrency, convertCryptoToDisplayCurrency]);
+  }, [portfolioItems, balances, balancesLoading, fxRates, displayCurrency, convertCryptoToDisplayCurrency]);
 
   // Total portfolio value in display currency
   const totalPortfolioValue = useMemo(
@@ -263,7 +277,21 @@ export function CurrencyBadge({ amount, crypto }: { amount: number; crypto: Cryp
   const fiatValue = convertCryptoToDisplayCurrency(amount, crypto);
   return (
     <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-sm font-medium text-gray-900 dark:text-white">
-      {formatFiat(fiatValue)}
+      {formatFiat(fiatValue)} {displayCurrency}
+    </span>
+  );
+}
+
+export function ConvertedFiatBadge({ amount, token }: { amount: number; token: string }) {
+  const { displayCurrency, convertCryptoToDisplayCurrency, formatFiat } = useCurrencyStore();
+  const crypto = (token || 'USDC') as CryptoCurrency;
+  const fiatValue = convertCryptoToDisplayCurrency(amount, crypto);
+  return (
+    <span
+      data-testid="converted-fiat-badge"
+      className="inline-flex items-center gap-1 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs font-medium text-gray-900 dark:text-white"
+    >
+      ≈ {formatFiat(fiatValue)} {displayCurrency}
     </span>
   );
 }

@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { useWalletStore } from '@/store/walletStore';
 import { CryptoId } from '@/components/ui/CryptoId';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { AccessibleModal } from '@/components/a11y/AccessibleModal';
 import { MessageReactionBar } from '@/components/MessageReactionBar';
 
 export interface ChatMessage {
@@ -41,9 +41,10 @@ export function ProjectChatModal({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   };
 
   const fetchMessages = async () => {
@@ -126,8 +127,6 @@ export function ProjectChatModal({
     }
   }, [messages, isOpen]);
 
-  useEscapeKey(onClose, isOpen);
-
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
@@ -167,127 +166,139 @@ export function ProjectChatModal({
     }
   };
 
-  if (!isOpen) return null;
-
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-xl w-full flex flex-col h-[85vh] max-h-[650px] shadow-2xl overflow-hidden">
-        
-        {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-[#27272a] bg-[#1c1c20] flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                Direct Contract Chat
-              </span>
-              <span className="text-xs text-[#71717a]">• {recipientRoleLabel}</span>
-            </div>
-            <h3 className="text-base font-bold text-white truncate max-w-sm sm:max-w-md">
-              {projectTitle}
-            </h3>
-            <div className="text-xs text-[#a1a1aa] flex items-center gap-1.5">
-              <span>To:</span>
-              <CryptoId
-                value={receiverAddress}
-                head={6}
-                tail={4}
-                className="bg-[#232326] px-1.5 py-0.5 rounded border border-[#333338] text-[#e4e4e7]"
-              />
-            </div>
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy={titleId}
+      backdropClassName="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+      dialogClassName="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-xl w-full flex flex-col h-[85vh] max-h-[650px] shadow-2xl overflow-hidden"
+    >
+      {/* Header */}
+      <div className="p-4 sm:p-5 border-b border-[#27272a] bg-[#1c1c20] flex items-center justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true"></span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              Direct Contract Chat
+            </span>
+            <span className="text-xs text-[#71717a]">• {recipientRoleLabel}</span>
           </div>
-
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-[#232326] hover:bg-[#27272a] border border-[#333338] text-[#a1a1aa] hover:text-white flex items-center justify-center transition-colors text-sm font-bold"
-          >
-            ✕
-          </button>
+          <h3 id={titleId} className="text-base font-bold text-white truncate max-w-sm sm:max-w-md">
+            {projectTitle}
+          </h3>
+          <div className="text-xs text-[#a1a1aa] flex items-center gap-1.5">
+            <span>To:</span>
+            <CryptoId
+              value={receiverAddress}
+              head={6}
+              tail={4}
+              className="bg-[#232326] px-1.5 py-0.5 rounded border border-[#333338] text-[#e4e4e7]"
+            />
+          </div>
         </div>
 
-        {/* Message Area */}
-        <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3.5 custom-scrollbar bg-[#18181b]">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center h-full text-xs text-[#71717a] space-y-2">
-              <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-              <p>Loading messages...</p>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-[#1c1c20]/40 rounded-xl border border-[#27272a]">
-              <span className="text-2xl mb-2">💬</span>
-              <h4 className="text-sm font-bold text-white mb-1">Start the Conversation</h4>
-              <p className="text-xs text-[#a1a1aa] max-w-xs leading-relaxed">
-                Use this chat to align on deliverables, review project requirements, and share updates.
-              </p>
-            </div>
-          ) : (
-            messages.map((msg) => {
-              const isMe = msg.sender_address.toLowerCase() === senderAddress.toLowerCase();
-              const timeStr = msg.created_at
-                ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : '';
-
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}
-                >
-                  <div className="flex items-center space-x-1.5 text-[10px] text-[#71717a] px-1">
-                    <span>{isMe ? 'You' : recipientRoleLabel}</span>
-                    <span>•</span>
-                    <span>{timeStr}</span>
-                  </div>
-
-                  <div
-                    className={`max-w-[82%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-md ${
-                      isMe
-                        ? 'bg-indigo-600 text-white rounded-tr-none border border-indigo-500/50'
-                        : 'bg-[#232326] text-[#e4e4e7] rounded-tl-none border border-[#333338]'
-                    }`}
-                  >
-                    {msg.content}
-                  </div>
-
-                  <MessageReactionBar
-                    messageId={msg.id}
-                    currentUserAddress={senderAddress}
-                    className={isMe ? 'items-end' : 'items-start'}
-                  />
-                </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Bar */}
-        <form onSubmit={handleSendMessage} className="p-3.5 sm:p-4 bg-[#1c1c20] border-t border-[#27272a] flex items-center space-x-2.5">
-          <input
-            type="text"
-            value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
-            placeholder="Type a message..."
-            disabled={sending}
-            className="flex-1 px-4 py-2.5 bg-[#232326] border border-[#333338] rounded-xl text-xs text-white placeholder-[#71717a] focus:outline-none focus:border-indigo-500 transition-colors"
-          />
-          <button
-            type="submit"
-            disabled={sending || !newContent.trim()}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
-          >
-            {sending ? (
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <span>Send</span>
-                <span>➔</span>
-              </>
-            )}
-          </button>
-        </form>
-
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close project chat"
+          className="w-8 h-8 rounded-xl bg-[#232326] hover:bg-[#27272a] border border-[#333338] text-[#a1a1aa] hover:text-white flex items-center justify-center transition-colors text-sm font-bold"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
       </div>
-    </div>
+
+      {/* Message Area */}
+      <div
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Project messages"
+        className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3.5 custom-scrollbar bg-[#18181b]"
+      >
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-full text-xs text-[#71717a] space-y-2" role="status">
+            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
+            <p>Loading messages...</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-[#1c1c20]/40 rounded-xl border border-[#27272a]">
+            <span className="text-2xl mb-2" aria-hidden="true">💬</span>
+            <h4 className="text-sm font-bold text-white mb-1">Start the Conversation</h4>
+            <p className="text-xs text-[#a1a1aa] max-w-xs leading-relaxed">
+              Use this chat to align on deliverables, review project requirements, and share updates.
+            </p>
+          </div>
+        ) : (
+          messages.map((msg) => {
+            const isMe = msg.sender_address.toLowerCase() === senderAddress.toLowerCase();
+            const timeStr = msg.created_at
+              ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '';
+
+            return (
+              <div
+                key={msg.id}
+                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}
+              >
+                <div className="flex items-center space-x-1.5 text-[10px] text-[#71717a] px-1">
+                  <span>{isMe ? 'You' : recipientRoleLabel}</span>
+                  <span aria-hidden="true">•</span>
+                  <span>{timeStr}</span>
+                </div>
+
+                <div
+                  className={`max-w-[82%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-md ${
+                    isMe
+                      ? 'bg-indigo-600 text-white rounded-tr-none border border-indigo-500/50'
+                      : 'bg-[#232326] text-[#e4e4e7] rounded-tl-none border border-[#333338]'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+
+                <MessageReactionBar
+                  messageId={msg.id}
+                  currentUserAddress={senderAddress}
+                  className={isMe ? 'items-end' : 'items-start'}
+                />
+              </div>
+            );
+          })
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Bar */}
+      <form onSubmit={handleSendMessage} className="p-3.5 sm:p-4 bg-[#1c1c20] border-t border-[#27272a] flex items-center space-x-2.5">
+        <input
+          type="text"
+          aria-label="Message"
+          value={newContent}
+          onChange={(e) => setNewContent(e.target.value)}
+          placeholder="Type a message..."
+          disabled={sending}
+          className="flex-1 px-4 py-2.5 bg-[#232326] border border-[#333338] rounded-xl text-xs text-white placeholder-[#71717a] focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+        <button
+          type="submit"
+          disabled={sending || !newContent.trim()}
+          aria-busy={sending || undefined}
+          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
+        >
+          {sending ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+              <span className="sr-only">Sending message</span>
+            </>
+          ) : (
+            <>
+              <span>Send</span>
+              <span aria-hidden="true">➔</span>
+            </>
+          )}
+        </button>
+      </form>
+    </AccessibleModal>
   );
 }

@@ -73,7 +73,7 @@ function handleMessage(room: CollaborationRoom, ws: WebSocket, data: Buffer) {
     const decoder = decoding.createDecoder(payload);
     const encoder = encoding.createEncoder();
     try {
-      syncProtocol.readSyncMessage(decoder, encoder, room.doc, ws, (error) => {
+      syncProtocol.readSyncMessage(decoder, encoder, room.doc, ws, (error: any) => {
         logger.warn(`Yjs sync message failed for collaboration room: ${error.message}`);
       });
       if (encoding.length(encoder) > 0) {

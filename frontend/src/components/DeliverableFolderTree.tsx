@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, type ReactNode } from 'react';
 
 export type FileCategory = 'code' | 'image' | 'pdf' | 'archive' | 'document';
 
 export interface FileItem {
+  id?: string;
   path: string;
   size?: number;
   url?: string;
@@ -17,47 +18,48 @@ export interface FileNode {
   size?: number;
   url?: string;
   isFolder: boolean;
+  category: FileCategory;
+  extension: string;
   children?: FileNode[];
-  category?: FileCategory;
-  extension?: string;
+}
+
+export function getFileCategory(filename: string): FileCategory {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  if (['ts', 'tsx', 'js', 'jsx', 'json', 'sol', 'rs', 'py', 'go', 'html', 'css', 'yaml', 'yml'].includes(ext)) {
+    return 'code';
+  }
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
+    return 'image';
+  }
+  if (ext === 'pdf') {
+    return 'pdf';
+  }
+  if (['zip', 'tar', 'gz', 'rar', '7z'].includes(ext)) {
+    return 'archive';
+  }
+  return 'document';
 }
 
 export function formatFileSize(bytes?: number): string {
-  if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return '';
+  if (bytes === undefined || bytes === null) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function getFileCategory(filename: string): FileCategory {
-  const dotIndex = filename.lastIndexOf('.');
-  if (dotIndex === -1) return 'document';
-  const ext = filename.slice(dotIndex + 1).toLowerCase();
-
-  const codeExts = ['js', 'jsx', 'ts', 'tsx', 'rs', 'sol', 'py', 'go', 'html', 'css', 'json', 'yaml', 'yml', 'md', 'sh'];
-  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
-  const archiveExts = ['zip', 'tar', 'gz', 'tgz', 'rar', '7z'];
-
-  if (ext === 'pdf') return 'pdf';
-  if (codeExts.includes(ext)) return 'code';
-  if (imageExts.includes(ext)) return 'image';
-  if (archiveExts.includes(ext)) return 'archive';
-  return 'document';
-}
-
-export function getCategoryBadge(category?: FileCategory): { label: string; colorClass: string; icon: string } {
+export function getCategoryBadge(category: FileCategory): { icon: string; colorClass: string } {
   switch (category) {
     case 'code':
-      return { label: 'Code', colorClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20', icon: '< / >' };
+      return { icon: '</>', colorClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
     case 'image':
-      return { label: 'Image', colorClass: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: 'IMG' };
+      return { icon: 'IMG', colorClass: 'bg-purple-500/10 text-purple-400 border-purple-500/20' };
     case 'pdf':
-      return { label: 'PDF', colorClass: 'bg-red-500/10 text-red-400 border-red-500/20', icon: 'PDF' };
+      return { icon: 'PDF', colorClass: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
     case 'archive':
-      return { label: 'Archive', colorClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20', icon: 'ZIP' };
+      return { icon: 'ZIP', colorClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
     case 'document':
     default:
-      return { label: 'Doc', colorClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: 'DOC' };
+      return { icon: 'DOC', colorClass: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
   }
 }
 
@@ -88,7 +90,7 @@ export function parsePathsToTree(files: FileItem[]): FileNode[] {
         const extension = dotIndex !== -1 ? part.slice(dotIndex + 1) : '';
 
         currentLevel.push({
-          id: accumulatedPath,
+          id: file.id ?? accumulatedPath,
           name: part,
           path: accumulatedPath,
           size: file.size,
@@ -106,6 +108,8 @@ export function parsePathsToTree(files: FileItem[]): FileNode[] {
             name: part,
             path: accumulatedPath,
             isFolder: true,
+            category: 'document',
+            extension: '',
             children: [],
           };
           currentLevel.push(folder);
@@ -137,6 +141,7 @@ export interface DeliverableFolderTreeProps {
   files: FileItem[];
   title?: string;
   onDownloadFile?: (file: FileNode) => void;
+  renderFileDetails?: (file: FileNode) => ReactNode;
   className?: string;
 }
 
@@ -144,6 +149,7 @@ export function DeliverableFolderTree({
   files,
   title = 'Deliverable Files Hierarchy',
   onDownloadFile,
+  renderFileDetails,
   className = '',
 }: DeliverableFolderTreeProps) {
   const tree = useMemo(() => parsePathsToTree(files), [files]);
@@ -213,6 +219,7 @@ export function DeliverableFolderTree({
                 <button
                   type="button"
                   onClick={() => toggleFolder(node.id)}
+                  aria-expanded={isExpanded}
                   data-testid={`folder-toggle-${node.id}`}
                   style={{ paddingLeft: `${depth * 16 + 8}px` }}
                   className="w-full flex items-center justify-between py-1.5 pr-2 rounded-lg text-left text-xs text-[#e4e4e7] hover:bg-[#27272a]/60 hover:text-white transition-colors group"
@@ -220,7 +227,7 @@ export function DeliverableFolderTree({
                   <div className="flex items-center space-x-2 truncate">
                     <span
                       data-testid={`chevron-${node.id}`}
-                      className={`text-[10px] text-[#71717a] transition-transform duration-200 inline-block ${
+                      className={`text-[10px] text-[#71717a] transition-transform duration-200 motion-reduce:transition-none inline-block ${
                         isExpanded ? 'rotate-90' : 'rotate-0'
                       }`}
                     >
@@ -251,29 +258,35 @@ export function DeliverableFolderTree({
               key={node.id}
               data-testid={`file-item-${node.id}`}
               style={{ paddingLeft: `${depth * 16 + 24}px` }}
-              className="flex items-center justify-between py-1.5 pr-2 rounded-lg text-xs hover:bg-[#27272a]/40 transition-colors group"
+              className="py-1.5 pr-2 rounded-lg text-xs hover:bg-[#27272a]/40 transition-colors group"
             >
-              <div className="flex items-center space-x-2 truncate min-w-0">
-                <span className={`text-[9px] font-mono px-1 py-0.5 rounded border uppercase shrink-0 font-bold ${badge.colorClass}`}>
-                  {badge.icon}
-                </span>
-                <span className="text-[#e4e4e7] truncate group-hover:text-white font-mono text-[11px]">{node.name}</span>
-              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center space-x-2 truncate min-w-0">
+                  <span className={`text-[9px] font-mono px-1 py-0.5 rounded border uppercase shrink-0 font-bold ${badge.colorClass}`}>
+                    {badge.icon}
+                  </span>
+                  <span className="text-[#e4e4e7] truncate group-hover:text-white font-mono text-[11px]">{node.name}</span>
+                </div>
 
-              <div className="flex items-center space-x-2 shrink-0">
-                {node.size !== undefined && (
-                  <span className="text-[10px] text-[#71717a] font-mono">{formatFileSize(node.size)}</span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleDownload(node)}
-                  data-testid={`download-button-${node.id}`}
-                  title={`Download ${node.name}`}
-                  className="px-2 py-0.5 rounded bg-[#232326] hover:bg-blue-600 hover:text-white text-[#a1a1aa] text-[10px] font-semibold border border-[#333338] transition-colors"
-                >
-                  Download
-                </button>
+                <div className="flex items-center space-x-2 shrink-0">
+                  {node.size !== undefined && (
+                    <span className="text-[10px] text-[#71717a] font-mono">{formatFileSize(node.size)}</span>
+                  )}
+                  {(onDownloadFile || node.url) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(node)}
+                      data-testid={`download-button-${node.path}`}
+                      aria-label={`Download ${node.name}`}
+                      title={`Download ${node.name}`}
+                      className="px-2 py-0.5 rounded bg-[#232326] hover:bg-blue-600 hover:text-white text-[#a1a1aa] text-[10px] font-semibold border border-[#333338] transition-colors"
+                    >
+                      Download
+                    </button>
+                  )}
+                </div>
               </div>
+              {renderFileDetails?.(node)}
             </li>
           );
         })}

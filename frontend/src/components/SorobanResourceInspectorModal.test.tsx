@@ -149,7 +149,7 @@ describe('SorobanResourceInspectorModal', () => {
     render(<SorobanResourceInspectorModal transaction={mockTransaction} onClose={onClose} />);
     expect(useEscapeKey).toHaveBeenCalled();
     // Modal stays mounted (enabled=true) but the callback guards on `simulating`.
-    const [cb, enabled] = useEscapeKey.mock.calls.at(-1);
+    const [cb, enabled] = vi.mocked(useEscapeKey).mock.calls.at(-1)!;
     expect(enabled).toBe(true);
     cb();
     expect(onClose).not.toHaveBeenCalled();

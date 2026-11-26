@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { CurrencyAmountInput } from '@/components/CurrencyAmountInput';
 import { useMilestonesForm } from '@/hooks/useMilestonesForm';
@@ -47,7 +48,7 @@ export default function CreateMilestonesPage() {
   } = useMilestonesForm(projectId, { totalBudget: projectBudget });
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] py-12 px-4 sm:px-6 lg:px-8 font-sans transition-colors duration-300">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-[#09090b] text-[#f4f4f5] py-12 px-4 sm:px-6 lg:px-8 font-sans transition-colors duration-300">
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="bg-[#18181b] rounded-3xl shadow-2xl overflow-hidden border border-[#27272a]">
           <div className="px-8 py-10 sm:px-12 border-b border-[#27272a] bg-gradient-to-r from-blue-900/20 via-indigo-900/20 to-purple-900/20">
@@ -106,6 +107,6 @@ export default function CreateMilestonesPage() {
           </form>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

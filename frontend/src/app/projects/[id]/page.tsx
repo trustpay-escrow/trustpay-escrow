@@ -1,5 +1,14 @@
 'use client';
 
+import { celebrateEscrow } from '@/lib/confetti';
+import { announcePolite } from '@/components/a11y/LiveAnnouncer';
+import { SorobanResourceInspectorModal } from '@/components/SorobanResourceInspectorModal';
+import { TransactionSpeedUpModal } from '@/components/TransactionSpeedUpModal';
+import { ProjectAuditLog } from '@/components/ProjectAuditLog';
+import { CalendarExportButton } from '@/components/CalendarExportButton';
+import { ContractSecurityModal } from '@/components/ContractSecurityModal';
+import { MutualCancellationModal } from '@/components/MutualCancellationModal';
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -100,68 +109,20 @@ export default function ProjectDetailsPage() {
     return () => mq.removeEventListener?.('change', handler);
   }, []);
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    if (!editableMilestones) return;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', index.toString());
-    setDraggedIndex(index);
-    e.currentTarget.style.opacity = reduceMotion ? '1' : '0.4';
-  };
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewContext, setReviewContext] = useState<{
+    revieweeAddress: string;
+    revieweeRole: 'client' | 'freelancer';
+    reviewerRole: 'client' | 'freelancer';
+  } | null>(null);
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    if (!editableMilestones || draggedIndex === null || draggedIndex === index) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverIndex(index);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDragOverIndex(null);
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
-    if (!editableMilestones || draggedIndex === null || draggedIndex === targetIndex) return;
-    e.preventDefault();
-    const fromIndex = draggedIndex;
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-
-    // Reorder locally first for instant feedback
-    const milestones = [...(project.milestones || [])].sort((a, b) => a.milestone_index - b.milestone_index);
-    const [removed] = milestones.splice(fromIndex, 1);
-    milestones.splice(targetIndex, 0, removed);
-    const reordered = milestones.map((m, i) => ({ ...m, milestone_index: i }));
-    setProject((prev) => prev ? { ...prev, milestones: reordered } : prev);
-
-    // Persist to backend
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      await Promise.all(
-        reordered.map((m, i) =>
-          authFetch(`${apiUrl}/api/milestones/${m.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ milestone_index: i }),
-          })
-        )
-      );
-      toast.success('Milestone order updated');
-    } catch (err: any) {
-      toast.error(`Failed to persist order: ${err.message || err}`);
-      await fetchProject(); // Revert on error
-    }
-  };
-
-  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
-    e.currentTarget.style.opacity = '1';
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  // Only allow reorder on draft projects for the client
-  const editableMilestones = project?.status === 'draft' && isClient;
+  const [stalledTransaction, setStalledTransaction] = useState<{
+    id: string;
+    innerTxXdr: string;
+    description: string;
+    submittedAt: string;
+    projectId?: string;
+  } | null>(null);
 
   const [showFundEscrowModal, setShowFundEscrowModal] = useState(false);
   const [fundFreelancerAddress, setFundFreelancerAddress] = useState('');
@@ -202,6 +163,14 @@ export default function ProjectDetailsPage() {
       description: 'Approve & Release Milestone #1',
     });
   };
+
+  useEffect(() => {
+    if (!txState.isOpen) return;
+    const statusText = txState.error || txState.message;
+    if (statusText) {
+      announcePolite(statusText);
+    }
+  }, [txState.isOpen, txState.stage, txState.message, txState.error]);
 
   // Escape mirrors each modal's own Cancel button.
   useEscapeKey(() => {
@@ -361,6 +330,66 @@ export default function ProjectDetailsPage() {
   );
 
   const hasOnChainEscrow = Boolean(project.project_id_onchain !== undefined && project.project_id_onchain !== null);
+  const editableMilestones = Boolean(project?.status === 'draft' && isClient);
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    if (!editableMilestones) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+    setDraggedIndex(index);
+    e.currentTarget.style.opacity = reduceMotion ? '1' : '0.4';
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, index: number) => {
+    if (!editableMilestones || draggedIndex === null || draggedIndex === index) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetIndex: number) => {
+    if (!editableMilestones || draggedIndex === null || draggedIndex === targetIndex) return;
+    e.preventDefault();
+    const fromIndex = draggedIndex;
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+
+    const milestones = [...(project?.milestones || [])].sort((a, b) => a.milestone_index - b.milestone_index);
+    const [removed] = milestones.splice(fromIndex, 1);
+    milestones.splice(targetIndex, 0, removed);
+    const reordered = milestones.map((m, i) => ({ ...m, milestone_index: i }));
+    setProject((prev) => (prev ? { ...prev, milestones: reordered } : prev));
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await Promise.all(
+        reordered.map((m, i) =>
+          authFetch(`${apiUrl}/api/milestones/${m.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ milestone_index: i }),
+          })
+        )
+      );
+      toast.success('Milestone order updated');
+    } catch (err: any) {
+      toast.error(`Failed to persist order: ${err.message || err}`);
+      await fetchProject();
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+    e.currentTarget.style.opacity = '1';
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
   const tokenSymbol = project.token || 'USDC';
 
   // 1. Client Action: Fund Escrow on Soroban
@@ -399,6 +428,7 @@ export default function ProjectDetailsPage() {
         },
       });
 
+      celebrateEscrow();
       const onChainId = res.onChainProjectId ? Number(res.onChainProjectId) : 1;
       setTxState((prev) => ({ ...prev, stage: 'success', txHash: res.txHash, message: `Escrow project #${onChainId} created on Stellar!` }));
 
@@ -576,6 +606,16 @@ export default function ProjectDetailsPage() {
     );
   };
 
+  const celebrateFinalRelease = (released: Milestone) => {
+    const milestones = project?.milestones ?? [];
+    if (
+      milestones.some((milestone) => milestone.id === released.id) &&
+      milestones.every((milestone) => milestone.id === released.id || milestone.status === 'approved')
+    ) {
+      celebrateEscrow();
+    }
+  };
+
   // 3. Client Action: Approve Milestone & Release on-chain funds
   const handleApproveMilestone = async () => {
     if (!activeApproveModal) return;
@@ -601,6 +641,7 @@ export default function ProjectDetailsPage() {
           setTxState((prev) => ({ ...prev, stage, message }));
         },
       });
+      celebrateFinalRelease(activeApproveModal);
 
       setTxState((prev) => ({
         ...prev,
@@ -654,6 +695,7 @@ export default function ProjectDetailsPage() {
           setTxState((prev) => ({ ...prev, stage, message }));
         },
       });
+      celebrateFinalRelease(milestone);
 
       setTxState((prev) => ({
         ...prev,
@@ -1196,7 +1238,6 @@ export default function ProjectDetailsPage() {
                 onApprove={(m) => setActiveApproveModal(m)}
                 onRequestRevision={(m) => {
                   setActiveRevisionModal(m);
-                  setRevisionNote('');
                 }}
               />
             ))}
@@ -1210,7 +1251,7 @@ export default function ProjectDetailsPage() {
               {project.milestones
                 .sort((a, b) => a.milestone_index - b.milestone_index)
                 .map((m, idx) => (
-                  <>
+                  <React.Fragment key={m.id || idx}>
                     {/* Drop indicator line above card when dragging over */}
                     {editableMilestones && dragOverIndex === idx && draggedIndex !== null && draggedIndex !== idx && (
                       <div
@@ -1433,7 +1474,8 @@ export default function ProjectDetailsPage() {
                       </div>
                     </div>
                   </div>
-                </>)}
+                  </React.Fragment>
+                ))}
             </div>
           )}
         </div>
@@ -1848,7 +1890,7 @@ export default function ProjectDetailsPage() {
                   // For now, we'll use a placeholder that would be replaced with actual XDR
                   const stalledTx = {
                     id: `speedup-${txState.txHash}`,
-                    innerTxXdr: txState.txHash, // Placeholder - actual implementation would store XDR
+                    innerTxXdr: txState.txHash || '', // Placeholder - actual implementation would store XDR
                     description: 'Pending Transaction',
                     submittedAt: new Date(Date.now() - 20000).toISOString(),
                     projectId: projectId,
@@ -1889,6 +1931,20 @@ export default function ProjectDetailsPage() {
         onClose={() => setShowMutualCancelModal(false)}
         project={project}
         onUpdated={fetchProject}
+      />
+
+      <SorobanResourceInspectorModal
+        transaction={resourceInspectorTx}
+        onClose={() => setResourceInspectorTx(null)}
+      />
+
+      <TransactionSpeedUpModal
+        stalledTx={stalledTransaction}
+        onClose={() => setStalledTransaction(null)}
+        onSuccess={(newTxHash) => {
+          setStalledTransaction(null);
+          setTxState((prev) => ({ ...prev, stage: 'success', txHash: newTxHash }));
+        }}
       />
 
       {/* Project Review Modal (#312) */}

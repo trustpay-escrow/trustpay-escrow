@@ -7,6 +7,7 @@ import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { NetworkMismatchBanner } from '@/components/NetworkMismatchBanner';
 import { CommandPalette } from '@/components/CommandPalette';
 import { PerformanceTelemetryButton } from '@/components/PerformanceTelemetryModal';
+import { LiveAnnouncerProvider } from '@/components/a11y/LiveAnnouncer';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -93,6 +94,12 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col pb-16 md:pb-0" suppressHydrationWarning>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-lg focus:bg-blue-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
+        >
+          Skip to main content
+        </a>
         <ThemeProvider
           attribute="data-theme"
           defaultTheme="system"
@@ -100,12 +107,14 @@ export default function RootLayout({
           themes={['light', 'dark', 'oled', 'system']}
           storageKey="theme"
         >
-          <NetworkMismatchBanner />
-          {children}
-          <MobileBottomNav />
-          <Toaster />
-          <CommandPalette />
-          <PerformanceTelemetryButton />
+          <LiveAnnouncerProvider>
+            <NetworkMismatchBanner />
+            {children}
+            <MobileBottomNav />
+            <Toaster />
+            <CommandPalette />
+            <PerformanceTelemetryButton />
+          </LiveAnnouncerProvider>
         </ThemeProvider>
       </body>
     </html>

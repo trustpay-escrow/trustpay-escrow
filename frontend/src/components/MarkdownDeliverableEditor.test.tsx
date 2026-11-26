@@ -51,7 +51,7 @@ describe('MarkdownDeliverableEditor', () => {
     render(<MarkdownDeliverableEditor value="hello world" onChange={mockOnChange} />);
 
     // Focus and select "world"
-    const textarea = screen.getByTestId('markdown-editor');
+    const textarea = screen.getByTestId('markdown-editor') as HTMLTextAreaElement;
     fireEvent.click(textarea);
     fireEvent.change(textarea, { target: { value: 'hello world', selectionStart: 6, selectionEnd: 11 } });
     textarea.setSelectionRange(6, 11);
@@ -62,7 +62,7 @@ describe('MarkdownDeliverableEditor', () => {
   });
 
   it('applies bullet list formatting', () => {
-    render(<MarkdownDeliverableEditor value="item 1\nitem 2" onChange={mockOnChange} />);
+    render(<MarkdownDeliverableEditor value={'item 1\nitem 2'} onChange={mockOnChange} />);
 
     fireEvent.click(screen.getByTestId('markdown-list'));
 
@@ -96,13 +96,16 @@ describe('MarkdownDeliverableEditor', () => {
 
     // Mock FileReader
     const originalFileReader = global.FileReader;
-    global.FileReader = vi.fn().mockImplementation(() => ({
-      readAsDataURL: function(this: any, file: File) {
+    class MockFileReader {
+      result = 'data:image/png;base64,TEST_BASE64';
+      onload: ((ev: any) => void) | null = null;
+      readAsDataURL() {
         setTimeout(() => {
-          this.onload({ target: { result: 'data:image/png;base64,TEST_BASE64' } });
+          this.onload?.({ target: { result: this.result } });
         }, 0);
-      },
-    })) as any;
+      }
+    }
+    global.FileReader = MockFileReader as any;
 
     const fileInput = screen.getByTestId('markdown-image-input');
     fireEvent.change(fileInput, { target: { files: [mockFile] } });

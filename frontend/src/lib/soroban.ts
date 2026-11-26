@@ -1417,24 +1417,16 @@ export async function buildFeeBumpTransaction(params: {
   }
 
   // Minimum fee bump: new fee must be at least 1.1x the inner fee
-  const minFee = Math.ceil(Number(innerFee) * 1.1);
+  const minFee = Math.round(Number(innerFee) * 1.1);
   if (newFee < minFee) newFee = minFee;
 
   // Build FeeBumpTransaction
-  // The feeSource must be a valid Stellar account (G... address)
-  const feeSource = new Account(feeSourceAddress, '0');
-  const feeBumpTx = new TransactionBuilder(feeSource, {
-    fee: String(newFee),
-    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
-  })
-    .addOperation(
-      Operation.feeBump({
-        innerTx: innerTxXdr,
-        feeSource: feeSourceAddress,
-      })
-    )
-    .setTimeout(180)
-    .build();
+  const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
+    feeSourceAddress,
+    String(newFee),
+    innerTx as any,
+    STELLAR_NETWORK_PASSPHRASE
+  );
 
   return {
     feeBumpTxXdr: feeBumpTx.toXDR(),
@@ -1719,4 +1711,166 @@ export async function simulateSorobanTransaction(options: {
       error: error?.message ?? String(error),
     };
   }
+}
+
+/**
+ * Claims accumulated arbitration fees for the connected arbiter address.
+ */
+export async function claimArbiterFeesOnChain(params: {
+  arbiterAddress: string;
+  contractAddress?: string;
+  onStatusUpdate?: TxStatusCallback;
+}): Promise<SorobanTxResult> {
+  const { arbiterAddress, contractAddress, onStatusUpdate } = params;
+
+  return invokeSorobanMethod({
+    callerAddress: arbiterAddress,
+    contractAddress,
+    functionName: 'claim_arbiter_fees',
+    args: [Address.fromString(arbiterAddress).toScVal()],
+    onStatusUpdate,
+  });
+}
+
+/**
+ * Builds a SEP-0007 web+stellar:tx URI for QR signing with mobile wallets.
+ */
+export function buildSep07Uri(
+  txXdr: string,
+  networkPassphrase: string = STELLAR_NETWORK_PASSPHRASE
+): string {
+  const params = new URLSearchParams({
+    xdr: txXdr,
+    network_passphrase: networkPassphrase,
+  });
+  return `web+stellar:tx?${params.toString()}`;
+}
+
+/**
+ * Prepares and simulates an unsigned Soroban contract invocation for SEP-0007 mobile QR signing.
+ */
+export async function prepareSep07Transaction(options: {
+  callerAddress: string;
+  contractAddress?: string;
+  functionName: string;
+  args: xdr.ScVal[];
+  baseFee?: number | string;
+}): Promise<{ txXdr: string; sourceAccount: string; functionName: string }> {
+  const { callerAddress, functionName, args } = options;
+  const targetContract = options.contractAddress || DEFAULT_ESCROW_CONTRACT_ID;
+  const inclusionFee = String(options.baseFee ?? getSorobanBaseFee() ?? DEFAULT_SOROBAN_BASE_FEE);
+
+  await ensureAccountExists(callerAddress);
+  const server = getSorobanRpcServer();
+  const sourceAccount = await server.getAccount(callerAddress);
+
+  const baseTx = new TransactionBuilder(sourceAccount, {
+    fee: inclusionFee,
+    networkPassphrase: STELLAR_NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: targetContract,
+        function: functionName,
+        args,
+      })
+    )
+    .setTimeout(300)
+    .build();
+
+  const preparedTx = await server.prepareTransaction(baseTx);
+  return {
+    txXdr: preparedTx.toXDR(),
+    sourceAccount: callerAddress,
+    functionName,
+  };
+}
+
+/**
+ * Polls Horizon for a newly submitted transaction from `sourceAccount` created after `since`.
+ */
+export async function pollSep07Submission(
+  sourceAccount: string,
+  since: Date,
+  timeoutMs: number = 60_000
+): Promise<{ txHash: string }> {
+  const deadline = Date.now() + timeoutMs;
+  const sinceMs = since.getTime() - 2_000;
+
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(
+        `${HORIZON_URL}/accounts/${encodeURIComponent(sourceAccount)}/transactions?order=desc&limit=5`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const records: any[] = data?._embedded?.records || [];
+        const match = records.find((rec) => {
+          const createdMs = rec?.created_at ? new Date(rec.created_at).getTime() : 0;
+          return createdMs >= sinceMs && rec?.hash;
+        });
+        if (match?.hash) {
+          return { txHash: match.hash };
+        }
+      }
+    } catch {
+      // Transient Horizon poll errors should keep polling until timeout.
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+
+  throw new Error('Timed out waiting for mobile wallet transaction submission.');
+}
+
+/**
+ * Polls Soroban RPC until a transaction is confirmed on ledger.
+ */
+export async function confirmSorobanTransaction(
+  txHash: string,
+  maxAttempts: number = 15
+): Promise<boolean> {
+  const server = getSorobanRpcServer();
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const status = await server.getTransaction(txHash);
+      if (status.status === 'SUCCESS') return true;
+      if (status.status === 'FAILED') return false;
+    } catch {
+      // Retry on transient RPC errors.
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return false;
+}
+
+/**
+ * Fetches recent Soroban contract events for a contract within a ledger lookback window.
+ */
+export async function fetchContractEvents(options: {
+  contractId?: string;
+  ledgerWindow?: number;
+  limit?: number;
+} = {}): Promise<any[]> {
+  const {
+    contractId = DEFAULT_ESCROW_CONTRACT_ID,
+    ledgerWindow = 300,
+    limit = 100,
+  } = options;
+
+  const server = getSorobanRpcServer();
+  const latest = await server.getLatestLedger();
+  const startLedger = Math.max(1, Number(latest.sequence) - ledgerWindow);
+
+  const res = await server.getEvents({
+    startLedger,
+    filters: [
+      {
+        type: 'contract',
+        contractIds: [contractId],
+      },
+    ],
+    limit,
+  });
+
+  return Array.isArray(res?.events) ? res.events : [];
 }

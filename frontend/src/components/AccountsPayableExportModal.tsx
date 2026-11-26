@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { AccessibleModal } from '@/components/a11y/AccessibleModal';
 import { Project } from '@/types';
 import {
   buildPayableRows,
@@ -29,14 +30,15 @@ function todayStr(): string {
 export function AccountsPayableExportModal({ isOpen, onClose, projects }: AccountsPayableExportModalProps) {
   const [startDate, setStartDate] = useState(firstOfMonth());
   const [endDate, setEndDate] = useState(todayStr());
+  const titleId = useId();
+  const fromDateId = useId();
+  const toDateId = useId();
 
   const rows = useMemo(
     () => buildPayableRows(projects, startDate || undefined, endDate || undefined),
     [projects, startDate, endDate]
   );
   const totals = useMemo(() => summarizePayableRows(rows), [rows]);
-
-  if (!isOpen) return null;
 
   const stamp = `${startDate || 'start'}_to_${endDate || 'today'}`;
 
@@ -59,37 +61,44 @@ export function AccountsPayableExportModal({ isOpen, onClose, projects }: Accoun
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-3xl w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Accounts Payable</span>
-          <h3 className="text-xl font-bold text-white mt-1">Enterprise Contractor Disbursement Export</h3>
-          <p className="text-xs text-slate-400 mt-1">
-            Batch milestone payouts across {projects.length} project(s) into a GAAP/IFRS-ready AP schedule with on-chain tx hashes for audit compliance.
-          </p>
-        </div>
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy={titleId}
+      backdropClassName="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+      dialogClassName="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-3xl w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto"
+    >
+      <div>
+        <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Accounts Payable</span>
+        <h3 id={titleId} className="text-xl font-bold text-white mt-1">Enterprise Contractor Disbursement Export</h3>
+        <p className="text-xs text-slate-400 mt-1">
+          Batch milestone payouts across {projects.length} project(s) into a GAAP/IFRS-ready AP schedule with on-chain tx hashes for audit compliance.
+        </p>
+      </div>
 
-        {/* Date range */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div>
-            <label className="block text-slate-300 font-semibold mb-1.5">From Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-slate-300 font-semibold mb-1.5">To Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
-            />
-          </div>
+      {/* Date range */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+        <div>
+          <label htmlFor={fromDateId} className="block text-slate-300 font-semibold mb-1.5">From Date</label>
+          <input
+            id={fromDateId}
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+          />
         </div>
+        <div>
+          <label htmlFor={toDateId} className="block text-slate-300 font-semibold mb-1.5">To Date</label>
+          <input
+            id={toDateId}
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+      </div>
 
         {/* Totals */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -177,7 +186,6 @@ export function AccountsPayableExportModal({ isOpen, onClose, projects }: Accoun
             Export CSV
           </Button>
         </div>
-      </div>
-    </div>
+    </AccessibleModal>
   );
 }

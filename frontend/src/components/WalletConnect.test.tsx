@@ -60,7 +60,7 @@ describe('WalletConnect Component', () => {
     vi.mocked(freighterApi.isConnected).mockResolvedValue(true as any);
     vi.mocked(freighterApi.getNetworkDetails).mockResolvedValue({ network: 'TESTNET' } as any);
     vi.mocked(freighterApi.setAllowed).mockResolvedValue(true as any);
-    vi.mocked(freighterApi.requestAccess).mockImplementation(() => accessPromise);
+    vi.mocked(freighterApi.requestAccess).mockImplementation(() => accessPromise as any);
 
     render(<WalletConnect />);
     const button = screen.getByTestId('connect-freighter-button');

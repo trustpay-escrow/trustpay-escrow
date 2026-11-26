@@ -28,6 +28,7 @@ export function ProjectFilterBar({
         onChange={onSearchChange}
       />
       <select
+        aria-label="Filter projects by category"
         value={selectedCategory}
         onChange={(e) => onCategoryChange(e.target.value)}
         className="w-full sm:w-auto px-3 py-1.5 bg-[#232326] border border-[#333338] rounded-xl text-white text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"

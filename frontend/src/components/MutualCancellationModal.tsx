@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { CurrencyAmountInput } from '@/components/CurrencyAmountInput';
+import { AccessibleModal } from '@/components/a11y/AccessibleModal';
+import { announcePolite } from '@/components/a11y/LiveAnnouncer';
 import { Project } from '@/types';
 import { useWalletStore } from '@/store/walletStore';
 import { authFetch } from '@/lib/api';
@@ -47,6 +48,9 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
     message: '',
   });
   const [executing, setExecuting] = useState(false);
+  const titleId = useId();
+  const refundInputId = useId();
+  const compInputId = useId();
 
   const tokenSymbol = project.token || 'USDC';
 
@@ -124,11 +128,13 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
       proposedBy: address,
       proposedAt: Date.now(),
     });
+    announcePolite('Settlement proposal created and awaiting counterparty acceptance.');
     toast.success('Settlement proposal created — awaiting counterparty acceptance.');
   };
 
   const handleReject = () => {
     persistProposal(null);
+    announcePolite('Settlement proposal rejected.');
     toast.info('Settlement proposal rejected.');
   };
 
@@ -152,7 +158,10 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
         clientRefundAmount: proposal.clientRefund,
         freelancerCompensation: proposal.freelancerComp,
         contractAddress: project.contract_id || DEFAULT_ESCROW_CONTRACT_ID,
-        onStatusUpdate: (stage, message) => setTxState((prev) => ({ ...prev, stage, message })),
+        onStatusUpdate: (stage, message) => {
+          setTxState((prev) => ({ ...prev, stage, message }));
+          announcePolite(message);
+        },
       });
 
       setTxState((prev) => ({
@@ -187,16 +196,21 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
   const isOwnProposal = Boolean(proposal && address && proposal.proposedBy.toUpperCase() === address.toUpperCase());
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Amicable Exit</span>
-          <h3 className="text-xl font-bold text-white mt-1">Mutual Cancellation & Refund Split</h3>
-          <p className="text-xs text-slate-400 mt-1">
-            Settle remaining locked escrow without arbitration. Both parties must agree before{' '}
-            <code className="text-amber-300">mutual_cancel</code> executes on-chain.
-          </p>
-        </div>
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={executing ? undefined : onClose}
+      ariaLabelledBy={titleId}
+      backdropClassName="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+      dialogClassName="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto"
+    >
+      <div>
+        <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Amicable Exit</span>
+        <h3 id={titleId} className="text-xl font-bold text-white mt-1">Mutual Cancellation & Refund Split</h3>
+        <p className="text-xs text-slate-400 mt-1">
+          Settle remaining locked escrow without arbitration. Both parties must agree before{' '}
+          <code className="text-amber-300">mutual_cancel</code> executes on-chain.
+        </p>
+      </div>
 
         {/* Remaining escrow breakdown */}
         <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1.5 text-xs">
@@ -218,29 +232,31 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
         {!proposal ? (
           <div className="space-y-4 text-xs">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1.5">
+              <label htmlFor={refundInputId} className="block text-slate-300 font-semibold mb-1.5">
                 Refund to Client ({tokenSymbol})
               </label>
-              <CurrencyAmountInput
-                token={tokenSymbol}
+              <input
+                id={refundInputId}
+                type="number"
                 min={0}
                 value={refundInput}
-                onValueChange={setRefundInput}
+                onChange={(e) => setRefundInput(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Amount returned to client"
-                inputClassName="w-full bg-slate-950 border border-slate-800 rounded-xl pr-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="block text-slate-300 font-semibold mb-1.5">
+              <label htmlFor={compInputId} className="block text-slate-300 font-semibold mb-1.5">
                 Compensate Freelancer ({tokenSymbol})
               </label>
-              <CurrencyAmountInput
-                token={tokenSymbol}
+              <input
+                id={compInputId}
+                type="number"
                 min={0}
                 value={compInput}
-                onValueChange={setCompInput}
+                onChange={(e) => setCompInput(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Amount paid to freelancer"
-                inputClassName="w-full bg-slate-950 border border-slate-800 rounded-xl pr-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500"
               />
             </div>
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
@@ -340,12 +356,14 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
         </div>
 
         {/* Tx progress */}
-        {executing && (
-          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
-            <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-            <span className="capitalize">{txState.stage}: {txState.message || txState.error}</span>
-          </div>
-        )}
+        <div role="status" aria-live="polite" aria-atomic="true">
+          {executing && (
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
+              <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+              <span className="capitalize">{txState.stage}: {txState.message || txState.error}</span>
+            </div>
+          )}
+        </div>
         {txState.stage === 'success' && txState.txHash && (
           <a
             href={getStellarExplorerUrl(txState.txHash, 'tx')}
@@ -356,7 +374,6 @@ export function MutualCancellationModal({ isOpen, onClose, project, onUpdated }:
             View transaction on Stellar.Expert ↗
           </a>
         )}
-      </div>
-    </div>
+    </AccessibleModal>
   );
 }

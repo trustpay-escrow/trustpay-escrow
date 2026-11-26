@@ -86,13 +86,13 @@ export interface CurrencyState {
   setConnected: (connected: boolean) => void;
   setError: (error: string | null) => void;
   // Conversion helpers
-  convertCryptoToFiat: (amount: number, crypto: CryptoCurrency) => number;
+  convertCryptoToFiat: (amount: number, crypto: CryptoCurrency, fiat?: FiatCurrency) => number;
   convertCryptoToDisplayCurrency: (amount: number, crypto: CryptoCurrency) => number;
   formatFiat: (amount: number, currency?: FiatCurrency) => string;
   getRate: (crypto: CryptoCurrency, fiat: FiatCurrency) => number | null;
 }
 
-const FALLBACK_RATES: Record<CryptoCurrency, Record<FiatCurrency, number>> = {
+export const FALLBACK_RATES: Record<CryptoCurrency, Record<FiatCurrency, number>> = {
   USDC: {
     USD: 1.0, EUR: 0.92, GBP: 0.79, JPY: 150.0, CAD: 1.36, AUD: 1.52,
     CHF: 0.88, CNY: 7.25, INR: 83.1, BRL: 4.95, MXN: 17.1, NGN: 1550.0,
@@ -115,7 +115,7 @@ const FALLBACK_RATES: Record<CryptoCurrency, Record<FiatCurrency, number>> = {
   },
 };
 
-function createInitialRates(): Record<CryptoCurrency, Record<FiatCurrency, FXRate>> {
+export function createInitialRates(): Record<CryptoCurrency, Record<FiatCurrency, FXRate>> {
   const result = {} as Record<CryptoCurrency, Record<FiatCurrency, FXRate>>;
   for (const crypto of CRYPTO_CURRENCIES) {
     result[crypto] = {} as Record<FiatCurrency, FXRate>;
@@ -172,13 +172,13 @@ export const useCurrencyStore = create<CurrencyState>()(
 
       convertCryptoToFiat: (amount: number, crypto: CryptoCurrency, fiat?: FiatCurrency) => {
         const targetFiat = fiat || get().displayCurrency;
-        const rate = get().fxRates[crypto]?.[targetFiat]?.rate ?? FALLBACK_RATES[crypto][targetFiat];
+        const rate = get().fxRates[crypto]?.[targetFiat]?.rate ?? FALLBACK_RATES[crypto]?.[targetFiat] ?? 0;
         return amount * rate;
       },
 
       convertCryptoToDisplayCurrency: (amount: number, crypto: CryptoCurrency) => {
         const { displayCurrency, fxRates } = get();
-        const rate = fxRates[crypto]?.[displayCurrency]?.rate ?? FALLBACK_RATES[crypto][displayCurrency];
+        const rate = fxRates[crypto]?.[displayCurrency]?.rate ?? FALLBACK_RATES[crypto]?.[displayCurrency] ?? 0;
         return amount * rate;
       },
 
@@ -189,7 +189,7 @@ export const useCurrencyStore = create<CurrencyState>()(
       },
 
       getRate: (crypto: CryptoCurrency, fiat: FiatCurrency) => {
-        return get().fxRates[crypto]?.[fiat]?.rate ?? FALLBACK_RATES[crypto][fiat] ?? null;
+        return get().fxRates[crypto]?.[fiat]?.rate ?? FALLBACK_RATES[crypto]?.[fiat] ?? null;
       },
     }),
     {

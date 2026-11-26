@@ -2,10 +2,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { soundSynthesizer, type SoundType } from '@/lib/sound-effects';
-
-const STORAGE_KEY_MUTE = 'notification_sounds_muted';
-const STORAGE_KEY_VOLUME = 'notification_sounds_volume';
+import { soundSynthesizer, SOUND_MUTE_KEY, SOUND_VOLUME_KEY, type SoundType } from '@/lib/sound-effects';
 
 export function useNotificationSounds() {
   const [isMuted, setIsMuted] = useState(false);
@@ -14,8 +11,8 @@ export function useNotificationSounds() {
 
   // Initialize from localStorage on mount
   useEffect(() => {
-    const savedMute = localStorage.getItem(STORAGE_KEY_MUTE) === 'true';
-    const savedVolume = localStorage.getItem(STORAGE_KEY_VOLUME);
+    const savedMute = localStorage.getItem(SOUND_MUTE_KEY) === 'true';
+    const savedVolume = localStorage.getItem(SOUND_VOLUME_KEY);
 
     setIsMuted(savedMute);
     if (savedVolume) {
@@ -36,12 +33,12 @@ export function useNotificationSounds() {
 
   // Persist mute state
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_MUTE, String(isMuted));
+    localStorage.setItem(SOUND_MUTE_KEY, String(isMuted));
   }, [isMuted]);
 
   // Persist volume
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_VOLUME, String(volume));
+    localStorage.setItem(SOUND_VOLUME_KEY, String(volume));
   }, [volume]);
 
   /**

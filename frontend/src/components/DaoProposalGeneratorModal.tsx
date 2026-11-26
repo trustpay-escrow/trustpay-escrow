@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { DaoProposalInput } from '@/types';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useRovingTabIndex } from '@/hooks/useRovingTabIndex';
 import {
   buildDaoCalldataJson,
   buildDaoInvocation,
@@ -45,14 +47,23 @@ function DaoProposalDialog({ onClose, defaults }: Omit<DaoProposalGeneratorModal
   const [arbiterAddress, setArbiterAddress] = useState(defaults.arbiterAddress ?? '');
   const [votingPeriodDays, setVotingPeriodDays] = useState(defaults.votingPeriodDays ?? 7);
   const [tab, setTab] = useState<OutputTab>('markdown');
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useFocusTrap(dialogRef, {
+    isOpen: true,
+    onClose,
+  });
+
+  const outputTabs: Array<[OutputTab, string]> = [
+    ['markdown', 'Forum markdown'],
+    ['calldata', 'Soroban calldata'],
+  ];
+  const { getItemProps: getTabProps } = useRovingTabIndex({
+    count: outputTabs.length,
+    activeIndex: tab === 'markdown' ? 0 : 1,
+    onSelect: (index) => setTab(outputTabs[index][0]),
+    orientation: 'horizontal',
+  });
 
   const input: DaoProposalInput = useMemo(
     () => ({
@@ -114,10 +125,12 @@ function DaoProposalDialog({ onClose, defaults }: Omit<DaoProposalGeneratorModal
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="DAO proposal generator"
-        className="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+        tabIndex={-1}
+        className="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 sm:p-5 border-b border-[#27272a] bg-[#1c1c20] flex items-start justify-between gap-4">
@@ -217,25 +230,26 @@ function DaoProposalDialog({ onClose, defaults }: Omit<DaoProposalGeneratorModal
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div role="tablist" aria-label="Proposal output" className="inline-flex rounded-lg border border-[#27272a] overflow-hidden">
-                  {(
-                    [
-                      ['markdown', 'Forum markdown'],
-                      ['calldata', 'Soroban calldata'],
-                    ] as Array<[OutputTab, string]>
-                  ).map(([id, label]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      role="tab"
-                      aria-selected={tab === id}
-                      onClick={() => setTab(id)}
-                      className={`px-3 py-1.5 text-xs font-semibold ${
-                        tab === id ? 'bg-blue-600 text-white' : 'bg-[#18181b] text-[#a1a1aa] hover:text-white'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  {outputTabs.map(([id, label], index) => {
+                    const tabProps = getTabProps(index);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === id}
+                        ref={tabProps.ref}
+                        tabIndex={tabProps.tabIndex}
+                        onKeyDown={tabProps.onKeyDown}
+                        onClick={() => setTab(id)}
+                        className={`px-3 py-1.5 text-xs font-semibold ${
+                          tab === id ? 'bg-blue-600 text-white' : 'bg-[#18181b] text-[#a1a1aa] hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
                 <div className="flex gap-2">
                   <button

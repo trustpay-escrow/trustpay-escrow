@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Milestone, Project, Proposal } from '@/types';
 import {
@@ -9,7 +9,7 @@ import {
   calculateReceiptTotals,
 } from '@/lib/receipt-generator';
 import { getStellarExplorerUrl } from '@/lib/soroban';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { AccessibleModal } from '@/components/a11y/AccessibleModal';
 
 export interface DownloadReceiptButtonProps {
   project: Project;
@@ -33,8 +33,7 @@ export function DownloadReceiptButton({
   const [businessName, setBusinessName] = useState('TrustPay Escrow');
   const [notes, setNotes] = useState('');
   const [vatRate, setVatRate] = useState('0');
-
-  useEscapeKey(() => setIsOpen(false), isOpen);
+  const titleId = useId();
 
   const resolvedMilestone =
     milestone || project.milestones?.find((item) => item.status === 'approved') || project.milestones?.[0];
@@ -106,21 +105,19 @@ export function DownloadReceiptButton({
         {label}
       </button>
 
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-md"
-          onClick={() => setIsOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div>
-              <h3 className="text-lg font-bold text-white">Customize settlement receipt</h3>
-              <p className="mt-1 text-xs text-slate-400">
-                {project.title} — {resolvedMilestone?.title || 'Milestone Settlement'}
-              </p>
-            </div>
+      <AccessibleModal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        ariaLabelledBy={titleId}
+        backdropClassName="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-md"
+        dialogClassName="w-full max-w-lg space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl sm:p-6"
+      >
+        <div>
+          <h3 id={titleId} className="text-lg font-bold text-white">Customize settlement receipt</h3>
+          <p className="mt-1 text-xs text-slate-400">
+            {project.title} — {resolvedMilestone?.title || 'Milestone Settlement'}
+          </p>
+        </div>
 
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-slate-300" htmlFor="receipt-business-name">
@@ -198,9 +195,7 @@ export function DownloadReceiptButton({
                 {isGenerating ? 'Generating...' : 'Generate & Download'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </AccessibleModal>
     </>
   );
 }

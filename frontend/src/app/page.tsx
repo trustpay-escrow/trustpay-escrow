@@ -1,6 +1,6 @@
-import Accordion from '@/components/Accordion';
 'use client';
 
+import Accordion from '@/components/Accordion';
 import React, { useState } from 'react';
 import WalletConnect from "@/components/WalletConnect";
 import Header from "@/components/Header";
@@ -97,15 +97,16 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans relative overflow-x-hidden flex flex-col justify-between selection:bg-blue-500/30 selection:text-white">
+    <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] font-sans relative overflow-x-hidden flex flex-col justify-between selection:bg-blue-500/30 selection:text-white">
       {/* Background Ambient Glows */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-to-b from-blue-600/15 via-indigo-600/10 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute top-[40%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-[10%] left-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-to-b from-blue-600/15 via-indigo-600/10 to-transparent rounded-full blur-3xl pointer-events-none" aria-hidden="true"></div>
+      <div className="absolute top-[40%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-3xl pointer-events-none" aria-hidden="true"></div>
+      <div className="absolute bottom-[10%] left-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" aria-hidden="true"></div>
 
       {/* Navigation Header */}
       <Header />
 
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col">
       {/* Hero Section */}
       <section className="relative z-10 max-w-5xl mx-auto px-6 pt-16 pb-20 text-center flex flex-col items-center">
         
@@ -267,7 +268,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
             <div className="bg-[#18181b]/80 border border-[#27272a] rounded-3xl p-8 space-y-4 hover:border-[#3f3f46] transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center text-2xl font-bold">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center text-2xl font-bold" aria-hidden="true">
                 ⚡
               </div>
               <h3 className="text-lg font-bold text-white">Soroban Escrow Contracts</h3>
@@ -277,7 +278,7 @@ export default function Home() {
             </div>
 
             <div className="bg-[#18181b]/80 border border-[#27272a] rounded-3xl p-8 space-y-4 hover:border-[#3f3f46] transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center text-2xl font-bold">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center text-2xl font-bold" aria-hidden="true">
                 🆔
               </div>
               <h3 className="text-lg font-bold text-white">Unified Wallet Identity</h3>
@@ -287,7 +288,7 @@ export default function Home() {
             </div>
 
             <div className="bg-[#18181b]/80 border border-[#27272a] rounded-3xl p-8 space-y-4 hover:border-[#3f3f46] transition-all">
-              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-2xl font-bold">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-2xl font-bold" aria-hidden="true">
                 🛡️
               </div>
               <h3 className="text-lg font-bold text-white">Decentralized Arbiter Protection</h3>
@@ -322,8 +323,12 @@ export default function Home() {
               >
                 <div className="space-y-4">
                   {/* Star Rating */}
-                  <div className="flex items-center space-x-1 text-amber-400 text-sm">
-                    {"★".repeat(item.rating)}
+                  <div
+                    className="flex items-center space-x-1 text-amber-400 text-sm"
+                    role="img"
+                    aria-label={`${item.rating} out of 5 stars`}
+                  >
+                    <span aria-hidden="true">{"★".repeat(item.rating)}</span>
                   </div>
                   {/* Quote Content */}
                   <p className="text-xs sm:text-sm text-[#d4d4d8] leading-relaxed italic">
@@ -369,6 +374,7 @@ export default function Home() {
           />
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="w-full border-t border-[#27272a]/60 py-8 text-xs text-[#71717a] bg-[#09090b]">
@@ -427,7 +433,7 @@ export default function Home() {
           </div>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
 

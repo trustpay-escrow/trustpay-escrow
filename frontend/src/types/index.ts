@@ -26,6 +26,7 @@ export interface Milestone {
   deliverable_url?: string;
   deliverable_notes?: string;
   deliverable_type?: string;
+  tx_hash?: string;
   revision_count?: number;
 }
 
@@ -188,6 +189,31 @@ export interface StarredFreelancer {
   lastProjectTitle?: string;
 }
 
+/** One payout tranche in a DAO escrow proposal. */
+export interface DaoProposalMilestone {
+  title: string;
+  amount: number;
+  due_date?: string;
+}
+
+/** Escrow terms plus governance settings used to generate a DAO proposal. */
+export interface DaoProposalInput {
+  proposalTitle: string;
+  projectTitle: string;
+  description: string;
+  category?: string;
+  token: string;
+  tokenAddress: string;
+  /** DAO treasury account that funds and authorises the escrow (the contract's `client`). */
+  treasuryAddress: string;
+  freelancerAddress?: string;
+  arbiterAddress?: string;
+  milestones: DaoProposalMilestone[];
+  yieldEnabled: boolean;
+  deadline?: string;
+  votingPeriodDays: number;
+}
+
 /** Assets with a Blend lending pool backing escrow yield (#118). */
 export type BlendPoolAsset = 'USDC' | 'XLM';
 
@@ -219,29 +245,4 @@ export interface BlendYieldSummary {
   clientShare: number;
   /** Interest retained by the platform under the yield split. */
   platformShare: number;
-}
-
-/** One payout tranche in a DAO escrow proposal. */
-export interface DaoProposalMilestone {
-  title: string;
-  amount: number;
-  due_date?: string;
-}
-
-/** Escrow terms plus governance settings used to generate a DAO proposal. */
-export interface DaoProposalInput {
-  proposalTitle: string;
-  projectTitle: string;
-  description: string;
-  category?: string;
-  token: string;
-  tokenAddress: string;
-  /** DAO treasury account that funds and authorises the escrow (the contract's `client`). */
-  treasuryAddress: string;
-  freelancerAddress?: string;
-  arbiterAddress?: string;
-  milestones: DaoProposalMilestone[];
-  yieldEnabled: boolean;
-  deadline?: string;
-  votingPeriodDays: number;
 }

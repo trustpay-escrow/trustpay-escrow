@@ -1,7 +1,8 @@
 export type TokenNetwork = 'TESTNET' | 'PUBLIC';
+export type CryptoCurrency = 'USDC' | 'EURC' | 'XLM' | 'PYUSD';
 
 export interface TokenConfig {
-  symbol: 'USDC' | 'EURC' | 'XLM' | 'PYUSD';
+  symbol: CryptoCurrency;
   name: string;
   issuerOrContractAddress: string;
   icon: string;

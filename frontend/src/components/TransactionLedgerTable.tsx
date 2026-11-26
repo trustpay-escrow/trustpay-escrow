@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { AddressBadge } from './AddressBadge';
 import { TransactionActivity, TransactionOperationType } from '@/types';
 
 export interface TransactionLedgerTableProps {
@@ -66,7 +67,6 @@ export function TransactionLedgerTable({
   className = '',
 }: TransactionLedgerTableProps) {
   const [filterType, setFilterType] = useState<string>('All');
-  const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
   const filterOptions: ('All' | TransactionOperationType)[] = [
@@ -87,18 +87,6 @@ export function TransactionLedgerTable({
     const start = (currentPage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, currentPage, pageSize]);
-
-  const handleCopy = async (hash: string) => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(hash);
-      }
-      setCopiedHash(hash);
-      setTimeout(() => setCopiedHash(null), 2000);
-    } catch {
-      // noop
-    }
-  };
 
   const getStellarExpertUrl = (hash: string) => {
     const network = isTestnet ? 'testnet' : 'public';
@@ -195,13 +183,7 @@ export function TransactionLedgerTable({
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-slate-300">{formatShortHash(tx.hash)}</span>
-                      <button
-                        onClick={() => handleCopy(tx.hash)}
-                        className="text-xs text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 transition"
-                        title="Copy Transaction Hash"
-                      >
-                        {copiedHash === tx.hash ? 'Copied!' : 'Copy'}
-                      </button>
+                      <AddressBadge value={tx.hash} label="Copy Transaction Hash" />
                       <a
                         href={getStellarExpertUrl(tx.hash)}
                         target="_blank"

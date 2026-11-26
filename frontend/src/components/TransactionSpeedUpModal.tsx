@@ -87,7 +87,7 @@ export function TransactionSpeedUpModal({
         feeBumpTxXdr: result.feeBumpTxXdr,
         feeSourceAddress: address,
         onStatusUpdate: (stage, message) => {
-          setTxStage(stage);
+          setTxStage(stage === 'preparing' || stage === 'simulating' ? 'building' : stage);
           setTxMessage(message);
         },
       });
@@ -116,7 +116,12 @@ export function TransactionSpeedUpModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-[#18181d] border border-[#27272a] rounded-2xl shadow-2xl overflow-hidden animate-slide-up">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Speed Up Transaction"
+        className="w-full max-w-md bg-[#18181d] border border-[#27272a] rounded-2xl shadow-2xl overflow-hidden animate-slide-up"
+      >
         {/* Header */}
         <div className="p-4 border-b border-[#27272a] flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -208,7 +213,7 @@ export function TransactionSpeedUpModal({
               disabled={!address}
               className="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm transition-colors shadow-lg shadow-rose-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ⚡ Speed Up Transaction ({selectedMultiplier}x fee)
+              Speed Up Transaction ({selectedMultiplier}x fee)
             </button>
           )}
 
@@ -249,7 +254,7 @@ export function TransactionSpeedUpModal({
           {txStage === 'error' && (
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm">
-                {error}
+                {txMessage || error}
               </div>
               <div className="flex gap-2">
                 <button

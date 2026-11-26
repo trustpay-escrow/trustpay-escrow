@@ -257,10 +257,11 @@ export async function syncEventToDatabase(event: ParsedEvent): Promise<boolean> 
             await createNotification({
               recipient_address: freelancer.stellar_address,
               project_id: project.id,
-              type: 'milestone_approved',
-              title: isAutoRelease ? 'Milestone Auto-Released! ⚡💰' : 'Milestone Approved! 💰',
+              type: allApproved ? 'escrow_final_release' : 'milestone_approved',
+              title: allApproved ? 'Final Escrow Payout Received'
+                : isAutoRelease ? 'Milestone Auto-Released! ⚡💰' : 'Milestone Approved! 💰',
               message: `Milestone #${milestoneIndex + 1} for '${project.title}' was approved on-chain and funds released.`,
-              link: `/projects?id=${project.id}`,
+              link: `/projects/${project.id}`,
             });
           }
         }

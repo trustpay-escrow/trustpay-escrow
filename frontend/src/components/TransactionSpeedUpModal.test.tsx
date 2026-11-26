@@ -196,7 +196,7 @@ describe('FeeBumpTransaction logic', () => {
     const innerFee = 100000;
     const multiplier = 1.05; // Too low
     let newFee = Math.ceil(innerFee * multiplier);
-    const minFee = Math.ceil(innerFee * 1.1);
+    const minFee = Math.round(innerFee * 1.1);
     if (newFee < minFee) newFee = minFee;
     expect(newFee).toBe(110000);
   });

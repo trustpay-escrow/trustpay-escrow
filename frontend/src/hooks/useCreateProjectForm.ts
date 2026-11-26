@@ -223,6 +223,8 @@ export function useCreateProjectForm() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof ProjectFormData, string>>>({});
   const [isDirty, setIsDirty] = useState(false);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const unsavedWarning = useUnsavedChangesWarning({ isDirty });
   
   const {
@@ -270,12 +272,13 @@ export function useCreateProjectForm() {
   // Load offline draft on mount if available
   useEffect(() => {
     let mounted = true;
-    loadDraft('create-project-draft').then((draft) => {
-      if (mounted && draft && draft.payload) {
+    loadDraft<any>('create-project-draft').then((draft) => {
+      const saved = draft && typeof draft === 'object' && 'payload' in draft ? draft.payload : draft;
+      if (mounted && saved && typeof saved === 'object') {
         setFormData((prev) => ({
           ...prev,
-          ...draft.payload,
-          client_address: address || draft.payload.client_address || '',
+          ...saved,
+          client_address: address || saved.client_address || '',
         }));
       }
     });
@@ -287,7 +290,8 @@ export function useCreateProjectForm() {
   // Persist draft on changes
   useEffect(() => {
     if (formData.title || formData.description || formData.budget > 0) {
-      persistDraft('create-project-draft', formData);
+      void persistDraft(formData, 'create-project-draft');
+      setDraftSavedAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }
   }, [formData, persistDraft]);
 
@@ -342,6 +346,56 @@ export function useCreateProjectForm() {
       setFormData((prev) => ({ ...prev, attachments: [...(prev.attachments || []), ...fileNames] }));
       toast.success(`${fileNames.length} file(s) attached (mock)`);
     }
+  };
+
+  const validateStep = (stepNumber: number): boolean => {
+    try {
+      if (stepNumber === 1) {
+        step1OverviewSchema.parse(formData);
+      } else if (stepNumber === 2) {
+        step2MilestonesSchema.parse(formData);
+      } else if (stepNumber === 3) {
+        step3TokenYieldSchema.parse(formData);
+      } else if (stepNumber === 4) {
+        projectSchema.parse(formData);
+      }
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Partial<Record<keyof ProjectFormData, string>> = {};
+        error.issues.forEach((err) => {
+          if (err.path[0]) {
+            newErrors[err.path[0] as keyof ProjectFormData] = err.message;
+          }
+        });
+        setErrors(newErrors);
+        const errorMessages = error.issues.map((err) => err.message).join(' • ');
+        toast.error(`Step ${stepNumber} validation failed: ${errorMessages}`);
+      }
+      return false;
+    }
+  };
+
+  const nextStep = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep((prev) => Math.min(prev + 1, 4));
+    }
+  };
+
+  const prevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  const clearDraft = () => {
+    try {
+      void removeDraft('create-project-draft');
+      setFormData({ ...defaultInitialData, client_address: address || '' });
+      setDraftSavedAt(null);
+      setErrors({});
+      setCurrentStep(1);
+      toast.info('Draft cleared');
+    } catch {}
   };
 
   const validateForm = (): boolean => {
@@ -486,6 +540,13 @@ export function useCreateProjectForm() {
     handlePathSwapComplete,
     loading,
     errors,
+    currentStep,
+    setCurrentStep,
+    nextStep,
+    prevStep,
+    validateStep,
+    draftSavedAt,
+    clearDraft,
     isOnline,
     OfflineStatusPill,
     handleChange,

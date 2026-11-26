@@ -207,6 +207,8 @@ describe('Review signature logic', () => {
       timestamp: Date.now(), // This makes it non-deterministic, but that's OK for uniqueness
     });
 
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
     const message2 = JSON.stringify({
       projectId: reviewData.projectId,
       ratings: {

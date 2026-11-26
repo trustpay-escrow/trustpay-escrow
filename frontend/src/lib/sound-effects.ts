@@ -3,6 +3,9 @@
  * Generates harmonic chimes without external audio assets
  */
 
+export const SOUND_MUTE_KEY = 'notification_sounds_muted';
+export const SOUND_VOLUME_KEY = 'notification_sounds_volume';
+
 export type SoundType = 'success' | 'alert' | 'ping';
 
 interface ChimeConfig {
@@ -65,6 +68,33 @@ export class SoundSynthesizer {
       frequencies: [523.25], // C5
       duration: 0.3,
     });
+  }
+
+  async playCopyTick(): Promise<void> {
+    try {
+      if (localStorage.getItem(SOUND_MUTE_KEY) === 'true') return;
+      const volume = Number(localStorage.getItem(SOUND_VOLUME_KEY) ?? 30);
+      if (!Number.isFinite(volume) || volume <= 0) return;
+
+      const context = this.ensureAudioContext();
+      if (context.state === 'suspended') await context.resume();
+      if (context.state !== 'running') return;
+
+      const now = context.currentTime;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.setValueAtTime(720, now);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(Math.min(volume, 100) * 0.0005, now + 0.006);
+      gain.gain.linearRampToValueAtTime(0, now + 0.055);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.onended = () => gain.disconnect();
+      oscillator.start(now);
+      oscillator.stop(now + 0.055);
+    } catch {
+      // Audio feedback is optional on browsers without a usable audio context.
+    }
   }
 
   /**

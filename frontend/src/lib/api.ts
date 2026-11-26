@@ -86,3 +86,23 @@ export async function fetchProjectAuditEvents(projectId: string): Promise<Projec
     return [];
   }
 }
+
+export interface EscrowSettlementDay {
+  date: string;
+  token: string;
+  volume: number;
+  transactions: number;
+  averageBudget: number;
+}
+
+export interface EscrowAnalytics {
+  capital: { token: string; locked: number; contracts: number }[];
+  settlements: EscrowSettlementDay[];
+}
+
+export async function fetchEscrowAnalytics(signal: AbortSignal): Promise<EscrowAnalytics> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const response = await fetch(`${apiUrl}/api/analytics`, { signal });
+  if (!response.ok) throw new Error('Could not load escrow analytics.');
+  return response.json();
+}

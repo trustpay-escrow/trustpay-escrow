@@ -1,30 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useCurrencyStore, FIAT_CURRENCIES, FALLBACK_RATES } from './currencyStore';
-
-// Mock localStorage
-const mockStorage: Record<string, string> = {};
-Object.defineProperty(window, 'localStorage', {
-  value: {
-    getItem: (key: string) => mockStorage[key] ?? null,
-    setItem: (key: string, value: string) => { mockStorage[key] = String(value); },
-    removeItem: (key: string) => { delete mockStorage[key]; },
-    clear: () => { Object.keys(mockStorage).forEach(k => delete mockStorage[k]); },
-    length: 0,
-    key: (i: number) => Object.keys(mockStorage)[i] ?? null,
-  },
-  writable: true,
-});
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useCurrencyStore, FIAT_CURRENCIES, FALLBACK_RATES, createInitialRates } from './currencyStore';
 
 describe('useCurrencyStore Zustand Store', () => {
   beforeEach(() => {
-    useCurrencyStore.getState().setError(null);
+    window.localStorage.clear();
     useCurrencyStore.setState({
       displayCurrency: 'USD',
-      fxRates: useCurrencyStore.getState().fxRates, // reset to initial
+      fxRates: createInitialRates(),
       isConnected: false,
       lastError: null,
     });
-    mockStorage['trustpay-currency-storage'] = '';
   });
 
   it('initializes with USD as default display currency', () => {
@@ -111,17 +96,18 @@ describe('useCurrencyStore Zustand Store', () => {
     const state = useCurrencyStore.getState();
     
     const newRates = [
-      { base: 'USDC', quote: 'USD', rate: 1.01, timestamp: new Date().toISOString(), source: 'live' as const },
-      { base: 'USDC', quote: 'EUR', rate: 0.93, timestamp: new Date().toISOString(), source: 'live' as const },
+      { base: 'USDC' as const, quote: 'USD' as const, rate: 1.01, timestamp: new Date().toISOString(), source: 'live' as const },
+      { base: 'USDC' as const, quote: 'EUR' as const, rate: 0.93, timestamp: new Date().toISOString(), source: 'live' as const },
     ];
     
     state.updateFXRates(newRates);
-    
-    expect(state.isConnected).toBe(true);
-    expect(state.lastError).toBeNull();
-    expect(state.fxRates.USDC.USD.rate).toBe(1.01);
-    expect(state.fxRates.USDC.USD.source).toBe('live');
-    expect(state.fxRates.USDC.EUR.rate).toBe(0.93);
+
+    const updated = useCurrencyStore.getState();
+    expect(updated.isConnected).toBe(true);
+    expect(updated.lastError).toBeNull();
+    expect(updated.fxRates.USDC.USD.rate).toBe(1.01);
+    expect(updated.fxRates.USDC.USD.source).toBe('live');
+    expect(updated.fxRates.USDC.EUR.rate).toBe(0.93);
   });
 
   it('handles conversion arithmetic with token decimals', () => {
@@ -129,7 +115,7 @@ describe('useCurrencyStore Zustand Store', () => {
     state.setDisplayCurrency('USD');
     
     // USDC has 7 decimals on Stellar - test raw amount conversion
-    const rawUSDC = 100_000_000; // 100 USDC in stroops (7 decimals)
+    const rawUSDC = 1_000_000_000; // 100 USDC in stroops (7 decimals)
     const humanUSDC = rawUSDC / 10_000_000; // 100
     
     const fiatValue = state.convertCryptoToFiat(humanUSDC, 'USDC', 'USD');
@@ -161,7 +147,8 @@ describe('useCurrencyStore Zustand Store', () => {
     expect(value).toBeCloseTo(46, 1); // 50 * 0.92
     
     // Error state preserved
-    expect(state.lastError).toBe('Network error');
-    expect(state.isConnected).toBe(false);
+    const updated = useCurrencyStore.getState();
+    expect(updated.lastError).toBe('Network error');
+    expect(updated.isConnected).toBe(false);
   });
 });

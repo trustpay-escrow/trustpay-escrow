@@ -8,10 +8,21 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className = "", variant = "default", size = "default", asChild = false, ...props }, ref) => {
-    
-    // Shadcn base tailwind classes
-    const baseStyles = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+  (
+    {
+      className = "",
+      variant = "default",
+      size = "default",
+      asChild = false,
+      type = "button",
+      ...props
+    },
+    ref
+  ) => {
+    void asChild;
+    // Shadcn base tailwind classes with WCAG 2.1 AA visible focus indicator
+    const baseStyles =
+      "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring,#3b82f6)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background,#09090b)] disabled:pointer-events-none disabled:opacity-50";
     
     const variants = {
       default: "bg-gray-900 text-gray-50 shadow hover:bg-gray-900/90 hover:shadow-[0_0_18px_rgba(59,130,246,0.20)] dark:bg-gray-50 dark:text-gray-900 dark:hover:bg-gray-50/90",
@@ -34,6 +45,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     return (
       <button
+        type={type}
         className={`${baseStyles} ${variantClass} ${sizeClass} ${className}`}
         ref={ref}
         {...props}

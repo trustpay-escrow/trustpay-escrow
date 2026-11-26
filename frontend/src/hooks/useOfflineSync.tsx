@@ -9,8 +9,21 @@ import {
   enqueueSyncRequest,
   processSyncQueue,
   getSyncQueue,
+  dequeueSyncRequest,
   OfflineDraft,
 } from '@/lib/offline-sync';
+
+export interface OfflineQueueItem {
+  id: string;
+  description: string;
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  url: string;
+  payload?: any;
+  queuedAt: string;
+  payloadSize?: number;
+  retryCount?: number;
+  tag?: string;
+}
 
 export interface UseOfflineSyncOptions {
   draftKey?: string;
@@ -32,14 +45,29 @@ export function useOfflineSync(options: UseOfflineSyncOptions = {}) {
 
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [queuedCount, setQueuedCount] = useState<number>(0);
+  const [queue, setQueue] = useState<OfflineQueueItem[]>([]);
   const isOnlineRef = useRef<boolean>(isOnline);
 
   const refreshQueueCount = useCallback(async () => {
     try {
       const q = await getSyncQueue();
       setQueuedCount(q.length);
+      setQueue(
+        q.map((item) => ({
+          id: item.id,
+          description: item.description || 'Queued submission',
+          method: item.method as any,
+          url: item.url,
+          payload: item.body,
+          queuedAt: new Date(item.timestamp).toISOString(),
+          payloadSize: item.body ? JSON.stringify(item.body).length : 0,
+          retryCount: item.retryCount || 0,
+          tag: item.url.includes('milestone') ? 'submission' : 'draft',
+        }))
+      );
     } catch {
       setQueuedCount(0);
+      setQueue([]);
     }
   }, []);
 
@@ -104,7 +132,7 @@ export function useOfflineSync(options: UseOfflineSyncOptions = {}) {
 
   // Helper to restore draft
   const loadDraft = useCallback(
-    async <T>(keyOverride?: string): Promise<T | null> => {
+    async <T,>(keyOverride?: string): Promise<T | null> => {
       const targetKey = keyOverride || draftKey;
       if (!targetKey) return null;
       const res = await getDraft<T>(targetKey);
@@ -139,10 +167,48 @@ export function useOfflineSync(options: UseOfflineSyncOptions = {}) {
     [refreshQueueCount]
   );
 
+  const discard = useCallback(
+    async (id: string) => {
+      await dequeueSyncRequest(id);
+      await refreshQueueCount();
+    },
+    [refreshQueueCount]
+  );
+
+  const retry = useCallback(
+    async (id: string): Promise<boolean> => {
+      const q = await getSyncQueue();
+      const item = q.find((i) => i.id === id);
+      if (!item) return false;
+      try {
+        const res = await fetch(item.url, {
+          method: item.method,
+          headers: item.headers || { 'Content-Type': 'application/json' },
+          body: item.body ? JSON.stringify(item.body) : undefined,
+        });
+        if (res.ok) {
+          await dequeueSyncRequest(id);
+          await refreshQueueCount();
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    },
+    [refreshQueueCount]
+  );
+
   return {
     isOnline,
     isSyncing,
     queuedCount,
+    pendingCount: queuedCount,
+    queue,
+    processing: isSyncing,
+    discard,
+    retry,
+    flushQueue: triggerSync,
     persistDraft,
     loadDraft,
     removeDraft,
@@ -155,7 +221,7 @@ export function useOfflineSync(options: UseOfflineSyncOptions = {}) {
 /**
  * Amber status pill displayed when network disconnects
  */
-export function OfflineStatusPill({ className = '' }: { className?: string }) {
+export function OfflineStatusPill({ className = '' }: { className?: string } = {}) {
   const { isOnline, queuedCount } = useOfflineSync();
 
   if (isOnline) return null;

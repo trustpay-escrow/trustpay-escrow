@@ -98,8 +98,7 @@ describe('PerformanceTelemetryModal', () => {
     vi.mocked(fetch).mockRejectedValue(new Error('offline'));
     render(<PerformanceTelemetryModal isOpen onClose={() => {}} />);
 
-    await waitFor(() => expect(screen.getByTestId('probe-soroban')).toHaveTextContent('failed'));
-    expect(screen.getByTestId('probe-soroban')).toHaveTextContent('1/1 failed');
+    await waitFor(() => expect(screen.getByTestId('probe-soroban')).toHaveTextContent('1/1 failed'));
     expect(screen.getByTestId('overall-rating')).toHaveTextContent('Poor');
     expect(screen.getAllByTestId('probe-failure').length).toBeGreaterThan(0);
   });

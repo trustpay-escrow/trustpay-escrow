@@ -6,7 +6,7 @@ import {
   getLiquidityQuote,
   normalizeFeeBps,
 } from '@/lib/liquidity-depth';
-import { useTokenRates, LiquidityPoolSnapshot } from '@/hooks/useTokenRates';
+import { useLiquidityPool, type LiquidityPoolSnapshot } from '@/hooks/useTokenRates';
 
 export interface LiquidityDepthOptimizerProps {
   amount: number;
@@ -262,7 +262,7 @@ export function LiquidityDepthOptimizerPanel({
 
 export function LiquidityDepthOptimizer(props: LiquidityDepthOptimizerProps) {
   const injected = props.pool !== undefined;
-  const { pool, loading, error } = useTokenRates(props.sourceToken || 'USDC', props.targetToken || 'EURC', {
+  const { pool, loading, error } = useLiquidityPool(props.sourceToken || 'USDC', props.targetToken || 'EURC', {
     enabled: !injected,
   });
 

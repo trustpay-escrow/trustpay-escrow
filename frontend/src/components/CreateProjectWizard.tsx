@@ -248,7 +248,11 @@ export function CreateProjectWizard() {
                   min="1"
                   step="any"
                   value={formData.budget === 0 ? '' : formData.budget}
-                  onChange={handleChange}
+                  onChange={(raw) =>
+                    handleChange({
+                      target: { name: 'budget', value: raw },
+                    } as React.ChangeEvent<HTMLInputElement>)
+                  }
                   placeholder="e.g. 2500"
                   data-testid="wizard-budget-input"
                   badgeTestId="wizard-budget-prefix"

@@ -17,15 +17,21 @@ export function currencyPrefix(token: string): string {
   }
 }
 
-type CurrencyAmountInputProps = {
+export type CurrencyAmountInputProps = {
   token: string;
   value: string | number;
-  onChange: (raw: string) => void;
+  onChange?: (raw: string) => void;
+  onValueChange?: (parsed: number | '') => void;
   placeholder?: string;
   label?: string;
   id?: string;
+  name?: string;
   min?: number | string;
   step?: number | string;
+  inputClassName?: string;
+  badgeTestId?: string;
+  'data-testid'?: string;
+  'aria-label'?: string;
 };
 
 /**
@@ -37,11 +43,17 @@ export function CurrencyAmountInput({
   token,
   value,
   onChange,
+  onValueChange,
   placeholder = '0.00',
   label,
   id,
+  name,
   min = 0,
   step = 'any',
+  inputClassName,
+  badgeTestId = 'currency-prefix',
+  'data-testid': dataTestId = 'currency-amount-input',
+  'aria-label': ariaLabel,
 }: CurrencyAmountInputProps) {
   const prefix = currencyPrefix(token);
 
@@ -49,23 +61,35 @@ export function CurrencyAmountInput({
     <div className="relative">
       <span
         aria-hidden="true"
-        data-testid="currency-prefix"
+        data-testid={badgeTestId}
         className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-xs font-semibold text-[#a1a1aa]"
       >
         {prefix}
       </span>
       <input
         id={id}
+        name={name}
         type="number"
         inputMode="decimal"
         min={min}
         step={step}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          onChange?.(raw);
+          if (onValueChange) {
+            const trimmed = raw.trim();
+            const parsed = trimmed === '' ? '' : Number(trimmed);
+            onValueChange(parsed === '' || Number.isNaN(parsed) ? '' : parsed);
+          }
+        }}
         placeholder={placeholder}
-        aria-label={label ?? `Amount in ${token}`}
-        data-testid="currency-amount-input"
-        className="w-full py-3 pl-16 pr-4 bg-[#232326] border border-[#333338] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-blue-500 transition-colors"
+        aria-label={ariaLabel ?? label ?? `Amount in ${token}`}
+        data-testid={dataTestId}
+        className={
+          inputClassName ||
+          'w-full py-3 pl-16 pr-4 bg-[#232326] border border-[#333338] rounded-xl text-white text-sm placeholder-[#71717a] focus:outline-none focus:border-blue-500 transition-colors'
+        }
       />
     </div>
   );

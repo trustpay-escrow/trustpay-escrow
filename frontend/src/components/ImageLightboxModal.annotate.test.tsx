@@ -1,30 +1,52 @@
-import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { ImageLightboxModal } from './ImageLightboxModal';
+import type { AnnotatedEvidence } from './EvidenceAnnotationCanvas';
 
+// Mock the canvas editor so we don't need real <canvas> in happy-dom
 vi.mock('./EvidenceAnnotationCanvas', () => ({
   EvidenceAnnotationCanvas: ({
-    imageSrc,
     fileName,
     onExport,
     onCancel,
   }: {
     imageSrc: string;
     fileName: string;
-    onExport: (r: { blob: Blob; filename: string }) => void;
+    onExport: (res: AnnotatedEvidence) => void;
     onCancel: () => void;
   }) => (
-    <div data-testid="editor" data-src={imageSrc} data-name={fileName}>
-      <button onClick={() => onExport({ blob: new Blob(['png']), filename: 'evidence-a-annotated.png' })}>mock export</button>
-      <button onClick={onCancel}>mock cancel</button>
+    <div data-testid="mock-annotation-canvas">
+      <span>Editing: {fileName}</span>
+      <button
+        type="button"
+        onClick={() =>
+          onExport({
+            blob: new Blob(['png'], { type: 'image/png' }),
+            filename: fileName,
+            dataUrl: 'data:image/png;base64,mock',
+            annotationCount: 2,
+            hasRedactions: true,
+            originalName: fileName,
+          })
+        }
+      >
+        Trigger Export
+      </button>
+      <button type="button" onClick={onCancel}>
+        Trigger Cancel
+      </button>
     </div>
   ),
 }));
 
-import { ImageLightboxModal } from './ImageLightboxModal';
-
-const URL_ = 'https://example.com/shot.png';
+const URL_ = 'https://example.com/mock.png';
 
 describe('ImageLightboxModal annotate mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('does not offer annotation unless the caller opts in', () => {
     render(<ImageLightboxModal imageUrl={URL_} onClose={() => {}} />);
     expect(screen.queryByRole('button', { name: /Annotate/ })).not.toBeInTheDocument();
@@ -32,34 +54,62 @@ describe('ImageLightboxModal annotate mode', () => {
   });
 
   it('swaps the image for the editor, seeded with the image and its name', () => {
-    render(<ImageLightboxModal imageUrl={URL_} imageAlt="login.png" onClose={() => {}} onAnnotatedExport={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /Annotate & Redact/ }));
+    render(
+      <ImageLightboxModal
+        imageUrl={URL_}
+        imageAlt="login.png"
+        onClose={() => {}}
+        onAnnotatedExport={() => {}}
+      />
+    );
 
-    const editor = screen.getByTestId('editor');
-    expect(editor).toHaveAttribute('data-src', URL_);
-    expect(editor).toHaveAttribute('data-name', 'login.png');
-    expect(screen.queryByRole('img', { name: 'login.png' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Annotate & Redact/ })).not.toBeInTheDocument(); // no nested editors
+    const btn = screen.getByRole('button', { name: /Annotate/ });
+    fireEvent.click(btn);
+
+    expect(screen.getByTestId('mock-annotation-canvas')).toBeInTheDocument();
+    expect(screen.getByText('Editing: login.png')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
-  it('hands the sanitized export to the caller and returns to the image view', () => {
+  it('hands exported evidence to the callback and returns to the normal view', () => {
     const onAnnotatedExport = vi.fn();
-    render(<ImageLightboxModal imageUrl={URL_} imageAlt="login.png" onClose={() => {}} onAnnotatedExport={onAnnotatedExport} />);
-    fireEvent.click(screen.getByRole('button', { name: /Annotate & Redact/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'mock export' }));
+    render(
+      <ImageLightboxModal
+        imageUrl={URL_}
+        imageAlt="login.png"
+        onClose={() => {}}
+        onAnnotatedExport={onAnnotatedExport}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Annotate/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger Export' }));
 
     expect(onAnnotatedExport).toHaveBeenCalledTimes(1);
-    expect(onAnnotatedExport.mock.calls[0][0].filename).toBe('evidence-a-annotated.png');
-    expect(screen.queryByTestId('editor')).not.toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'login.png' })).toBeInTheDocument();
+    expect(onAnnotatedExport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        annotationCount: 2,
+        hasRedactions: true,
+        originalName: 'login.png',
+      })
+    );
+    // Editor should be closed, back to image view
+    expect(screen.queryByTestId('mock-annotation-canvas')).not.toBeInTheDocument();
   });
 
-  it('cancelling the editor leaves the lightbox open and exports nothing', () => {
+  it('exits edit mode without saving when cancel is clicked', () => {
     const onAnnotatedExport = vi.fn();
     const onClose = vi.fn();
-    render(<ImageLightboxModal imageUrl={URL_} onClose={onClose} onAnnotatedExport={onAnnotatedExport} />);
-    fireEvent.click(screen.getByRole('button', { name: /Annotate & Redact/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'mock cancel' }));
+    render(
+      <ImageLightboxModal
+        imageUrl={URL_}
+        onClose={onClose}
+        onAnnotatedExport={onAnnotatedExport}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Annotate/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger Cancel' }));
 
     expect(onAnnotatedExport).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
@@ -68,8 +118,15 @@ describe('ImageLightboxModal annotate mode', () => {
 
   it('keeps the existing close behaviour', () => {
     const onClose = vi.fn();
-    render(<ImageLightboxModal imageUrl={URL_} onClose={onClose} onAnnotatedExport={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: /Close/ }));
+    render(
+      <ImageLightboxModal
+        imageUrl={URL_}
+        onClose={onClose}
+        onAnnotatedExport={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close lightbox' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

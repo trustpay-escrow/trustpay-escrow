@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { useWalletStore } from '@/store/walletStore';
+import { AccessibleModal } from '@/components/a11y/AccessibleModal';
+import { announcePolite } from '@/components/a11y/LiveAnnouncer';
 
 export interface DisputedProject {
   id: string;
@@ -103,9 +105,9 @@ export function ArbiterDashboard() {
         )
       );
 
-      toast.success(
-        `Dispute resolved! ${clientAmount} ${selectedDispute.token} released to client, ${freelancerAmount} ${selectedDispute.token} released to freelancer.`
-      );
+      const resolutionMsg = `Dispute resolved! ${clientAmount} ${selectedDispute.token} released to client, ${freelancerAmount} ${selectedDispute.token} released to freelancer.`;
+      announcePolite(resolutionMsg);
+      toast.success(resolutionMsg);
       setSelectedDispute(null);
     } catch (err: any) {
       toast.error('Failed to submit dispute settlement to Stellar Soroban');
@@ -263,9 +265,15 @@ export function ArbiterDashboard() {
       </div>
 
       {/* Arbitration Modal */}
-      {selectedDispute && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#18181b] border border-[#27272a] rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl relative">
+      <AccessibleModal
+        isOpen={Boolean(selectedDispute)}
+        onClose={isResolving ? undefined : () => setSelectedDispute(null)}
+        ariaLabel={selectedDispute ? `Arbitration settlement for ${selectedDispute.title}` : 'Arbitration settlement'}
+        backdropClassName="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+        dialogClassName="bg-[#18181b] border border-[#27272a] rounded-3xl max-w-lg w-full p-6 space-y-6 shadow-2xl relative"
+      >
+        {selectedDispute && (
+          <>
             <div className="flex items-start justify-between">
               <div>
                 <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
@@ -276,10 +284,12 @@ export function ArbiterDashboard() {
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedDispute(null)}
+                aria-label="Close arbitration modal"
                 className="text-[#71717a] hover:text-white p-1"
               >
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             </div>
 
@@ -302,6 +312,7 @@ export function ArbiterDashboard() {
                 </div>
                 <input
                   type="range"
+                  aria-label="Client refund percentage"
                   min="0"
                   max="100"
                   value={clientSplitPct}
@@ -310,7 +321,7 @@ export function ArbiterDashboard() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-center bg-[#232328] p-3 rounded-xl border border-[#33333b]">
+              <div className="grid grid-cols-2 gap-3 text-center bg-[#232328] p-3 rounded-xl border border-[#33333b]" aria-live="polite">
                 <div>
                   <span className="text-[10px] text-[#a1a1aa] block uppercase">Client Receives</span>
                   <span className="text-base font-bold text-blue-400">
@@ -336,15 +347,16 @@ export function ArbiterDashboard() {
                 <button
                   type="submit"
                   disabled={isResolving}
+                  aria-busy={isResolving || undefined}
                   className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white transition-all shadow-md active:scale-95 disabled:opacity-50"
                 >
                   {isResolving ? 'Executing On-Chain...' : 'Execute Resolution'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </AccessibleModal>
     </div>
   );
 }

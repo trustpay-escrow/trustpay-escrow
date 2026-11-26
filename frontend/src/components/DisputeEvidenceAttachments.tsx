@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { downloadBlob } from '@/lib/share-card';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { AnnotatedEvidence, EvidenceAnnotationCanvas } from './EvidenceAnnotationCanvas';
 
 export const MAX_EVIDENCE_FILES = 5;
@@ -31,6 +32,7 @@ const formatSize = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math
 export function DisputeEvidenceAttachments({ onChange }: DisputeEvidenceAttachmentsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const itemsRef = useRef<PreparedEvidence[]>([]);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<PreparedEvidence[]>([]);
   const [editing, setEditing] = useState<{ file: File; url: string } | null>(null);
 
@@ -58,14 +60,10 @@ export function DisputeEvidenceAttachments({ onChange }: DisputeEvidenceAttachme
     []
   );
 
-  useEffect(() => {
-    if (!editing) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeEditor();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [editing, closeEditor]);
+  useFocusTrap(dialogRef, {
+    isOpen: Boolean(editing),
+    onClose: closeEditor,
+  });
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -171,10 +169,12 @@ export function DisputeEvidenceAttachments({ onChange }: DisputeEvidenceAttachme
           onClick={closeEditor}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Annotate evidence"
-            className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 sm:p-5 w-full max-w-5xl max-h-[95vh] overflow-auto shadow-2xl"
+            tabIndex={-1}
+            className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 sm:p-5 w-full max-w-5xl max-h-[95vh] overflow-auto shadow-2xl focus:outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-bold text-white mb-3">Annotate &amp; redact evidence</h3>

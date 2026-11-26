@@ -6,5 +6,9 @@ export default async function CollaborativeScopePage({
   searchParams: Promise<{ projectId?: string; roomId?: string }>;
 }) {
   const params = await searchParams;
-  return <CollaborativeScopeBuilder projectId={params.projectId} roomId={params.roomId} />;
+  return (
+    <main id="main-content" tabIndex={-1}>
+      <CollaborativeScopeBuilder projectId={params.projectId} roomId={params.roomId} />
+    </main>
+  );
 }

@@ -85,8 +85,8 @@ describe('Milestone Drag-and-Drop Reorder (#314)', () => {
 // Test the drop indicator visibility logic
 describe('Drop Indicator Visibility', () => {
   it('shows indicator when dragOverIndex matches current index and draggedIndex is different', () => {
-    const dragOverIndex = 1;
-    const draggedIndex = 0;
+    const dragOverIndex: number | null = 1;
+    const draggedIndex: number | null = 0;
     const idx = 1;
 
     const shouldShow = dragOverIndex === idx && draggedIndex !== null && draggedIndex !== idx;
@@ -94,8 +94,8 @@ describe('Drop Indicator Visibility', () => {
   });
 
   it('hides indicator when dragOverIndex does not match', () => {
-    const dragOverIndex = 1;
-    const draggedIndex = 0;
+    const dragOverIndex: number | null = 1;
+    const draggedIndex: number | null = 0;
     const idx = 2;
 
     const shouldShow = dragOverIndex === idx && draggedIndex !== null && draggedIndex !== idx;

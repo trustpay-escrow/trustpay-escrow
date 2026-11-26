@@ -44,6 +44,33 @@ describe('MilestoneSubmitModal', () => {
     expect(screen.getByTestId('submit-deliverable')).toBeInTheDocument();
   });
 
+  it('preserves nested folder paths and offers downloads for non-image files', async () => {
+    const createUrl = vi.fn(() => 'blob:deliverable');
+    const revokeUrl = vi.fn();
+    const NativeUrl = URL;
+    vi.stubGlobal('URL', class extends NativeUrl {
+      static createObjectURL = createUrl;
+      static revokeObjectURL = revokeUrl;
+    });
+    const file = new File(['hello'], 'main.ts', { type: 'text/plain' });
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'deliverable/src/main.ts' });
+
+    const { unmount } = render(<MilestoneSubmitModal isOpen onClose={vi.fn()} project={project} milestone={milestone} />);
+    fireEvent.change(screen.getByLabelText('Browse Folder'), { target: { files: [file] } });
+    expect(screen.getByTestId('folder-toggle-deliverable/src')).toHaveAttribute('aria-expanded', 'true');
+    const download = screen.getByTestId('download-button-deliverable/src/main.ts');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      expect(this.href).toBe('blob:deliverable');
+      expect(this.download).toBe('main.ts');
+    });
+    fireEvent.click(download);
+    expect(click).toHaveBeenCalledOnce();
+    click.mockRestore();
+    await screen.findByText('Ready');
+    unmount();
+    expect(revokeUrl).toHaveBeenCalledWith('blob:deliverable');
+  });
+
   it('calls onClose once when Escape is pressed', () => {
     const onClose = vi.fn();
     render(<MilestoneSubmitModal isOpen onClose={onClose} project={project} milestone={milestone} />);

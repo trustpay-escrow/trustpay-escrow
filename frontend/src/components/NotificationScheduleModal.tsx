@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Project } from '@/types';
 import { useNotifications } from '@/hooks/useNotifications';
+import { AccessibleModal } from '@/components/a11y/AccessibleModal';
 import {
   NotificationChannelKey,
   NotificationIntervalKey,
@@ -43,6 +44,8 @@ export function NotificationScheduleModal({ project, isOpen, onClose }: Notifica
   const [draft, setDraft] = useState<NotificationPreferences>(preferences);
   const [wasOpen, setWasOpen] = useState(isOpen);
   const [saving, setSaving] = useState(false);
+  const titleId = useId();
+  const telegramInputId = useId();
 
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
@@ -115,22 +118,24 @@ export function NotificationScheduleModal({ project, isOpen, onClose }: Notifica
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md" onClick={onClose}>
-      <div
-        className="bg-[#18181b] border border-[#3f3f46] rounded-2xl max-w-2xl w-full p-6 sm:p-7 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-[#27272a]">
-          <div>
-            <h3 className="text-lg font-bold text-white">Milestone Deadline Reminders</h3>
-            <p className="text-xs text-[#a1a1aa] mt-1">
-              {project ? project.title : 'Configure alert intervals and delivery channels for milestone deadlines.'}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-[#a1a1aa] hover:text-white text-lg" aria-label="Close reminder scheduler">
-            ✕
-          </button>
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy={titleId}
+      backdropClassName="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md"
+      dialogClassName="bg-[#18181b] border border-[#3f3f46] rounded-2xl max-w-2xl w-full p-6 sm:p-7 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto"
+    >
+      <div className="flex items-start justify-between gap-4 pb-4 border-b border-[#27272a]">
+        <div>
+          <h3 id={titleId} className="text-lg font-bold text-white">Milestone Deadline Reminders</h3>
+          <p className="text-xs text-[#a1a1aa] mt-1">
+            {project ? project.title : 'Configure alert intervals and delivery channels for milestone deadlines.'}
+          </p>
         </div>
+        <button type="button" onClick={onClose} className="text-[#a1a1aa] hover:text-white text-lg" aria-label="Close reminder scheduler">
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="space-y-3">
@@ -164,8 +169,9 @@ export function NotificationScheduleModal({ project, isOpen, onClose }: Notifica
 
             {draft.channels.telegram && (
               <div className="space-y-1.5 pt-1">
-                <label className="block text-xs font-semibold text-[#e4e4e7]">Telegram chat ID</label>
+                <label htmlFor={telegramInputId} className="block text-xs font-semibold text-[#e4e4e7]">Telegram chat ID</label>
                 <input
+                  id={telegramInputId}
                   value={draft.telegramChatId || ''}
                   onChange={(event) => setDraft((prev) => ({ ...prev, telegramChatId: event.target.value }))}
                   placeholder="123456789"
@@ -218,7 +224,6 @@ export function NotificationScheduleModal({ project, isOpen, onClose }: Notifica
             {saving ? 'Saving…' : 'Save schedule'}
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleModal>
   );
 }

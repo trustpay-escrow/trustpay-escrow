@@ -32,12 +32,12 @@ export async function sha256Hex(input: HashInput): Promise<string> {
   if (typeof input === 'string') {
     const bytes = new TextEncoder().encode(input);
     data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  } else if (input instanceof ArrayBuffer) {
-    data = input;
+  } else if (Object.prototype.toString.call(input) === '[object ArrayBuffer]') {
+    data = input as ArrayBuffer;
   } else if (ArrayBuffer.isView(input)) {
     data = input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength) as ArrayBuffer;
   } else {
-    data = await readBlob(input);
+    data = await readBlob(input as Blob);
   }
   return toHex(await globalThis.crypto.subtle.digest('SHA-256', data));
 }

@@ -121,9 +121,16 @@ export function useI18n() {
     setMounted(true);
     const initial = detectBrowserLocale();
     setLocaleState(initial);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = initial;
+    }
 
     const handleStorageChange = () => {
-      setLocaleState(detectBrowserLocale());
+      const next = detectBrowserLocale();
+      setLocaleState(next);
+      if (typeof document !== 'undefined') {
+        document.documentElement.lang = next;
+      }
     };
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('trustpay-locale-change', handleStorageChange);
@@ -136,6 +143,9 @@ export function useI18n() {
 
   const setLocale = useCallback((newLocale: SupportedLocale) => {
     setLocaleState(newLocale);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = newLocale;
+    }
     try {
       localStorage.setItem(STORAGE_KEY_LOCALE, newLocale);
       window.dispatchEvent(new Event('trustpay-locale-change'));

@@ -14,7 +14,7 @@ export default function DisputeDetailPage() {
     <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex flex-col justify-between selection:bg-blue-500/30 selection:text-white">
       <Header />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <Link
             href="/projects"

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { AccessibleModal } from '@/components/a11y/AccessibleModal';
 import {
   getContractWasmHash,
   getStellarExplorerUrl,
@@ -28,6 +29,7 @@ export function ContractSecurityModal({ isOpen, onClose, contractId }: ContractS
   const [wasmHash, setWasmHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const titleId = useId();
   const loading = isOpen && wasmHash === null && error === null;
 
   useEffect(() => {
@@ -71,126 +73,133 @@ export function ContractSecurityModal({ isOpen, onClose, contractId }: ContractS
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Contract Transparency</span>
-          <h3 className="text-xl font-bold text-white mt-1">Soroban Escrow Security Inspector</h3>
-          <p className="text-xs text-slate-400 mt-1">
-            Verifies the deployed WASM bytecode hash against the official audited release build.
-          </p>
-        </div>
+    <AccessibleModal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy={titleId}
+      backdropClassName="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+      dialogClassName="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto"
+    >
+      <div>
+        <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Contract Transparency</span>
+        <h3 id={titleId} className="text-xl font-bold text-white mt-1">Soroban Escrow Security Inspector</h3>
+        <p className="text-xs text-slate-400 mt-1">
+          Verifies the deployed WASM bytecode hash against the official audited release build.
+        </p>
+      </div>
 
-        {/* Deployed WASM Bytecode Hash */}
-        <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">Deployed WASM Bytecode Hash (SHA-256)</span>
-            {wasmHash && (
-              <button
-                onClick={handleCopy}
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
-              >
-                {copied ? 'Copied ✓' : 'Copy'}
-              </button>
-            )}
-          </div>
-          {loading ? (
-            <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
-              <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-              Querying Soroban RPC for contract instance...
-            </div>
-          ) : error ? (
-            <p className="text-xs text-red-400 break-all">{error}</p>
-          ) : wasmHash ? (
-            <p className="text-[11px] text-emerald-300 font-mono break-all leading-relaxed bg-slate-900 p-2.5 rounded-lg border border-slate-800">
-              {wasmHash}
-            </p>
-          ) : null}
-
+      {/* Deployed WASM Bytecode Hash */}
+      <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-400 font-medium">Deployed WASM Bytecode Hash (SHA-256)</span>
           {wasmHash && (
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-slate-500">Contract Instance</span>
-              <a
-                href={getStellarExplorerUrl(targetContract, 'contract')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
-              >
-                View on Stellar.Expert ↗
-              </a>
-            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
+            >
+              {copied ? 'Copied ✓' : 'Copy'}
+            </button>
           )}
         </div>
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-slate-400 py-2" role="status" aria-live="polite">
+            <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+            Querying Soroban RPC for contract instance...
+          </div>
+        ) : error ? (
+          <p role="alert" className="text-xs text-red-400 break-all">{error}</p>
+        ) : wasmHash ? (
+          <p className="text-[11px] text-emerald-300 font-mono break-all leading-relaxed bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+            {wasmHash}
+          </p>
+        ) : null}
 
-        {/* Verification Status */}
         {wasmHash && (
-          <div
-            className={`p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 ${
-              verified
-                ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
-                : hashMismatch
-                ? 'bg-red-950/40 border-red-500/30 text-red-300'
-                : 'bg-amber-950/30 border-amber-500/30 text-amber-300'
-            }`}
-          >
-            <span className="text-base leading-none">{verified ? '✓' : hashMismatch ? '✕' : '⚠'}</span>
-            <div>
-              <p className="font-bold">
-                {verified
-                  ? 'Bytecode Verified — matches official release artifact'
-                  : hashMismatch
-                  ? 'Hash Mismatch — deployed bytecode differs from the official build'
-                  : 'Unverified — no official release hash configured'}
-              </p>
-              <p className="mt-0.5 opacity-80">
-                {verified
-                  ? 'The deployed contract matches the audited open-source build.'
-                  : hashMismatch
-                  ? 'Do not deposit funds until the deployed contract is reconciled with the audited source.'
-                  : 'Set NEXT_PUBLIC_ESCROW_WASM_SHA256 to enable automated release comparison.'}
-              </p>
-            </div>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-slate-500">Contract Instance</span>
+            <a
+              href={getStellarExplorerUrl(targetContract, 'contract')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
+            >
+              View on Stellar.Expert ↗
+            </a>
           </div>
         )}
-
-        {/* Security Checklist */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Security Checklist</h4>
-          {SECURITY_CHECKLIST.map((item) => (
-            <div
-              key={item.label}
-              className="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800"
-            >
-              <span className="text-emerald-400 font-bold mt-0.5">✓</span>
-              <div>
-                <p className="text-xs font-semibold text-white">{item.label}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{item.detail}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Verified Source Link */}
-        <a
-          href={OFFICIAL_CONTRACT_REPO_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
-        >
-          <span>View Verified Rust Source on GitHub</span>
-          <span>↗</span>
-        </a>
-
-        <div className="flex items-center justify-end pt-1">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            className="border-slate-800 text-slate-300 hover:bg-slate-800 rounded-xl text-xs"
-          >
-            Close
-          </Button>
-        </div>
       </div>
-    </div>
+
+      {/* Verification Status */}
+      {wasmHash && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`p-3.5 rounded-2xl border text-xs flex items-start gap-2.5 ${
+            verified
+              ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+              : hashMismatch
+              ? 'bg-red-950/40 border-red-500/30 text-red-300'
+              : 'bg-amber-950/30 border-amber-500/30 text-amber-300'
+          }`}
+        >
+          <span className="text-base leading-none" aria-hidden="true">{verified ? '✓' : hashMismatch ? '✕' : '⚠'}</span>
+          <div>
+            <p className="font-bold">
+              {verified
+                ? 'Bytecode Verified — matches official release artifact'
+                : hashMismatch
+                ? 'Hash Mismatch — deployed bytecode differs from the official build'
+                : 'Unverified — no official release hash configured'}
+            </p>
+            <p className="mt-0.5 opacity-80">
+              {verified
+                ? 'The deployed contract matches the audited open-source build.'
+                : hashMismatch
+                ? 'Do not deposit funds until the deployed contract is reconciled with the audited source.'
+                : 'Set NEXT_PUBLIC_ESCROW_WASM_SHA256 to enable automated release comparison.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Security Checklist */}
+      <div className="space-y-2">
+        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Security Checklist</h4>
+        {SECURITY_CHECKLIST.map((item) => (
+          <div
+            key={item.label}
+            className="flex items-start gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800"
+          >
+            <span className="text-emerald-400 font-bold mt-0.5" aria-hidden="true">✓</span>
+            <div>
+              <p className="text-xs font-semibold text-white">{item.label}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{item.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Verified Source Link */}
+      <a
+        href={OFFICIAL_CONTRACT_REPO_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
+      >
+        <span>View Verified Rust Source on GitHub</span>
+        <span aria-hidden="true">↗</span>
+      </a>
+
+      <div className="flex items-center justify-end pt-1">
+        <Button
+          variant="outline"
+          onClick={onClose}
+          className="border-slate-800 text-slate-300 hover:bg-slate-800 rounded-xl text-xs"
+        >
+          Close
+        </Button>
+      </div>
+    </AccessibleModal>
   );
 }

@@ -4,9 +4,14 @@ import { StrKey } from '@stellar/stellar-sdk';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
-vi.mock('@/store/walletStore', () => ({
-  useWalletStore: () => ({ address: StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 9)) }),
-}));
+vi.mock('@/store/walletStore', () => {
+  const address = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 9));
+  return {
+    useWalletStore: () => ({ address }),
+    useActiveWalletAddress: () => address,
+    canRaiseDispute: () => true,
+  };
+});
 vi.mock('@/lib/api', () => ({
   authFetch: vi.fn().mockResolvedValue({
     ok: true,

@@ -112,14 +112,14 @@ export function useWalletEventListener() {
       window.addEventListener('xBullAccountChange', handleXBullAccountChange);
 
       // Message-based events (Albedo, custom wallets)
-      window.addEventListener('message', handleWalletMessage);
+      window.addEventListener('message', handleWalletMessage as EventListener);
 
       // Store references for cleanup
       listeners.current = [
         { event: 'freighterAccountChange', handler: handleFreighterAccountChange },
         { event: 'freighterNetworkChange', handler: handleFreighterNetworkChange },
         { event: 'xBullAccountChange', handler: handleXBullAccountChange },
-        { event: 'message', handler: handleWalletMessage },
+        { event: 'message', handler: handleWalletMessage as EventListener },
       ];
     }
 

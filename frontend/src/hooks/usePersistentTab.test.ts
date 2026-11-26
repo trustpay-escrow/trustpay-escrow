@@ -201,7 +201,6 @@ describe('usePersistentTab & usePersistentFilter', () => {
 
       expect(mockStorage['trustpay_filter_search_test']).toBeUndefined();
     });
-
     it('clears persisted filter and resets value when switching wallet address', () => {
       let wallet: string | null = 'WALLET_A';
       mockStorage['trustpay_filter_search_test'] = JSON.stringify('old wallet query');

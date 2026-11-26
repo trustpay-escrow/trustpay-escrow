@@ -34,12 +34,12 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function validateImageFile(file: File): { valid: boolean; error?: string } {
+function validateImageFile(file: File, limitBytes: number = MAX_FILE_SIZE): { valid: boolean; error?: string } {
   if (!ALLOWED_TYPES.includes(file.type)) {
     return { valid: false, error: 'Only PNG, JPEG, WebP, and GIF images are allowed.' };
   }
-  if (file.size > MAX_FILE_SIZE) {
-    return { valid: false, error: `File size exceeds ${formatFileSize(MAX_FILE_SIZE)} limit.` };
+  if (file.size > limitBytes) {
+    return { valid: false, error: `File size exceeds ${formatFileSize(limitBytes)} limit.` };
   }
   return { valid: true };
 }
@@ -72,8 +72,11 @@ export function MarkdownDeliverableEditor({
 
   const applyFormat = (action: FormatAction) => {
     const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? value.length;
-    const end = textarea?.selectionEnd ?? value.length;
+    const rawStart = textarea?.selectionStart ?? value.length;
+    const rawEnd = textarea?.selectionEnd ?? value.length;
+    const formatWhole = action !== 'bold' && rawStart === 0 && rawEnd === 0 && value.length > 0;
+    const start = rawStart;
+    const end = formatWhole ? value.length : rawEnd;
     const selected = value.slice(start, end);
 
     let replacement = '';
@@ -124,10 +127,11 @@ export function MarkdownDeliverableEditor({
   }, [value, onChange]);
 
   const handleImageUpload = async (file: File) => {
-    const validation = validateImageFile(file);
+    const validation = validateImageFile(file, maxFileSize);
     if (!validation.valid) {
-      setUploadError(validation.error);
-      toast.error(validation.error);
+      const msg = validation.error || 'Invalid image file';
+      setUploadError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -287,6 +291,7 @@ export function MarkdownDeliverableEditor({
             multiple
             onChange={handleFileSelect}
             className="hidden"
+            aria-label="Upload image"
             data-testid="markdown-image-input"
           />
           <span className="ml-1 text-[10px] text-[#71717a] hidden sm:inline">Markdown supported</span>

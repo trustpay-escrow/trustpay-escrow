@@ -8,7 +8,7 @@ import { OfflineQueueDrawer } from '@/components/OfflineQueueDrawer';
  * Small pill indicator showing the number of pending offline items.
  * Clicking opens the OfflineQueueDrawer.
  */
-export function OfflineStatusPill() {
+export function OfflineStatusPill({ className = '' }: { className?: string } = {}) {
   const { pendingCount, isOnline } = useOfflineSync();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -22,7 +22,7 @@ export function OfflineStatusPill() {
         type="button"
         onClick={() => setDrawerOpen(true)}
         disabled={pendingCount === 0}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${className} ${
           pendingCount > 0
             ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
             : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 cursor-default'

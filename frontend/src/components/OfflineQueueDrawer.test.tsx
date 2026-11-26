@@ -91,7 +91,7 @@ describe('OfflineQueueDrawer', () => {
     render(<OfflineQueueDrawer isOpen={true} onClose={() => {}} />);
 
     // Click discard on first item
-    fireEvent.click(screen.getByText('Discard'));
+    fireEvent.click(screen.getAllByText('Discard')[0]);
     // Confirm
     fireEvent.click(screen.getByText('Yes'));
 

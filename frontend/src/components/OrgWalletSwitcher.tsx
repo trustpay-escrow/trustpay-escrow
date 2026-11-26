@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { useWalletStore, OrgWalletAccount } from '@/store/walletStore';
 import { useTokenBalance } from '@/hooks/useCreateProjectForm';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { CryptoId } from '@/components/ui/CryptoId';
 
 const STELLAR_ADDRESS_REGEX = /^G[A-Z2-7]{55}$/;
@@ -66,6 +67,13 @@ export function OrgWalletSwitcher() {
   const [label, setLabel] = useState('');
   const [address, setAddress] = useState('');
   const [error, setError] = useState('');
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
+  useFocusTrap(popoverRef, {
+    isOpen: open,
+    onClose: () => setOpen(false),
+  });
 
   const activeAccount = orgAccounts.find((account) => account.id === activeOrgAccountId) || orgAccounts[0] || null;
 
@@ -99,12 +107,19 @@ export function OrgWalletSwitcher() {
 
       {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 z-50 w-80 max-w-[90vw] rounded-2xl border border-[#333338] bg-[#18181b] p-3 shadow-2xl space-y-2.5">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div
+            ref={popoverRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            tabIndex={-1}
+            className="absolute right-0 top-full mt-2 z-50 w-80 max-w-[90vw] rounded-2xl border border-[#333338] bg-[#18181b] p-3 shadow-2xl space-y-2.5 focus:outline-none"
+          >
             <div className="flex items-center justify-between px-1">
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#e4e4e7]">Organization wallets</h4>
+              <h4 id={titleId} className="text-xs font-extrabold uppercase tracking-wider text-[#e4e4e7]">Organization wallets</h4>
               <button type="button" onClick={() => setOpen(false)} className="text-[#71717a] hover:text-white text-sm" aria-label="Close wallet switcher">
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             </div>
 
@@ -129,18 +144,20 @@ export function OrgWalletSwitcher() {
             <div className="border-t border-[#27272a] pt-2.5 space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#71717a]">Add sub-account</p>
               <input
+                aria-label="Sub-account label"
                 value={label}
                 onChange={(event) => setLabel(event.target.value)}
                 placeholder="Label (e.g. Marketing Treasury)"
                 className="w-full px-3 py-2 bg-[#232326] border border-[#333338] rounded-lg text-xs text-white placeholder-[#71717a] focus:outline-none focus:border-blue-500"
               />
               <input
+                aria-label="Sub-account Stellar address"
                 value={address}
                 onChange={(event) => setAddress(event.target.value)}
                 placeholder="Stellar address (G…)"
                 className="w-full px-3 py-2 bg-[#232326] border border-[#333338] rounded-lg text-xs text-white font-mono placeholder-[#71717a] focus:outline-none focus:border-blue-500"
               />
-              {error && <p className="text-[10px] text-red-400 font-semibold">{error}</p>}
+              {error && <p role="alert" className="text-[10px] text-red-400 font-semibold">{error}</p>}
               <button
                 type="button"
                 onClick={handleAdd}

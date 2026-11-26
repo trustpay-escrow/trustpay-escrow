@@ -6,7 +6,7 @@ import { TransactionLedgerTable } from '@/components/TransactionLedgerTable';
 
 export default function TransactionsPage() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 py-12 px-4 sm:px-6 lg:px-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-slate-950 text-slate-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -27,6 +27,6 @@ export default function TransactionsPage() {
 
         <TransactionLedgerTable isTestnet={true} />
       </div>
-    </div>
+    </main>
   );
 }

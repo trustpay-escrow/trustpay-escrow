@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 export const REACTION_EMOJIS = ['👍', '🚀', '❤️', '👀', '🛠️'] as const;
 export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
@@ -28,6 +29,8 @@ export function MessageReactionBar({
 }: MessageReactionBarProps) {
   const [reactions, setReactions] = useState<MessageReactionRecord[]>(initialReactions);
   const [showPicker, setShowPicker] = useState(false);
+
+  useEscapeKey(() => setShowPicker(false), showPicker);
 
   const handleToggle = (emoji: ReactionEmoji) => {
     setReactions((prev) => {
@@ -97,13 +100,15 @@ export function MessageReactionBar({
                 key={emoji}
                 type="button"
                 data-testid={`picker-emoji-${emoji}`}
+                aria-label={`React with ${emoji}`}
+                aria-pressed={Boolean(hasReacted)}
                 onClick={() => handleToggle(emoji)}
                 className={`w-6 h-6 flex items-center justify-center text-xs rounded-full hover:scale-125 transition-transform ${
                   hasReacted ? 'bg-indigo-600/30' : 'hover:bg-[#27272a]'
                 }`}
                 title={`React with ${emoji}`}
               >
-                <span>{emoji}</span>
+                <span aria-hidden="true">{emoji}</span>
               </button>
             );
           })}
@@ -122,6 +127,8 @@ export function MessageReactionBar({
               key={r.emoji}
               type="button"
               data-testid={`reaction-badge-${r.emoji}`}
+              aria-label={`Toggle ${r.emoji} reaction (${r.count})`}
+              aria-pressed={hasReacted}
               onClick={() => handleToggle(r.emoji)}
               className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-all hover:scale-105 active:scale-95 ${
                 hasReacted
@@ -129,7 +136,7 @@ export function MessageReactionBar({
                   : 'bg-[#232326] border-[#333338] text-[#a1a1aa] hover:border-[#3f3f46]'
               }`}
             >
-              <span>{r.emoji}</span>
+              <span aria-hidden="true">{r.emoji}</span>
               <span data-testid={`reaction-count-${r.emoji}`}>{r.count}</span>
             </button>
           );
@@ -139,11 +146,13 @@ export function MessageReactionBar({
         <button
           type="button"
           data-testid="add-reaction-trigger"
+          aria-label="Add reaction"
+          aria-expanded={showPicker}
           onClick={() => setShowPicker(!showPicker)}
           className="text-[#71717a] hover:text-[#a1a1aa] text-xs px-1.5 py-0.5 rounded-md hover:bg-[#232326] transition-colors"
           title="Add reaction"
         >
-          +😊
+          <span aria-hidden="true">+😊</span>
         </button>
       </div>
     </div>

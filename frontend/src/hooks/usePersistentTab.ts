@@ -35,7 +35,6 @@ export function clearPersistedDashboardState(): void {
     // Private-mode storage can throw; logout must still succeed.
   }
 }
-
 export function usePersistentTab<T extends string = string>({
   key,
   defaultTab,

@@ -34,12 +34,12 @@ export function Header({ showDashboardLink = true }: HeaderProps) {
             </span>
           </div>
           <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#052e16] text-[#22c55e] border border-[#14532d] ml-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" aria-hidden="true"></span>
             Stellar Testnet
           </span>
         </Link>
 
-        <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-[#a1a1aa]">
+        <nav aria-label="Primary navigation" className="hidden md:flex items-center space-x-8 text-sm font-medium text-[#a1a1aa]">
           <a href="#how-it-works" className="hover:text-white transition-colors">
             {t('nav.howItWorks')}
           </a>
@@ -75,7 +75,7 @@ export function Header({ showDashboardLink = true }: HeaderProps) {
               href="/projects"
               className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-600/20 border border-blue-500/30 transition-all hover:shadow-blue-600/30 hover:-translate-y-0.5"
             >
-              {t('nav.launchDashboard')} ↗
+              {t('nav.launchDashboard')} <span aria-hidden="true">↗</span>
             </Link>
           )}
         </div>

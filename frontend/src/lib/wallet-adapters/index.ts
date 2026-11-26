@@ -109,13 +109,15 @@ export const freighterAdapter: WalletAdapter = {
   isInstalled: async () => {
     if (typeof window === 'undefined') return false;
     try {
-      return await isFreighterConnected();
+      const res = await isFreighterConnected();
+      return typeof res === 'boolean' ? res : Boolean(res?.isConnected);
     } catch {
       return false;
     }
   },
   connect: async () => {
-    const installed = await isFreighterConnected();
+    const conn = await isFreighterConnected();
+    const installed = typeof conn === 'boolean' ? conn : Boolean(conn?.isConnected);
     if (!installed) {
       throw new Error('Freighter wallet extension is not installed. Please install Freighter from freighter.app.');
     }

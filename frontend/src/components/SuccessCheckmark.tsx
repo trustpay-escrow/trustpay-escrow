@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { CryptoId } from '@/components/ui/CryptoId';
+import { triggerCelebrationConfetti } from '@/lib/confetti';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { announcePolite } from '@/components/a11y/LiveAnnouncer';
 
 export interface SuccessCheckmarkProps {
   isOpen: boolean;
@@ -30,6 +33,12 @@ export function SuccessCheckmark({
 }: SuccessCheckmarkProps) {
   const [animationStarted, setAnimationStarted] = useState(false);
   const audioPlayedRef = useRef(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  useFocusTrap(dialogRef, {
+    isOpen,
+    onClose,
+  });
 
   // Optional celebratory audio chime using Web Audio API
   const playCelebrationChime = () => {
@@ -71,18 +80,17 @@ export function SuccessCheckmark({
   useEffect(() => {
     if (isOpen) {
       setAnimationStarted(true);
+      announcePolite(
+        typeof milestoneIndex === 'number'
+          ? `Milestone ${milestoneIndex + 1} completed and funds released.`
+          : 'Milestone completed and funds released.'
+      );
 
       if (playSound && !audioPlayedRef.current) {
         audioPlayedRef.current = true;
         playCelebrationChime();
+        triggerCelebrationConfetti();
       }
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onClose();
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
 
       let timer: NodeJS.Timeout | null = null;
       if (autoDismissDelay > 0) {
@@ -92,29 +100,32 @@ export function SuccessCheckmark({
       }
 
       return () => {
-        window.removeEventListener('keydown', handleKeyDown);
         if (timer) clearTimeout(timer);
       };
     } else {
       setAnimationStarted(false);
       audioPlayedRef.current = false;
     }
-  }, [isOpen, onClose, autoDismissDelay, playSound]);
+  }, [isOpen, onClose, autoDismissDelay, playSound, milestoneIndex]);
 
   if (!isOpen) return null;
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="success-dialog-title"
-      aria-describedby="success-dialog-desc"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-md p-6 overflow-hidden text-center bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl shadow-emerald-500/10">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="success-dialog-title"
+        aria-describedby="success-dialog-desc"
+        tabIndex={-1}
+        className="relative w-full max-w-md p-6 overflow-hidden text-center bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl shadow-emerald-500/10 focus:outline-none"
+      >
         {/* Background glow celebration accent */}
         <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
 

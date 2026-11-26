@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useId, useRef } from 'react';
 import Link from 'next/link';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useNotificationSounds } from '@/hooks/useNotificationSounds';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useRovingTabIndex } from '@/hooks/useRovingTabIndex';
 import { NotificationCategory, NotificationItem, getNotificationCategory } from '@/types/notification';
 
 interface NotificationCenterProps {
@@ -26,17 +28,12 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
 
   const { isMuted, toggleMute, volume, setNotificationVolume } = useNotificationSounds();
   const drawerRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
 
-  // Close on Escape or click outside
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  useFocusTrap(drawerRef, {
+    isOpen,
+    onClose,
+  });
 
   const tabs: { key: NotificationCategory; label: string; icon: string }[] = [
     { key: 'all', label: 'All', icon: '🔔' },
@@ -45,6 +42,17 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
     { key: 'disputes', label: 'Disputes', icon: '⚠️' },
     { key: 'system', label: 'System', icon: '⚙️' },
   ];
+
+  const activeTabIndex = Math.max(
+    0,
+    tabs.findIndex((tab) => tab.key === activeTab)
+  );
+  const { getItemProps: getTabProps } = useRovingTabIndex({
+    count: tabs.length,
+    activeIndex: activeTabIndex,
+    onSelect: (index) => setActiveTab(tabs[index].key),
+    orientation: 'horizontal',
+  });
 
   const formatTimestamp = (isoString: string) => {
     try {
@@ -100,17 +108,18 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
         ref={drawerRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Notification Center"
-        className="relative w-full max-w-md h-full bg-[#101014] border-l border-[#27272a] shadow-2xl flex flex-col z-10 transform transition-transform duration-300 ease-in-out"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="relative w-full max-w-md h-full bg-[#101014] border-l border-[#27272a] shadow-2xl flex flex-col z-10 transform transition-transform duration-300 ease-in-out focus:outline-none"
       >
         {/* Header */}
         <div className="p-4 border-b border-[#27272a] bg-[#141418] flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold">
+            <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold" aria-hidden="true">
               🔔
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-tight">Notification Center</h2>
+              <h2 id={titleId} className="text-sm font-bold text-white tracking-tight">Notification Center</h2>
               <p className="text-[11px] text-[#71717a]">Escrow alerts & updates</p>
             </div>
           </div>
@@ -119,18 +128,20 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
             <button
               type="button"
               onClick={() => refresh()}
+              aria-label="Refresh notifications"
               className="p-1.5 rounded-lg text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
               title="Refresh"
             >
-              🔄
+              <span aria-hidden="true">🔄</span>
             </button>
             <button
               type="button"
               onClick={onClose}
+              aria-label="Close notification center"
               className="p-1.5 rounded-lg text-[#a1a1aa] hover:text-white hover:bg-[#27272a] transition-colors"
               title="Close Drawer"
             >
-              ✕
+              <span aria-hidden="true">✕</span>
             </button>
           </div>
         </div>
@@ -138,7 +149,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
         {/* Sound Settings Bar */}
         <div className="px-4 py-2.5 bg-[#18181d] border-b border-[#27272a] flex items-center justify-between text-xs text-[#a1a1aa]">
           <div className="flex items-center space-x-2">
-            <span>{isMuted ? '🔇' : '🔊'}</span>
+            <span aria-hidden="true">{isMuted ? '🔇' : '🔊'}</span>
             <span className="text-[11px] font-medium text-[#d4d4d8]">Sound Alerts</span>
           </div>
           <div className="flex items-center space-x-3">
@@ -148,6 +159,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
                 min="0"
                 max="100"
                 value={volume}
+                aria-label="Notification alert volume"
                 onChange={(e) => setNotificationVolume(Number(e.target.value))}
                 className="w-16 h-1 accent-blue-500 cursor-pointer"
                 title={`Volume: ${volume}%`}
@@ -156,6 +168,8 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
             <button
               type="button"
               onClick={toggleMute}
+              aria-label="Mute sound alerts"
+              aria-pressed={isMuted}
               className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition-colors ${
                 isMuted
                   ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
@@ -168,14 +182,24 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
         </div>
 
         {/* Category Tabs */}
-        <div className="flex items-center space-x-1 px-3 py-2 bg-[#121216] border-b border-[#27272a] overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => {
+        <div
+          role="tablist"
+          aria-label="Notification categories"
+          className="flex items-center space-x-1 px-3 py-2 bg-[#121216] border-b border-[#27272a] overflow-x-auto no-scrollbar"
+        >
+          {tabs.map((tab, index) => {
             const isActive = activeTab === tab.key;
             const count = unreadCountsByCategory[tab.key] || 0;
+            const tabProps = getTabProps(index);
             return (
               <button
                 key={tab.key}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
+                ref={tabProps.ref}
+                tabIndex={tabProps.tabIndex}
+                onKeyDown={tabProps.onKeyDown}
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   isActive
@@ -200,7 +224,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
 
         {/* Secondary Actions (Mark All Read) */}
         <div className="px-4 py-2 border-b border-[#27272a] flex items-center justify-between text-xs">
-          <span className="text-[#71717a]">
+          <span className="text-[#71717a]" role="status" aria-live="polite">
             {filteredNotifications.length} notification{filteredNotifications.length === 1 ? '' : 's'}
           </span>
           {unreadCountsByCategory[activeTab] > 0 && (
@@ -209,21 +233,21 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
               onClick={markAllAsRead}
               className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors"
             >
-              ✓ Mark all as read
+              <span aria-hidden="true">✓ </span>Mark all as read
             </button>
           )}
         </div>
 
         {/* Notifications List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-[#27272a]/60">
+        <div className="flex-1 overflow-y-auto divide-y divide-[#27272a]/60" role="region" aria-label="Notifications" aria-live="polite">
           {loading && filteredNotifications.length === 0 ? (
-            <div className="p-8 text-center text-xs text-[#a1a1aa] space-y-2">
-              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="p-8 text-center text-xs text-[#a1a1aa] space-y-2" role="status">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" aria-hidden="true" />
               <p>Loading notifications...</p>
             </div>
           ) : filteredNotifications.length === 0 ? (
             <div className="p-12 text-center space-y-3">
-              <div className="text-3xl">🔕</div>
+              <div className="text-3xl" aria-hidden="true">🔕</div>
               <p className="text-sm font-semibold text-white">No notifications in this tab</p>
               <p className="text-xs text-[#71717a] max-w-xs mx-auto">
                 Any updates regarding your escrows, proposals, milestones, or dispute events will show up here.
@@ -239,7 +263,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
                     !item.is_read ? 'bg-blue-950/20 hover:bg-blue-950/30' : 'hover:bg-[#18181c]'
                   }`}
                 >
-                  <div className="w-9 h-9 rounded-xl bg-[#232328] border border-[#333338] flex items-center justify-center text-lg shrink-0 shadow-inner">
+                  <div className="w-9 h-9 rounded-xl bg-[#232328] border border-[#333338] flex items-center justify-center text-lg shrink-0 shadow-inner" aria-hidden="true">
                     {getIconForNotification(item)}
                   </div>
 
@@ -268,7 +292,7 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
                         className="inline-flex items-center text-[11px] font-bold text-blue-400 hover:text-blue-300 space-x-1 transition-colors"
                       >
                         <span>View Details</span>
-                        <span>→</span>
+                        <span aria-hidden="true">→</span>
                       </Link>
                       {!item.is_read && (
                         <button
@@ -284,17 +308,18 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
 
                   {/* Unread indicator */}
                   {!item.is_read && (
-                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 self-center" />
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 self-center" aria-hidden="true" />
                   )}
 
                   {/* Delete button */}
                   <button
                     type="button"
                     onClick={() => removeNotification(item.id)}
-                    className="opacity-0 group-hover:opacity-100 text-[#71717a] hover:text-red-400 text-xs transition-opacity absolute right-2.5 top-2.5 p-1"
+                    aria-label={`Dismiss notification: ${item.title}`}
+                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-[#71717a] hover:text-red-400 text-xs transition-opacity absolute right-2.5 top-2.5 p-1"
                     title="Dismiss"
                   >
-                    ✕
+                    <span aria-hidden="true">✕</span>
                   </button>
                 </div>
               );

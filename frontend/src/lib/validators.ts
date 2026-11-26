@@ -166,6 +166,8 @@ export const deliverableFileSchema = z.object({
   type: z.string(),
 });
 
+export const MAX_DELIVERABLE_FILES = 50;
+
 export const HTTPS_URL_PATTERN = /^https:\/\/[A-Za-z0-9_.-]+(?:\.[A-Za-z0-9_.-]+)+(?:\/[^\s]*)?$/i;
 
 export const httpsUrlSchema = z.string().trim().regex(
@@ -222,5 +224,5 @@ export function validateDeliverable(data: Partial<DeliverableFormData>): Record<
 export const deliverableSubmissionSchema = z.object({
   notes: z.string().trim().min(20, 'Add a summary of at least 20 characters'),
   githubPrUrls: z.array(githubPrUrlSchema).max(10, 'At most 10 pull request links are allowed'),
-  files: z.array(deliverableFileSchema).max(20, 'At most 20 files are allowed').optional(),
+  files: z.array(deliverableFileSchema).max(MAX_DELIVERABLE_FILES, `At most ${MAX_DELIVERABLE_FILES} files are allowed`).optional(),
 });

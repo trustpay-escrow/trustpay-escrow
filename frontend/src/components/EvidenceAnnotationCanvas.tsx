@@ -25,6 +25,10 @@ import {
 export interface AnnotatedEvidence {
   blob: Blob;
   filename: string;
+  dataUrl?: string;
+  annotationCount?: number;
+  hasRedactions?: boolean;
+  originalName?: string;
 }
 
 export interface EvidenceAnnotationCanvasProps {

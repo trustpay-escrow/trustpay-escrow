@@ -10,6 +10,7 @@
   --input-bg: #ffffff;
   --input-border: #d4d4d8;
   --input-focus-border: #3b82f6;
+  --ring: #2563eb;
 }
 
 /* Dark theme */
@@ -21,6 +22,20 @@
   --input-bg: #232326;
   --input-border: #333338;
   --input-focus-border: #3b82f6;
+  --ring: #60a5fa;
+}
+
+/* OLED True Black theme */
+[data-theme='oled'],
+.oled {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card-bg: #000000;
+  --card-border: #27272a;
+  --input-bg: #09090b;
+  --input-border: #27272a;
+  --input-focus-border: #3b82f6;
+  --ring: #60a5fa;
 }
 
 /* OLED True Black theme */
@@ -87,9 +102,9 @@ button {
   cursor: pointer;
 }
 
-/* High-contrast keyboard focus indicators (#309) */
+/* High-contrast keyboard focus indicators (WCAG 2.4.7 / 1.4.11 / #309) */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--ring, #1d4ed8);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -99,6 +114,14 @@ button {
 .oled :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline-color: #fbbf24;
   box-shadow: 0 0 0 2px #0b1120;
+}
+
+main#main-content {
+  scroll-margin-top: 5rem;
+}
+
+main#main-content:focus {
+  outline: none;
 }
 
 /* Screen-reader-only utility for live regions */
@@ -125,7 +148,13 @@ button {
 .dark-input:focus {
   border-color: var(--input-focus-border);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+.dark-input:focus-visible {
+  border-color: var(--input-focus-border);
+  outline: 2px solid var(--ring, #3b82f6);
+  outline-offset: 1px;
 }
 
 /* Custom scrollbar with theme support (#189) */
@@ -199,6 +228,65 @@ button {
 
 .card-hover-border:hover {
   border-color: rgba(59, 130, 246, 0.5);
+}
+
+.copy-ripple {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  background: currentColor;
+  animation: copy-ripple 450ms ease-out forwards;
+}
+
+@keyframes copy-ripple {
+  from { transform: translate(-50%, -50%) scale(0); opacity: 0.35; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy-ripple { display: none; }
+}
+
+/* TrustPay pagination: keep navigation in a single bounded row. */
+.trustpay-pagination { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.trustpay-pagination .pagination-controls {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.trustpay-pagination .pagination-button {
+  flex-shrink: 0;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+.trustpay-pagination .pagination-ellipsis {
+  flex: 0 0 12px;
+  text-align: center;
+  font-size: 0.75rem;
+}
+.trustpay-pagination .pagination-icon { display: none; }
+@media (max-width: 767px) {
+  .trustpay-pagination .pagination-controls { gap: 4px; }
+  .trustpay-pagination .pagination-button {
+    min-width: 32px;
+    min-height: 44px;
+    padding: 4px 2px;
+    border-radius: 10px;
+  }
+  .trustpay-pagination .pagination-button[data-long-number] { font-size: 0.625rem; }
+  .trustpay-pagination .pagination-label { display: none; }
+  .trustpay-pagination .pagination-icon {
+    display: inline-block;
+    width: 24px;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .trustpay-pagination .pagination-ellipsis { flex-basis: 10px; }
 }
 
 /* Notification bell badge pop-in: scale 0.8 -> 1.1 -> 1.0 (#197) */

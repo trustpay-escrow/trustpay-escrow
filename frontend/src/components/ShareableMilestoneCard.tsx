@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { Milestone, Project } from '@/types';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { getStellarExplorerUrl } from '@/lib/soroban';
 import {
   buildShareFilename,
@@ -301,17 +302,15 @@ export interface ShareMilestoneButtonProps {
  */
 export function ShareMilestoneButton({ project, milestone, rating, className = '' }: ShareMilestoneButtonProps) {
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const hasShareData = Boolean(deriveShareCardData(project, milestone, rating));
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  useFocusTrap(dialogRef, {
+    isOpen: open && hasShareData,
+    onClose: () => setOpen(false),
+  });
 
-  if (!deriveShareCardData(project, milestone, rating)) return null;
+  if (!hasShareData) return null;
 
   return (
     <>
@@ -331,10 +330,12 @@ export function ShareMilestoneButton({ project, milestone, rating, className = '
           onClick={() => setOpen(false)}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="Share achievement"
-            className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 sm:p-5 max-w-[calc(100vw-1.5rem)] max-h-[90vh] overflow-auto shadow-2xl"
+            tabIndex={-1}
+            className="bg-[#18181b] border border-[#27272a] rounded-2xl p-4 sm:p-5 max-w-[calc(100vw-1.5rem)] max-h-[90vh] overflow-auto shadow-2xl focus:outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">

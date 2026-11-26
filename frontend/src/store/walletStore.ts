@@ -60,6 +60,8 @@ export interface PendingMultisigRequest {
 export interface WalletState {
   address: string | null;
   walletName: string | null;
+  network: string | null;
+  targetNetwork: string;
   walletType: SupportedWalletId | null;
   activeRole: ActiveRole;
   isClient: boolean;
@@ -73,6 +75,7 @@ export interface WalletState {
   pendingMultisig: PendingMultisigRequest[];
   setIsConnecting: (isConnecting: boolean) => void;
   setActiveRole: (role: ActiveRole) => void;
+  setNetwork: (network: string | null) => void;
   /** Replaces the in-memory SEP-0010 JWT (e.g. after a silent refresh). */
   setToken: (token: string | null) => void;
   setRoleFilter: (role: ActiveRole, filters: Partial<RoleFilterState>) => void;
@@ -82,7 +85,8 @@ export interface WalletState {
     isFreelancer?: boolean,
     walletName?: string,
     token?: string | null,
-    walletType?: SupportedWalletId | null
+    walletType?: SupportedWalletId | null,
+    network?: string | null
   ) => void;
   addOrgAccount: (account: { label: string; address: string; walletName?: string }) => void;
   removeOrgAccount: (id: string) => void;
@@ -99,10 +103,12 @@ function primaryOrgAccountId(address: string) {
 
 export const useWalletStore = create<WalletState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       address: null,
       walletName: null,
       walletType: null,
+      network: null,
+      targetNetwork: process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'TESTNET',
       activeRole: 'client',
       isClient: true,
       isFreelancer: true,
@@ -119,6 +125,7 @@ export const useWalletStore = create<WalletState>()(
       pendingMultisig: [],
       setIsConnecting: (isConnecting) => set({ isConnecting }),
       setActiveRole: (activeRole) => set({ activeRole }),
+      setNetwork: (network) => set({ network }),
       setToken: (token) => set({ token }),
       setRoleFilter: (role, filters) =>
         set((state) => ({
@@ -133,9 +140,38 @@ export const useWalletStore = create<WalletState>()(
         isFreelancer = true,
         walletName = 'Freighter',
         token = null,
-        walletType = 'freighter'
-      ) =>
-        set({ address, isClient, isFreelancer, walletName, token, walletType, isConnecting: false }),
+        walletType: SupportedWalletId | null = 'freighter',
+        network: string | null = null
+      ) => {
+        set((state) => {
+          const id = primaryOrgAccountId(address);
+          const existing = state.orgAccounts.find((account) => account.id === id);
+          const primaryAccount: OrgWalletAccount = {
+            id,
+            label: existing?.label || walletName || 'Primary Wallet',
+            address,
+            walletName,
+            isPrimary: true,
+            addedAt: existing?.addedAt || new Date().toISOString(),
+          };
+          const orgAccounts = existing
+            ? state.orgAccounts.map((account) => (account.id === id ? primaryAccount : account))
+            : [primaryAccount, ...state.orgAccounts];
+
+          return {
+            address,
+            isClient,
+            isFreelancer,
+            walletName,
+            token,
+            walletType,
+            network,
+            isConnecting: false,
+            orgAccounts,
+            activeOrgAccountId: id,
+          };
+        });
+      },
       addOrgAccount: ({ label, address, walletName }) =>
         set((state) => {
           const trimmedLabel = label.trim() || 'Organization wallet';
@@ -196,6 +232,7 @@ export const useWalletStore = create<WalletState>()(
           address: null,
           walletName: null,
           walletType: null,
+          network: null,
           activeRole: 'client',
           isClient: true,
           isFreelancer: true,

@@ -1,3 +1,4 @@
+import { celebrateEscrow } from '@/lib/confetti';
 import { authFetch } from '@/lib/api';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useWalletStore } from '@/store/walletStore';
@@ -145,6 +146,8 @@ export function useNotifications() {
             return [newNotification, ...prev];
           });
           setUnreadCount((prev) => prev + 1);
+
+          if (newNotification.type === 'escrow_final_release') celebrateEscrow();
 
           toast.info(newNotification.title || 'New Notification', {
             description: newNotification.message,

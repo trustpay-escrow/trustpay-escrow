@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useWalletStore, ActiveRole } from '@/store/walletStore';
+import { useRovingTabIndex } from '@/hooks/useRovingTabIndex';
 
 export interface RoleSwitcherProps {
   className?: string;
@@ -50,6 +51,16 @@ const ROLES: RoleOption[] = [
 
 export function RoleSwitcher({ className = '', showDescriptions = false }: RoleSwitcherProps) {
   const { activeRole, setActiveRole } = useWalletStore();
+  const activeIndex = Math.max(
+    0,
+    ROLES.findIndex((r) => r.id === activeRole)
+  );
+  const { getItemProps } = useRovingTabIndex({
+    count: ROLES.length,
+    activeIndex,
+    onSelect: (index) => setActiveRole(ROLES[index].id),
+    orientation: 'horizontal',
+  });
 
   return (
     <div className={`flex flex-col items-center sm:items-end gap-1.5 ${className}`}>
@@ -58,13 +69,18 @@ export function RoleSwitcher({ className = '', showDescriptions = false }: RoleS
         aria-label="Unified Wallet Role Switcher"
         className="flex items-center space-x-1 bg-[#1e1e24] p-1 rounded-xl border border-[#33333b] shadow-inner"
       >
-        {ROLES.map((role) => {
+        {ROLES.map((role, index) => {
           const isActive = activeRole === role.id;
+          const itemProps = getItemProps(index);
           return (
             <button
               key={role.id}
+              type="button"
               role="tab"
               aria-selected={isActive}
+              ref={itemProps.ref}
+              tabIndex={itemProps.tabIndex}
+              onKeyDown={itemProps.onKeyDown}
               data-testid={`role-btn-${role.id}`}
               onClick={() => setActiveRole(role.id)}
               className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all duration-200 flex items-center space-x-1.5 border border-transparent ${
@@ -73,7 +89,7 @@ export function RoleSwitcher({ className = '', showDescriptions = false }: RoleS
                   : `text-[#a1a1aa] ${role.hoverColor}`
               }`}
             >
-              <span>{role.icon}</span>
+              <span aria-hidden="true">{role.icon}</span>
               <span>{role.label}</span>
               {isActive && (
                 <span className="hidden lg:inline-block text-[9px] uppercase font-extrabold tracking-wider bg-black/30 px-1.5 py-0.5 rounded-md">

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import {
   buildDiagnosticReport,
   computeOverallScore,
@@ -108,15 +109,12 @@ export interface PerformanceTelemetryModalProps {
 export function PerformanceTelemetryModal({ isOpen, onClose }: PerformanceTelemetryModalProps) {
   const [vitals, setVitals] = useState<WebVitals>({ LCP: null, FID: null, CLS: null });
   const [probes, setProbes] = useState<EndpointProbe[]>(initialProbes);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+  useFocusTrap(dialogRef, {
+    isOpen,
+    onClose,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -184,10 +182,12 @@ export function PerformanceTelemetryModal({ isOpen, onClose }: PerformanceTeleme
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Performance telemetry"
-        className="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+        tabIndex={-1}
+        className="bg-[#18181b] border border-[#27272a] rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 sm:p-5 border-b border-[#27272a] bg-[#1c1c20] flex items-start justify-between gap-4">

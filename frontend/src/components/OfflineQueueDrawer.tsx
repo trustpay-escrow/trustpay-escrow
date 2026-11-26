@@ -172,7 +172,7 @@ function OfflineQueueItemCard({
     <div
       className={`rounded-xl border p-3 transition-colors ${
         disabled ? 'opacity-60' : 'hover:border-slate-700'
-      } ${item.retryCount > 0 ? 'border-amber-500/30 bg-amber-950/20' : 'border-slate-800 bg-slate-950/50'}`}
+      } ${(item.retryCount ?? 0) > 0 ? 'border-amber-500/30 bg-amber-950/20' : 'border-slate-800 bg-slate-950/50'}`}
       data-testid={`offline-queue-item-${item.id}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -186,9 +186,9 @@ function OfflineQueueItemCard({
                 {item.tag}
               </span>
             )}
-            {item.retryCount > 0 && (
+            {(item.retryCount ?? 0) > 0 && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                <span>↻</span> {item.retryCount}
+                ↻ {item.retryCount}
               </span>
             )}
           </div>
@@ -198,7 +198,7 @@ function OfflineQueueItemCard({
             <span className="truncate max-w-[200px] font-mono">{item.url}</span>
             <span>{formatTimestamp(item.queuedAt)}</span>
             <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-700 font-mono">
-              {formatPayloadSize(item.payloadSize)}
+              {formatPayloadSize(item.payloadSize ?? 0)}
             </span>
           </div>
         </div>
@@ -206,16 +206,15 @@ function OfflineQueueItemCard({
         <div className="flex items-center gap-2 shrink-0">
           {!confirmDiscard ? (
             <>
-              {!disabled && !retrying && (
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 transition-colors"
-                  title="Retry now"
-                >
-                  Retry
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleRetry}
+                disabled={disabled || retrying}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Retry now"
+              >
+                {retrying ? 'Retrying...' : 'Retry'}
+              </button>
               <button
                 type="button"
                 onClick={() => setConfirmDiscard(true)}

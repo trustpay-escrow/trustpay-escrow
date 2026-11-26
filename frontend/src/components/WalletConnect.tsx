@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useWalletStore } from '@/store/walletStore';
@@ -15,6 +15,118 @@ import { WalletConnectModal } from '@/components/WalletConnectModal';
 import { CryptoId } from '@/components/ui/CryptoId';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useWalletEventListener } from '@/hooks/useWalletEventListener';
+
+export function WalletAddressCopy({ address, header = false }: { address: string; header?: boolean }) {
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const copied = !!address && copiedAddress === address;
+  const [addressHovered, setAddressHovered] = useState(false);
+  const [addressFocused, setAddressFocused] = useState(false);
+  const [tooltipDismissed, setTooltipDismissed] = useState(false);
+  const addressTooltipId = useId();
+  const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyAttempt = useRef(0);
+  const showAddressTooltip = (addressHovered || addressFocused) && !tooltipDismissed;
+
+  const resetCopyFeedback = useCallback(() => {
+    copyAttempt.current++;
+    if (copyResetTimer.current !== null) clearTimeout(copyResetTimer.current);
+    setCopiedAddress(null);
+  }, []);
+
+  useEffect(() => resetCopyFeedback, [address, resetCopyFeedback]);
+
+  useEffect(() => {
+    if (!showAddressTooltip) return;
+    const dismissTooltip = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        resetCopyFeedback();
+        setTooltipDismissed(true);
+      }
+    };
+    document.addEventListener('keydown', dismissTooltip);
+    return () => document.removeEventListener('keydown', dismissTooltip);
+  }, [showAddressTooltip, resetCopyFeedback]);
+
+  const copyAddress = async () => {
+    if (!address) return;
+    const attempt = ++copyAttempt.current;
+    if (copyResetTimer.current !== null) clearTimeout(copyResetTimer.current);
+    setCopiedAddress(null);
+    try {
+      await navigator.clipboard.writeText(address);
+      if (attempt !== copyAttempt.current) return;
+      if (copyResetTimer.current !== null) clearTimeout(copyResetTimer.current);
+      setCopiedAddress(address);
+      setTooltipDismissed(false);
+      toast.success('Stellar address copied to clipboard!');
+      copyResetTimer.current = setTimeout(() => {
+        setCopiedAddress(null);
+        setTooltipDismissed(true);
+      }, 2000);
+    } catch {
+      if (attempt !== copyAttempt.current) return;
+      toast.error('Unable to copy address. Please try again.');
+    }
+  };
+
+  return (
+    <div
+      className={header ? 'relative shrink-0 max-w-full' : 'relative w-full'}
+      onMouseEnter={() => {
+        setAddressHovered(true);
+        setTooltipDismissed(false);
+      }}
+      onMouseLeave={() => {
+        setAddressHovered(false);
+        resetCopyFeedback();
+      }}
+      onPointerDown={() => setAddressFocused(false)}
+      onFocus={(event) => {
+        setAddressFocused(event.target.matches(':focus-visible'));
+        setTooltipDismissed(false);
+      }}
+      onBlur={() => {
+        setAddressFocused(false);
+        resetCopyFeedback();
+      }}
+    >
+      <button
+        type="button"
+        onClick={copyAddress}
+        aria-label="Copy full Stellar address"
+        aria-describedby={showAddressTooltip ? addressTooltipId : undefined}
+        className={
+          header
+            ? 'inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-md border border-[#3f3f46] bg-[#27272a] px-2.5 py-1 text-white cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400'
+            : 'flex min-h-10 w-full items-center justify-between gap-2 rounded-xl border border-[#3f3f46] bg-[#18181b] px-3.5 py-2 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400'
+        }
+      >
+        <CryptoId value={address} head={header ? 6 : 8} tail={header ? 4 : 8} title="" className="text-white truncate" />
+        <span className={header ? 'shrink-0 text-[#a1a1aa]' : 'flex shrink-0 items-center gap-1 rounded-md bg-[#27272a] px-2 py-1 text-xs text-[#a1a1aa]'}>
+          <svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="h-3.5 w-3.5">
+            <rect x="8" y="8" width="12" height="12" rx="2" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+          </svg>
+          {!header && (copied ? 'Copied! ✓' : 'Copy')}
+        </span>
+      </button>
+      {showAddressTooltip && (
+        <div
+          id={addressTooltipId}
+          role="tooltip"
+          className={header ? 'absolute top-full left-0 z-20 w-full pt-2' : 'absolute bottom-full left-1/2 z-20 w-max max-w-full -translate-x-1/2 pb-2'}
+        >
+          <span className="block rounded-md border border-[#3f3f46] bg-[#18181b] px-3 py-2 text-center text-xs text-white shadow-lg">
+            {copied ? 'Copied!' : 'Click to copy full Stellar address'}
+          </span>
+        </div>
+      )}
+      <span role="status" className="sr-only">
+        {copied ? 'Stellar address copied to clipboard.' : ''}
+      </span>
+    </div>
+  );
+}
 
 const getErrorMessage = (err: any, prefix = ''): string => {
   let msg = 'An unknown error occurred';
@@ -426,7 +538,9 @@ export default function WalletConnect() {
                   '🪐'
                 )}
               </div>
-              <div className="text-xs font-bold text-white group-hover:text-blue-400">Freighter</div>
+              <div className="text-xs font-bold text-white group-hover:text-blue-400">
+                {isConnecting ? 'Waiting for Wallet...' : 'Connect Freighter Wallet →'}
+              </div>
               <div className="text-[10px] text-[#a1a1aa]">Browser extension</div>
             </button>
 
@@ -443,12 +557,12 @@ export default function WalletConnect() {
 
             <button
               type="button"
-              onClick={() => handleConnectAdapter(getWalletAdapter('xbull'))}
+              onClick={() => setShowXBullModal(true)}
               disabled={isConnecting}
               className="p-3 bg-[#232326] hover:bg-[#2a2a30] border border-[#333338] hover:border-amber-500/50 rounded-xl text-left transition-all cursor-pointer group"
             >
               <div className="text-lg mb-1">🐂</div>
-              <div className="text-xs font-bold text-white group-hover:text-amber-400">xBull</div>
+              <div className="text-xs font-bold text-white group-hover:text-amber-400">xBull Wallet</div>
               <div className="text-[10px] text-[#a1a1aa]">Extension & Web</div>
             </button>
 
@@ -476,6 +590,57 @@ export default function WalletConnect() {
 
       {/* Email Registration Portal */}
       {mounted && emailModalContent && createPortal(emailModalContent, document.body)}
+
+      {/* xBull Wallet Modal Portal */}
+      {mounted &&
+        showXBullModal &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div
+              ref={xBullDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="xBull Wallet Options"
+              tabIndex={-1}
+              className="bg-[#18181b] border border-[#3f3f46] rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl focus:outline-none"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white">xBull Wallet Options</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowXBullModal(false)}
+                  aria-label="Close xBull options"
+                  className="text-[#a1a1aa] hover:text-white px-2 py-1"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-xs text-[#a1a1aa]">
+                Connect with the xBull browser extension or open the web wallet.
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowXBullModal(false);
+                    void handleConnectAdapter(getWalletAdapter('xbull'));
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+                >
+                  Connect xBull Extension
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowXBullModal(false)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#27272a] hover:bg-[#3f3f46] text-white text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

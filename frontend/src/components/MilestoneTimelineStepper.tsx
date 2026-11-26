@@ -267,10 +267,12 @@ export function MilestoneTimelineStepper({ project, milestones }: MilestoneTimel
                     <p className="text-xs text-[#a1a1aa] mt-1">{state}</p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setExpandedIndex(null)}
+                    aria-label="Close milestone details"
                     className="text-[#71717a] hover:text-white text-sm"
                   >
-                    ✕
+                    <span aria-hidden="true">✕</span>
                   </button>
                 </div>
 

@@ -6,6 +6,7 @@ export interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
   className?: string;
   inputClassName?: string;
 }
@@ -14,6 +15,7 @@ export function SearchInput({
   value,
   onChange,
   placeholder = 'Search projects...',
+  ariaLabel,
   className = '',
   inputClassName = '',
 }: SearchInputProps) {
@@ -37,6 +39,7 @@ export function SearchInput({
         ref={inputRef}
         type="text"
         role="searchbox"
+        aria-label={ariaLabel || placeholder}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -51,7 +54,7 @@ export function SearchInput({
           onClick={handleClear}
           className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-full text-[#71717a] hover:text-white hover:bg-[#333338] transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500"
         >
-          <span className="text-xs leading-none">✕</span>
+          <span className="text-xs leading-none" aria-hidden="true">✕</span>
         </button>
       )}
     </div>
