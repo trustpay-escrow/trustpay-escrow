@@ -72,6 +72,8 @@ import { usePersistentFilter } from '@/hooks/usePersistentTab';
 import { celebrateEscrow } from '@/lib/confetti';
 import { MilestoneCertificateButton } from '@/components/MilestoneCertificateButton';
 import { TooltipHelper } from '@/components/TooltipHelper';
+import { Address, nativeToScVal, xdr } from '@stellar/stellar-sdk';
+import { SorobanResourceInspectorModal } from '@/components/SorobanResourceInspectorModal';
 
 export interface ClientDashboardProps {
   defaultTab?: 'projects' | 'create' | 'applicants' | 'saved';
@@ -299,6 +301,50 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
       await fetchBackendProjects();
     } catch (err: any) {
       toast.error(`Action failed: ${err?.message || err}`);
+    }
+  };
+
+  // Soroban Resource Inspector — pre-flight simulation state
+  const [inspectorTransaction, setInspectorTransaction] = useState<{
+    contractAddress: string;
+    functionName: string;
+    args: xdr.ScVal[];
+    description: string;
+  } | null>(null);
+  const [inspectorResolve, setInspectorResolve] = useState<
+    ((fp: SorobanResourceFootprint | null) => void) | null
+  >(null);
+
+  /**
+   * Opens the Soroban Resource Inspector modal and waits for the user to
+   * proceed or cancel. Returns the footprint when the user clicks "Proceed
+   * to Signing", or null if they close the modal.
+   */
+  const runPreflightInspection = (tx: {
+    contractAddress: string;
+    functionName: string;
+    args: xdr.ScVal[];
+    description: string;
+  }): Promise<SorobanResourceFootprint | null> => {
+    return new Promise((resolve) => {
+      setInspectorTransaction(tx);
+      setInspectorResolve(() => resolve);
+    });
+  };
+
+  const handleInspectorClose = () => {
+    setInspectorTransaction(null);
+    if (inspectorResolve) {
+      inspectorResolve(null);
+      setInspectorResolve(null);
+    }
+  };
+
+  const handleInspectorProceed = (fp: SorobanResourceFootprint) => {
+    setInspectorTransaction(null);
+    if (inspectorResolve) {
+      inspectorResolve(fp);
+      setInspectorResolve(null);
     }
   };
 
