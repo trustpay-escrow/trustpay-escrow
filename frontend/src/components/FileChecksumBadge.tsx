@@ -1,7 +1,12 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { truncateHash, verifyFileChecksum, calculateFileChecksum } from '../lib/checksum';
+import {
+  truncateHash,
+  verifyFileChecksum,
+  calculateFileChecksum,
+  parseAttachmentChecksums,
+} from '../lib/checksum';
 
 export interface FileChecksumBadgeProps {
   hash: string;
@@ -227,5 +232,24 @@ export function FileChecksumBadge({
         </div>
       )}
     </div>
+  );
+}
+
+/** Renders checksum badges for every SHA-256 attachment recorded in milestone deliverable notes. */
+export function DeliverableChecksums({ notes }: { notes?: string | null }) {
+  const items = parseAttachmentChecksums(notes);
+  if (items.length === 0) return null;
+
+  return (
+    <ul className="space-y-1.5" data-testid="deliverable-checksums">
+      {items.map((item) => (
+        <li key={`${item.name}-${item.sha256}`} className="text-xs flex flex-wrap items-center gap-2">
+          <span className="text-slate-500 font-medium truncate max-w-[12rem]" title={item.name}>
+            {item.name}
+          </span>
+          <FileChecksumBadge hash={item.sha256} fileName={item.name} />
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -53,3 +53,59 @@ export function truncateHash(hash: string, leadChars = 4, trailChars = 4): strin
   }
   return `sha256: ${clean.slice(0, leadChars)}...${clean.slice(-trailChars)}`;
 }
+
+export type HashInput = ArrayBuffer | ArrayBufferView | Blob | string;
+
+export function hasSubtleCrypto(): boolean {
+  return typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.subtle?.digest === 'function';
+}
+
+export async function sha256Hex(input: HashInput): Promise<string> {
+  if (!hasSubtleCrypto()) {
+    throw new Error('This browser does not support the Web Crypto API (crypto.subtle).');
+  }
+  if (typeof input === 'string') {
+    return calculateStringChecksum(input);
+  }
+  if (Object.prototype.toString.call(input) === '[object ArrayBuffer]') {
+    return calculateBufferChecksum(input as ArrayBuffer);
+  }
+  if (ArrayBuffer.isView(input)) {
+    const buffer = input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength) as ArrayBuffer;
+    return calculateBufferChecksum(buffer);
+  }
+  return calculateFileChecksum(input as Blob);
+}
+
+export const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+export function isSha256Hex(value: string | undefined | null): value is string {
+  return typeof value === 'string' && SHA256_HEX.test(value.trim().toLowerCase());
+}
+
+export interface AttachmentChecksum {
+  name: string;
+  sha256: string;
+}
+
+const ATTACHMENT_LINE = /^- Attachment: (.+?) \([^)]*\) — sha256:([0-9a-fA-F]{64})\s*$/;
+
+/** Formats one attachment line for deliverable notes, carrying its SHA-256 when valid. */
+export function formatAttachmentLine(name: string, size: string, sha256: string | undefined): string {
+  return isSha256Hex(sha256)
+    ? `- Attachment: ${name} (${size}) — sha256:${sha256.toLowerCase()}`
+    : `- Attachment: ${name} (${size})`;
+}
+
+/** Extracts per-file attachment SHA-256 checksums recorded in deliverable notes. */
+export function parseAttachmentChecksums(notes: string | undefined | null): AttachmentChecksum[] {
+  if (!notes) return [];
+  const out: AttachmentChecksum[] = [];
+  for (const line of notes.split(/\r?\n/)) {
+    const match = line.match(ATTACHMENT_LINE);
+    if (match) {
+      out.push({ name: match[1], sha256: match[2].toLowerCase() });
+    }
+  }
+  return out;
+}
