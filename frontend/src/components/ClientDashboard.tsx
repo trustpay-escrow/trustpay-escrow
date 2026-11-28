@@ -41,6 +41,7 @@ import { AccountsPayableExportModal } from '@/components/AccountsPayableExportMo
 import { GasFeeEstimatorWidget } from '@/components/GasFeeEstimatorWidget';
 import { BlendYieldVisualizer } from '@/components/BlendYieldVisualizer';
 import { CurrencyConverterWidget } from '@/components/CurrencyConverterWidget';
+import { SorobanResourceInspectorModal } from '@/components/SorobanResourceInspectorModal';
 import { BLEND_ALLOCATION_RATIO } from '@/lib/blend-yield';
 import {
   createProjectOnChain,
@@ -57,6 +58,7 @@ import {
   SorobanResourceFootprint,
 } from '@/lib/soroban';
 import { triggerCelebrationConfetti } from '@/lib/confetti';
+import { nativeToScVal, xdr, Address } from '@stellar/stellar-sdk';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import {
   MultisigApprovalModal,
@@ -75,8 +77,10 @@ import { TooltipHelper } from '@/components/TooltipHelper';
 import { Address, nativeToScVal, xdr } from '@stellar/stellar-sdk';
 import { SorobanResourceInspectorModal } from '@/components/SorobanResourceInspectorModal';
 
+export type ClientDashboardTab = 'projects' | 'create' | 'applicants' | 'saved';
+
 export interface ClientDashboardProps {
-  defaultTab?: 'projects' | 'create' | 'applicants' | 'saved';
+  defaultTab?: ClientDashboardTab;
 }
 
 export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProps) {
@@ -92,7 +96,26 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
   );
   const { starred, isStarred, toggle: toggleStarred, setNotes: setStarredNotes } =
     useStarredFreelancers(activeWalletAddress);
-  const [activeTab, setActiveTab] = usePersistentTab<'projects' | 'create' | 'applicants' | 'saved'>({
+
+  // Detect whether the connected enterprise account requires multiple signers (#multisig)
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeWalletAddress) {
+      setIsMultisig(false);
+      return;
+    }
+    fetchMultisigAccountInfo(activeWalletAddress)
+      .then((info) => {
+        if (!cancelled) setIsMultisig(isMultisigAccount(info));
+      })
+      .catch(() => {
+        if (!cancelled) setIsMultisig(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWalletAddress]);
+  const [activeTab, setActiveTab] = usePersistentTab<ClientDashboardTab>({
     key: 'client_active_tab',
     defaultTab,
     allowedTabs: ['projects', 'create', 'applicants', 'saved'] as const,
@@ -315,11 +338,6 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
     ((fp: SorobanResourceFootprint | null) => void) | null
   >(null);
 
-  /**
-   * Opens the Soroban Resource Inspector modal and waits for the user to
-   * proceed or cancel. Returns the footprint when the user clicks "Proceed
-   * to Signing", or null if they close the modal.
-   */
   const runPreflightInspection = (tx: {
     contractAddress: string;
     functionName: string;
@@ -2063,27 +2081,17 @@ export function ClientDashboard({ defaultTab = 'projects' }: ClientDashboardProp
           </div>
         )}
 
-        {/* VIEW 4: SAVED CONTRACTORS (#255) */}
+        {/* VIEW 4: SAVED CONTRACTORS */}
         {activeTab === 'saved' && (
-          <div className="bg-[#18181b] border border-[#27272a] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
-            <div className="pb-4 border-b border-[#27272a]">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Saved Contractors</h2>
-              <p className="text-xs sm:text-sm text-[#a1a1aa] mt-1">
-                Freelancers you have starred, with private notes only you can see.
-              </p>
-            </div>
-            <StarredFreelancersList
-              starred={starred}
-              onUnstar={(addr) => toggleStarred({ address: addr })}
-              onSaveNotes={setStarredNotes}
-              onInvite={(f) => {
-                setFormFreelancerAddress(f.address);
-                setActiveTab('create');
-                toast.success(`Escrow form pre-filled for ${f.name || 'your saved contractor'}.`);
-              }}
-            />
-          </div>
+          <StarredFreelancersList
+            onInviteToProject={(contractorAddr) => {
+              setFormFreelancerAddress(contractorAddr);
+              setActiveTab('create');
+              toast.info(`Pre-filling contractor address for new escrow project`);
+            }}
+          />
         )}
+
       </div>
 
       {/* Modal for adding a new milestone with all backend fields */}

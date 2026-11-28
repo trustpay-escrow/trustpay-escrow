@@ -3,15 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CryptoId } from '@/components/ui/CryptoId';
-import { AddressBadge } from './AddressBadge';
-import { PortfolioLinkPreview } from './PortfolioLinkPreview';
-import { ZkAttestationBadge } from './ZkAttestationBadge';
-import { EmbeddedDemoSandbox } from './EmbeddedDemoSandbox';
-import { ProposalExpirationBadge, formatTimeRemaining } from './ProposalExpirationBadge';
-import { TruncatedText } from './TruncatedText';
-import { announcePolite } from '@/components/a11y/LiveAnnouncer';
-import { CounterOfferSummary } from '@/components/ProposalCounterOfferModal';
-import type { CounterOffer } from '@/lib/counter-offer';
+import { StarButton } from '@/components/StarredFreelancersList';
 
 export interface ApplicantCardData {
   id: string;
@@ -158,23 +150,18 @@ export function ApplicantCard({
               value={walletAddr}
               className="sm:text-sm text-white bg-[#232326] px-3 py-1 rounded-xl border border-[#333338] select-all break-all"
             />
-            <AddressBadge address={walletAddr} showExplorerLink={true} />
-            <AddressBadge value={walletAddr} label="Copy Wallet Address" />
-            {onToggleStar && (
-              <button
-                type="button"
-                onClick={() => onToggleStar(applicant)}
-                aria-pressed={isStarred}
-                aria-label={isStarred ? 'Remove from saved contractors' : 'Save contractor'}
-                title={isStarred ? 'Remove from saved contractors' : 'Save contractor'}
-                className={`p-1 text-base transition-colors ${
-                  isStarred ? 'text-amber-400 hover:text-amber-300' : 'text-[#71717a] hover:text-amber-300'
-                }`}
-                data-testid="applicant-star-toggle"
-              >
-                {isStarred ? '★' : '☆'}
-              </button>
-            )}
+            <button
+              onClick={handleCopyWallet}
+              className="text-[#a1a1aa] hover:text-white transition-colors p-1 text-xs"
+              title="Copy Wallet Address"
+            >
+              {copied ? '✓' : '📋'}
+            </button>
+            <StarButton
+              address={walletAddr}
+              name={applicant.name}
+              portfolioUrl={portfolioUrl}
+            />
           </div>
           {Boolean(applicant.zk_attestation) && (
             <div className="pt-1">
