@@ -2,6 +2,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { ReputationStats, ReputationTier } from '@/types';
+import { deriveDeterministicReputation } from '@/lib/api';
+import { ReputationScorecard, ReputationTierBadge } from './ReputationScorecard';
 import { CryptoId } from '@/components/ui/CryptoId';
 import { AddressBadge } from './AddressBadge';
 import { PortfolioLinkPreview } from './PortfolioLinkPreview';
@@ -31,6 +34,9 @@ export interface ApplicantCardData {
   zk_attestation?: unknown;
   counter_offer?: CounterOffer | null;
   negotiation_status?: 'none' | 'countered' | 'accepted' | 'declined';
+  reputation?: ReputationStats;
+  reputation_tier?: ReputationTier;
+  reputationTier?: ReputationTier;
 }
 
 export interface ApplicantCardProps {
@@ -84,6 +90,16 @@ export function ApplicantCard({
   const demoUrl = applicant.demo_url || applicant.demoUrl;
   const currentStatus = applicant.status || (applicant.granted ? 'accepted' : 'pending');
   const prevStatusRef = useRef(currentStatus);
+
+  const reputationData: ReputationStats = useMemo(() => {
+    if (applicant.reputation) return applicant.reputation;
+    const tier = applicant.reputation_tier || applicant.reputationTier;
+    const base = deriveDeterministicReputation(walletAddr);
+    if (tier) {
+      return { ...base, tier };
+    }
+    return base;
+  }, [applicant.reputation, applicant.reputation_tier, applicant.reputationTier, walletAddr]);
 
   const isExpired = applicant.expires_at ? formatTimeRemaining(new Date(applicant.expires_at)).isExpired : false;
 
@@ -158,7 +174,7 @@ export function ApplicantCard({
               {walletAddr}
             </span>
             <AddressBadge address={walletAddr} showExplorerLink={true} />
-            <AddressBadge value={walletAddr} label="Copy Wallet Address" />
+            <ReputationTierBadge tier={reputationData.tier} size="sm" />
             {onToggleStar && (
               <button
                 type="button"
