@@ -74,6 +74,8 @@ import { usePersistentFilter } from '@/hooks/usePersistentTab';
 import { celebrateEscrow } from '@/lib/confetti';
 import { MilestoneCertificateButton } from '@/components/MilestoneCertificateButton';
 import { TooltipHelper } from '@/components/TooltipHelper';
+import { Address, nativeToScVal, xdr } from '@stellar/stellar-sdk';
+import { SorobanResourceInspectorModal } from '@/components/SorobanResourceInspectorModal';
 
 export type ClientDashboardTab = 'projects' | 'create' | 'applicants' | 'saved';
 

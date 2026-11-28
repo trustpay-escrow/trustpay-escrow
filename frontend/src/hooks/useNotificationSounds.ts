@@ -80,6 +80,20 @@ export function useNotificationSounds() {
   }, [playSound]);
 
   /**
+   * Play subtle click sound (button click)
+   */
+  const playClick = useCallback(() => {
+    playSound('click');
+  }, [playSound]);
+
+  /**
+   * Play subtle tick sound (copy action)
+   */
+  const playTick = useCallback(() => {
+    playSound('tick');
+  }, [playSound]);
+
+  /**
    * Update volume (0-100)
    */
   const setNotificationVolume = useCallback((vol: number) => {
@@ -98,6 +112,8 @@ export function useNotificationSounds() {
     playSuccess,
     playAlert,
     playPing,
+    playClick,
+    playTick,
     isMuted,
     toggleMute,
     volume,

@@ -6,7 +6,7 @@
 export const SOUND_MUTE_KEY = 'notification_sounds_muted';
 export const SOUND_VOLUME_KEY = 'notification_sounds_volume';
 
-export type SoundType = 'success' | 'alert' | 'ping';
+export type SoundType = 'success' | 'alert' | 'ping' | 'click' | 'tick';
 
 interface ChimeConfig {
   frequencies: number[];
@@ -98,6 +98,26 @@ export class SoundSynthesizer {
   }
 
   /**
+   * Play a subtle soft audio tick tone (for copy/action feedback)
+   */
+  playTick(): void {
+    this.playChime('tick', {
+      frequencies: [1200], // High transient click
+      duration: 0.05,
+    });
+  }
+
+  /**
+   * Play a subtle soft audio click tone
+   */
+  playClick(): void {
+    this.playChime('click', {
+      frequencies: [800], // Soft transient click
+      duration: 0.06,
+    });
+  }
+
+  /**
    * Play generic chime with custom frequencies
    */
   private playChime(type: SoundType, config: ChimeConfig): void {
@@ -165,6 +185,12 @@ export class SoundSynthesizer {
         break;
       case 'ping':
         this.playPing();
+        break;
+      case 'click':
+        this.playClick();
+        break;
+      case 'tick':
+        this.playTick();
         break;
     }
   }
